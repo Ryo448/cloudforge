@@ -8,6 +8,7 @@ interface Bridge {
   reconnect: () => Promise<boolean>;
   chooseDirectory: () => Promise<string | null>;
   openProject: (id: string) => Promise<void>;
+  openTerminal: (id: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   copy: (text: string) => Promise<void>;
   watchProject: (id: string) => Promise<void>;

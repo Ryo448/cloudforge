@@ -91,6 +91,7 @@ export function ProjectPort({ project, onChanged }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [terminalBusy, setTerminalBusy] = useState(false);
   const routeMismatch =
     !!project.routePort && project.routePort !== project.port;
   const running = ["online", "starting", "restarting"].includes(
@@ -165,6 +166,44 @@ export function ProjectPort({ project, onChanged }: Props) {
           {busy ? <Spinner /> : <Check size={16} />} Salvar porta
         </button>
       </form>
+      <div className="settings-subsection">
+        <h3>Terminal</h3>
+        <p className="muted">
+          Permita abrir o terminal do projeto.
+        </p>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={project.terminalEnabled}
+            disabled={terminalBusy}
+            onChange={async (event) => {
+              const enabled = event.target.checked;
+              setTerminalBusy(true);
+              setError("");
+              setNotice("");
+              try {
+                await api(
+                  "PATCH",
+                  `/api/projects/${project.id}/terminal-enabled`,
+                  { enabled },
+                );
+                onChanged();
+                setNotice(
+                  enabled
+                    ? "Abertura do terminal ativada para este projeto."
+                    : "Abertura do terminal desativada para este projeto.",
+                );
+              } catch (e) {
+                setError(message(e));
+              } finally {
+                setTerminalBusy(false);
+              }
+            }}
+          />
+          <span>Mostrar opção de abrir o terminal deste projeto</span>
+        </label>
+        {terminalBusy && <Spinner />}
+      </div>
     </section>
   );
 }

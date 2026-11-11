@@ -1246,6 +1246,33 @@ form small {
 .settings-section > h2 {
   margin-bottom: 15px;
 }
+.settings-subsection {
+  max-width: 600px;
+  border-top: 1px solid var(--border);
+  margin-top: 26px;
+  padding-top: 20px;
+}
+.settings-subsection h3 {
+  font-size: 14px;
+  font-weight: 550;
+}
+.settings-subsection p {
+  margin: 8px 0 12px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.settings-subsection .checkbox-label {
+  margin: 12px 0;
+}
+.tui-window {
+  width: 100vw;
+  height: 100vh;
+  padding: 10px;
+  background: #0d1510;
+}
+.tui-window .xterm {
+  height: 100%;
+}
 .narrow-form {
   max-width: 600px;
   margin-top: 22px;

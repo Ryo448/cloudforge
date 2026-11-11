@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/shirou/gopsutil/v4/process"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -29,6 +30,7 @@ type job struct {
 	cancel   context.CancelFunc
 	done     chan struct{}
 	tree     *processes.Tree
+	terminal *terminalSession
 	active   bool
 	blocked  string
 	removing bool
@@ -325,65 +327,85 @@ func (s *Supervisor) loop(ctx context.Context, j *job) {
 			if p.Port > 0 {
 				cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", p.Port))
 			}
-			processes.Configure(cmd)
-			stdout := &streamWriter{book: j.logs, stream: "stdout"}
-			stderr := &streamWriter{book: j.logs, stream: "stderr"}
-			cmd.Stdout = stdout
-			cmd.Stderr = stderr
-			cmd.WaitDelay = 2 * time.Second
-			if runError == nil && ctx.Err() == nil {
-				runError = cmd.Start()
-			}
-			if runError == nil && cmd.Process != nil {
-				tree, e := processes.Attach(cmd)
-				if e != nil {
-					cmd.Process.Kill()
-					cmd.Wait()
-					runError = e
-				} else {
-					now := time.Now().UTC()
-					j.mu.Lock()
-					j.tree = tree
-					j.state.PID = cmd.Process.Pid
-					if proc, e := process.NewProcess(int32(cmd.Process.Pid)); e == nil {
-						j.state.ProcessCreatedAt, _ = proc.CreateTime()
-						j.state.Executable, _ = proc.Exe()
-					}
-					j.state.StartedAt = &now
-					j.state.ActualState = "online"
-					j.state.LastError = ""
-					j.state.Health = "running"
-					state := j.state
-					j.mu.Unlock()
-					if e = s.store.Runtime(state); e != nil {
-						tree.Close()
-						_ = cmd.Wait()
-						j.mu.Lock()
-						j.state.ActualState = "error"
-						j.state.PID = 0
-						j.state.StartedAt = nil
-						j.state.LastError = "Não foi possível persistir a execução: " + e.Error()
-						j.state.Health = "offline"
-						j.mu.Unlock()
-						j.logs.Add("system", "Processo encerrado por falha de persistência.")
-						return
-					}
-					j.logs.Add("system", fmt.Sprintf("Aplicação iniciada · PID %d", cmd.Process.Pid))
-					wait := make(chan error, 1)
-					go func() { result := cmd.Wait(); stdout.Flush(); stderr.Flush(); wait <- result }()
-					select {
-					case runError = <-wait:
-					case <-ctx.Done():
-						procDone := make(chan struct{})
-						go func() { runError = <-wait; close(procDone) }()
-						tree.Stop(procDone)
-						<-procDone
-					}
-					tree.Close()
-					j.mu.Lock()
-					j.tree = nil
-					j.mu.Unlock()
+			var terminal *terminalSession
+			if p.TerminalEnabled {
+				terminal = newTerminalSession()
+				var input io.WriteCloser
+				cmd, input, runError = terminalCommand(cmd)
+				if runError == nil {
+					terminal.input = input
 				}
+			}
+			if runError == nil {
+				processes.Configure(cmd)
+				stdout := &streamWriter{book: j.logs, stream: "stdout"}
+				stderr := &streamWriter{book: j.logs, stream: "stderr"}
+				if terminal == nil {
+					cmd.Stdout = stdout
+				} else {
+					cmd.Stdout = io.MultiWriter(stdout, terminal)
+				}
+				cmd.Stderr = stderr
+				cmd.WaitDelay = 2 * time.Second
+				if runError == nil && ctx.Err() == nil {
+					runError = cmd.Start()
+				}
+				if runError == nil && cmd.Process != nil {
+					tree, e := processes.Attach(cmd)
+					if e != nil {
+						cmd.Process.Kill()
+						cmd.Wait()
+						runError = e
+					} else {
+						now := time.Now().UTC()
+						j.mu.Lock()
+						j.tree = tree
+						j.terminal = terminal
+						j.state.PID = cmd.Process.Pid
+						if proc, e := process.NewProcess(int32(cmd.Process.Pid)); e == nil {
+							j.state.ProcessCreatedAt, _ = proc.CreateTime()
+							j.state.Executable, _ = proc.Exe()
+						}
+						j.state.StartedAt = &now
+						j.state.ActualState = "online"
+						j.state.LastError = ""
+						j.state.Health = "running"
+						state := j.state
+						j.mu.Unlock()
+						if e = s.store.Runtime(state); e != nil {
+							tree.Close()
+							_ = cmd.Wait()
+							j.mu.Lock()
+							j.state.ActualState = "error"
+							j.state.PID = 0
+							j.state.StartedAt = nil
+							j.state.LastError = "Não foi possível persistir a execução: " + e.Error()
+							j.state.Health = "offline"
+							j.mu.Unlock()
+							j.logs.Add("system", "Processo encerrado por falha de persistência.")
+							return
+						}
+						j.logs.Add("system", fmt.Sprintf("Aplicação iniciada · PID %d", cmd.Process.Pid))
+						wait := make(chan error, 1)
+						go func() { result := cmd.Wait(); stdout.Flush(); stderr.Flush(); wait <- result }()
+						select {
+						case runError = <-wait:
+						case <-ctx.Done():
+							procDone := make(chan struct{})
+							go func() { runError = <-wait; close(procDone) }()
+							tree.Stop(procDone)
+							<-procDone
+						}
+						tree.Close()
+						j.mu.Lock()
+						j.tree = nil
+						j.terminal = nil
+						j.mu.Unlock()
+					}
+				}
+			}
+			if terminal != nil {
+				terminal.close()
 			}
 		}
 		if ctx.Err() != nil {
@@ -444,6 +466,7 @@ func (s *Supervisor) Views() []model.View {
 	for _, j := range jobs {
 		j.mu.Lock()
 		v := model.View{Project: j.p, RuntimeInfo: j.state}
+		v.RuntimeInfo.TerminalReady = j.terminal != nil
 		j.mu.Unlock()
 		for _, r := range routes {
 			if r.ProjectID == v.ID {
@@ -462,6 +485,25 @@ func (s *Supervisor) Logs(id string) ([]model.Log, error) {
 		return nil, e
 	}
 	return j.logs.Lines(), nil
+}
+func (s *Supervisor) SetTerminalEnabled(id string, enabled bool) error {
+	j, err := s.get(id)
+	if err != nil {
+		return err
+	}
+	j.op.Lock()
+	defer j.op.Unlock()
+	j.mu.Lock()
+	project := j.p
+	j.mu.Unlock()
+	project.TerminalEnabled = enabled
+	if err = s.store.SaveProject(project); err != nil {
+		return err
+	}
+	j.mu.Lock()
+	j.p = project
+	j.mu.Unlock()
+	return nil
 }
 func (s *Supervisor) Online(id string) bool {
 	j, e := s.get(id)

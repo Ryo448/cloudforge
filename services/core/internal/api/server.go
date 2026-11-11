@@ -124,7 +124,7 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.Trim(r.URL.Path, "/")
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.0.0"})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.0.0", "apiVersion": 3})
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {
@@ -437,6 +437,29 @@ func (s *Server) projectLocal(w http.ResponseWriter, r *http.Request, parts []st
 			return
 		}
 		write(w, 200, logs)
+		return
+	}
+	if section == "terminal" && r.Method == "GET" {
+		s.terminal(w, r, id)
+		return
+	}
+	if section == "terminal-enabled" && r.Method == "PATCH" {
+		var body struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if err := decode(w, r, &body); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		if body.Enabled == nil {
+			fail(w, 400, errors.New("informe se o terminal deve ficar ativo"))
+			return
+		}
+		if err := s.Supervisor.SetTerminalEnabled(id, *body.Enabled); err != nil {
+			fail(w, 500, err)
+			return
+		}
+		write(w, 200, map[string]bool{"ok": true})
 		return
 	}
 	if section == "files" && r.Method == "GET" {

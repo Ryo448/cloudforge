@@ -13,6 +13,7 @@ type Project struct {
 	WorkingDirectory string    `json:"workingDirectory"`
 	DesiredState     string    `json:"desiredState"`
 	RestartPolicy    string    `json:"restartPolicy"`
+	TerminalEnabled  bool      `json:"terminalEnabled"`
 	Port             int       `json:"port"`
 	CreatedAt        time.Time `json:"createdAt"`
 	UpdatedAt        time.Time `json:"updatedAt"`
@@ -31,6 +32,7 @@ type Runtime struct {
 	Children         int        `json:"children"`
 	Restarts         int        `json:"restarts"`
 	Health           string     `json:"health"`
+	TerminalReady    bool       `json:"terminalReady,omitempty"`
 }
 type View struct {
 	Project

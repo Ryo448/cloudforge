@@ -7,6 +7,7 @@ import (
 	"cloudforge/core/internal/cloudflare"
 	"cloudforge/core/internal/logging"
 	"cloudforge/core/internal/persistence"
+	"cloudforge/core/internal/processes"
 	"cloudforge/core/internal/routing"
 	"cloudforge/core/internal/supervisor"
 	"context"
@@ -26,6 +27,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--pty-child" {
+		if err := processes.RunPTYChild(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if e := run(); e != nil {
 		log.Print(e)
 		os.Exit(1)

@@ -542,7 +542,20 @@ function Logs({ project }: { project: Project }) {
     [q, setQ] = useState(""),
     [hiddenUntil, setHiddenUntil] = useState(0),
     [error, setError] = useState(""),
+    [openingTui, setOpeningTui] = useState(false),
     [copied, setCopied] = useState(false);
+  async function openTui() {
+    if (openingTui) return;
+    setOpeningTui(true);
+    setError("");
+    try {
+      await window.cloudforge.openTerminal(project.id);
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setOpeningTui(false);
+    }
+  }
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -590,6 +603,15 @@ function Logs({ project }: { project: Project }) {
           <span className="host-chip">Somente leitura</span>
         </div>
         <div className="log-tools">
+          {project.terminalEnabled && (
+            <button
+              className="button"
+              disabled={openingTui}
+              onClick={() => void openTui()}
+            >
+              <Terminal size={15} /> Abrir terminal
+            </button>
+          )}
           <label className="search-field compact">
             <Search size={15} />
             <input

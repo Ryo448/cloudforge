@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("cloudforge", {
   reconnect: () => ipcRenderer.invoke("core:reconnect"),
   chooseDirectory: () => ipcRenderer.invoke("project:choose"),
   openProject: (id) => ipcRenderer.invoke("project:open", id),
+  openTerminal: (id) => ipcRenderer.invoke("project:terminal", id),
   openExternal: (url) => ipcRenderer.invoke("external:open", url),
   copy: (text) => ipcRenderer.invoke("clipboard:copy", text),
   watchProject: (id) => ipcRenderer.invoke("core:watch", id),

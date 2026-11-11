@@ -22,6 +22,7 @@ export interface Project {
   workingDirectory: string;
   desiredState: string;
   restartPolicy: string;
+  terminalEnabled: boolean;
   port: number;
   createdAt: string;
   updatedAt: string;
