@@ -1,0 +1,45 @@
+{
+  "name": "cloudforge",
+  "version": "0.1.4",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run licenses && npm run build --workspace @cloudforge/desktop && npm run build --workspace @cloudforge/web && node scripts/build-core.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs",
+    "package": "npm run build && node scripts/bundle-cloudflared.mjs && electron-builder --config apps/desktop/electron-builder.json",
+    "start": "node scripts/start.mjs",
+    "format": "prettier --write apps packages scripts package.json tsconfig.json",
+    "lint": "prettier --check apps packages scripts package.json tsconfig.json",
+    "package:dir": "npm run build && node scripts/bundle-cloudflared.mjs && electron-builder --config apps/desktop/electron-builder.json --dir",
+    "postinstall": "install-electron",
+    "licenses": "node scripts/licenses.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.2.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "prettier": "^3.6.2"
+  },
+  "overrides": {
+    "minimatch@>=7 <11.0.1": "^11.0.1"
+  }
+}

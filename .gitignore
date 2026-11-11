@@ -1,0 +1,12 @@
+node_modules/
+dist/
+release/
+.tools/
+.local/
+*.log
+*.exe
+*.test
+coverage/
+.impeccable/*
+!.impeccable/design.json
+!**/.gitkeep

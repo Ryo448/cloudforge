@@ -1,0 +1,11 @@
+CREATE TABLE users(id TEXT PRIMARY KEY,username TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+CREATE TABLE sessions(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),token_hash TEXT NOT NULL UNIQUE,csrf_hash TEXT NOT NULL,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,revoked_at INTEGER,device_info TEXT NOT NULL);
+CREATE INDEX sessions_expiry ON sessions(expires_at);
+CREATE TABLE projects(id TEXT PRIMARY KEY,name TEXT NOT NULL,path TEXT NOT NULL UNIQUE,runtime TEXT NOT NULL,desired_state TEXT NOT NULL,data TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE project_dependencies(project_id TEXT PRIMARY KEY REFERENCES projects(id),data TEXT NOT NULL);
+CREATE TABLE project_runtime(project_id TEXT PRIMARY KEY REFERENCES projects(id),pid INTEGER NOT NULL,actual_state TEXT NOT NULL,data TEXT NOT NULL);
+CREATE TABLE domains(id TEXT PRIMARY KEY,zone_id TEXT NOT NULL,domain_name TEXT NOT NULL UNIQUE,provider TEXT NOT NULL);
+CREATE TABLE tunnels(id TEXT PRIMARY KEY,cloudflare_tunnel_id TEXT NOT NULL UNIQUE,name TEXT NOT NULL,status TEXT NOT NULL,configuration_reference TEXT NOT NULL);
+CREATE TABLE project_routes(id TEXT PRIMARY KEY,project_id TEXT NOT NULL UNIQUE REFERENCES projects(id),hostname TEXT NOT NULL UNIQUE,local_port INTEGER NOT NULL CHECK(local_port BETWEEN 1 AND 65535),data TEXT NOT NULL);
+CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE operations(id TEXT PRIMARY KEY,kind TEXT NOT NULL,status TEXT NOT NULL,payload TEXT NOT NULL,last_error TEXT NOT NULL,updated_at TEXT NOT NULL);

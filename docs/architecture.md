@@ -1,0 +1,13 @@
+# Arquitetura
+
+Core Go independente da janela Electron. Instância única por diretório de dados usando file lock. SQLite WAL com migrations versionadas e repositórios isolados em `internal/persistence`. O supervisor persiste estado desejado, prepara dependências e gerencia árvores de processos. Ao desligar o Core, encerra árvores com segurança sem apagar o estado desejado; na próxima inicialização recupera projetos que estavam em execução.
+
+Electron possui renderer isolado, preload restrito e IPC validado. O processo principal envia requisições à API administrativa em loopback com chave local; a chave nunca vai ao renderer. A API pública é outro listener, com somente autenticação, lista saneada, eventos e três ações de processo. O túnel aponta para esse listener, nunca para a API administrativa.
+
+Novas instalações autorizam um domínio no navegador via `cloudflared tunnel login`. O Core usa um perfil separado para criar ou reutilizar seu túnel local e associar CNAMEs com a CLI oficial. Cada zona adicional autorizada tem um certificado próprio e pertence à mesma conta do túnel. A regra de ingresso encaminha ao roteador HTTP local. O roteador atende apenas os hosts cadastrados e encaminha o painel administrativo e os projetos separadamente. Projetos offline retornam 503 e preservam o DNS. A troca de endereço cadastra o novo DNS antes de alterar o host local. A limpeza só remove um CNAME que continua apontando para este túnel. Túneis remotos existentes mantêm o diário e a compensação originais na criação de rotas.
+
+A porta HTTP pertence à configuração do projeto. Uma edição persiste a porta e atualiza a rota existente na mesma transação SQLite. O processo mantém o estado atual, e o próximo início usa a nova variável `PORT`. Aplicações com porta fixa precisam ter essa mesma porta configurada no Cloudforge.
+
+Autenticação: Argon2id (64 MiB, 3 iterações, salt 16 bytes), sessões opacas com hash SHA-256 no servidor, expiração, renovação e revogação, cookie HttpOnly/Secure/SameSite, verificação de origem e CSRF, rate limiting. O modo de desenvolvimento HTTP da web é explicitamente separado do modo público HTTPS.
+
+Windows: jobs para árvores de processos e inicialização na sessão do usuário via HKCU Run. Linux: grupos de processos e systemd de usuário. Essa opção mantém a identidade do armazenamento seguro do SO sem instalar um serviço como LocalSystem. Não executar projetos de terceiros sem confiança: não há isolamento de segurança equivalente a containers. Futuro adaptador Docker e repositório PostgreSQL devem preservar os contratos atuais. O contrato de persistência está em `internal/persistence/repository.go`; SQL e transações ficam no adaptador SQLite, incluindo usuários e sessões.

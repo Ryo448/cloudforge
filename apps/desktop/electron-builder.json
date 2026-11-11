@@ -1,0 +1,24 @@
+{
+  "appId": "app.cloudforge.desktop",
+  "productName": "Cloudforge",
+  "npmRebuild": false,
+  "publish": null,
+  "directories": { "app": "apps/desktop", "output": "release" },
+  "files": ["dist/**/*", "electron/**/*", "package.json"],
+  "extraResources": [
+    { "from": "dist/core", "to": ".", "filter": ["cloudforge-core*"] },
+    { "from": "apps/web/dist", "to": "web" }
+  ],
+  "win": {
+    "target": "nsis",
+    "extraResources": [
+      {
+        "from": "dist/cloudflared",
+        "to": "cloudflared",
+        "filter": ["cloudflared.exe", "LICENSE"]
+      }
+    ]
+  },
+  "linux": { "target": "AppImage", "category": "Development" },
+  "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+}

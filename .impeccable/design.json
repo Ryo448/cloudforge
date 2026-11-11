@@ -1,0 +1,479 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-11T02:25:34.632Z",
+  "title": "Sistema de design do Cloudforge",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Verde fosco",
+        "tonalRamp": [
+          "oklch(15% 0.032 147.7)",
+          "oklch(25% 0.047 147.7)",
+          "oklch(36% 0.063 147.7)",
+          "oklch(47% 0.074 147.7)",
+          "oklch(58% 0.076 147.7)",
+          "oklch(69% 0.072 147.7)",
+          "oklch(81% 0.059 147.7)",
+          "oklch(95% 0.023 147.7)"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Verde de passagem",
+        "tonalRamp": [
+          "oklch(15% 0.025 148.0)",
+          "oklch(25% 0.037 148.0)",
+          "oklch(36% 0.049 148.0)",
+          "oklch(47% 0.058 148.0)",
+          "oklch(58% 0.059 148.0)",
+          "oklch(69% 0.056 148.0)",
+          "oklch(81% 0.046 148.0)",
+          "oklch(95% 0.018 148.0)"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "Texto sobre verde",
+        "tonalRamp": [
+          "oklch(15% 0.014 155.4)",
+          "oklch(25% 0.021 155.4)",
+          "oklch(36% 0.028 155.4)",
+          "oklch(47% 0.033 155.4)",
+          "oklch(58% 0.034 155.4)",
+          "oklch(69% 0.032 155.4)",
+          "oklch(81% 0.026 155.4)",
+          "oklch(95% 0.010 155.4)"
+        ]
+      },
+      "transition": {
+        "role": "tertiary",
+        "displayName": "Âmbar de transição",
+        "tonalRamp": [
+          "oklch(15% 0.035 75.7)",
+          "oklch(25% 0.052 75.7)",
+          "oklch(36% 0.069 75.7)",
+          "oklch(47% 0.081 75.7)",
+          "oklch(58% 0.084 75.7)",
+          "oklch(69% 0.080 75.7)",
+          "oklch(81% 0.065 75.7)",
+          "oklch(95% 0.025 75.7)"
+        ]
+      },
+      "error": {
+        "role": "tertiary",
+        "displayName": "Vermelho de falha",
+        "tonalRamp": [
+          "oklch(15% 0.038 23.5)",
+          "oklch(25% 0.056 23.5)",
+          "oklch(36% 0.075 23.5)",
+          "oklch(47% 0.088 23.5)",
+          "oklch(58% 0.091 23.5)",
+          "oklch(69% 0.086 23.5)",
+          "oklch(81% 0.070 23.5)",
+          "oklch(95% 0.027 23.5)"
+        ]
+      },
+      "ram": {
+        "role": "tertiary",
+        "displayName": "Azul da série de memória",
+        "tonalRamp": [
+          "oklch(15% 0.021 245.7)",
+          "oklch(25% 0.031 245.7)",
+          "oklch(36% 0.042 245.7)",
+          "oklch(47% 0.049 245.7)",
+          "oklch(58% 0.051 245.7)",
+          "oklch(69% 0.048 245.7)",
+          "oklch(81% 0.039 245.7)",
+          "oklch(95% 0.015 245.7)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Grafite da área de trabalho",
+        "tonalRamp": [
+          "oklch(15% 0.004 173.0)",
+          "oklch(25% 0.006 173.0)",
+          "oklch(36% 0.008 173.0)",
+          "oklch(47% 0.010 173.0)",
+          "oklch(58% 0.010 173.0)",
+          "oklch(69% 0.009 173.0)",
+          "oklch(81% 0.008 173.0)",
+          "oklch(95% 0.003 173.0)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Grafite dos painéis",
+        "tonalRamp": [
+          "oklch(15% 0.006 163.4)",
+          "oklch(25% 0.009 163.4)",
+          "oklch(36% 0.011 163.4)",
+          "oklch(47% 0.014 163.4)",
+          "oklch(58% 0.014 163.4)",
+          "oklch(69% 0.013 163.4)",
+          "oklch(81% 0.011 163.4)",
+          "oklch(95% 0.004 163.4)"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "Grafite da navegação",
+        "tonalRamp": [
+          "oklch(15% 0.007 160.4)",
+          "oklch(25% 0.010 160.4)",
+          "oklch(36% 0.013 160.4)",
+          "oklch(47% 0.016 160.4)",
+          "oklch(58% 0.016 160.4)",
+          "oklch(69% 0.016 160.4)",
+          "oklch(81% 0.013 160.4)",
+          "oklch(95% 0.005 160.4)"
+        ]
+      },
+      "active-nav": {
+        "role": "neutral",
+        "displayName": "Fundo da navegação ativa",
+        "tonalRamp": [
+          "oklch(15% 0.015 151.9)",
+          "oklch(25% 0.023 151.9)",
+          "oklch(36% 0.030 151.9)",
+          "oklch(47% 0.036 151.9)",
+          "oklch(58% 0.037 151.9)",
+          "oklch(69% 0.035 151.9)",
+          "oklch(81% 0.028 151.9)",
+          "oklch(95% 0.011 151.9)"
+        ]
+      },
+      "active-nav-text": {
+        "role": "neutral",
+        "displayName": "Texto da navegação ativa",
+        "tonalRamp": [
+          "oklch(15% 0.012 157.3)",
+          "oklch(25% 0.017 157.3)",
+          "oklch(36% 0.023 157.3)",
+          "oklch(47% 0.027 157.3)",
+          "oklch(58% 0.027 157.3)",
+          "oklch(69% 0.026 157.3)",
+          "oklch(81% 0.021 157.3)",
+          "oklch(95% 0.008 157.3)"
+        ]
+      },
+      "remote-canvas": {
+        "role": "neutral",
+        "displayName": "Fundo da web e dos campos",
+        "tonalRamp": [
+          "oklch(15% 0.008 158.0)",
+          "oklch(25% 0.012 158.0)",
+          "oklch(36% 0.015 158.0)",
+          "oklch(47% 0.018 158.0)",
+          "oklch(58% 0.019 158.0)",
+          "oklch(69% 0.018 158.0)",
+          "oklch(81% 0.014 158.0)",
+          "oklch(95% 0.006 158.0)"
+        ]
+      },
+      "terminal": {
+        "role": "neutral",
+        "displayName": "Fundo do terminal",
+        "tonalRamp": [
+          "oklch(15% 0.007 157.1)",
+          "oklch(25% 0.010 157.1)",
+          "oklch(36% 0.013 157.1)",
+          "oklch(47% 0.015 157.1)",
+          "oklch(58% 0.016 157.1)",
+          "oklch(69% 0.015 157.1)",
+          "oklch(81% 0.012 157.1)",
+          "oklch(95% 0.005 157.1)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Divisórias",
+        "tonalRamp": [
+          "oklch(15% 0.009 161.5)",
+          "oklch(25% 0.013 161.5)",
+          "oklch(36% 0.017 161.5)",
+          "oklch(47% 0.021 161.5)",
+          "oklch(58% 0.021 161.5)",
+          "oklch(69% 0.020 161.5)",
+          "oklch(81% 0.016 161.5)",
+          "oklch(95% 0.006 161.5)"
+        ]
+      },
+      "login-outline": {
+        "role": "neutral",
+        "displayName": "Contorno dos campos de login",
+        "tonalRamp": [
+          "oklch(15% 0.014 155.4)",
+          "oklch(25% 0.021 155.4)",
+          "oklch(36% 0.028 155.4)",
+          "oklch(47% 0.033 155.4)",
+          "oklch(58% 0.034 155.4)",
+          "oklch(69% 0.033 155.4)",
+          "oklch(81% 0.027 155.4)",
+          "oklch(95% 0.010 155.4)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Texto principal",
+        "tonalRamp": [
+          "oklch(15% 0.003 160.1)",
+          "oklch(25% 0.004 160.1)",
+          "oklch(36% 0.005 160.1)",
+          "oklch(47% 0.006 160.1)",
+          "oklch(58% 0.007 160.1)",
+          "oklch(69% 0.006 160.1)",
+          "oklch(81% 0.005 160.1)",
+          "oklch(95% 0.002 160.1)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Texto secundário e status Offline",
+        "tonalRamp": [
+          "oklch(15% 0.010 158.4)",
+          "oklch(25% 0.014 158.4)",
+          "oklch(36% 0.019 158.4)",
+          "oklch(47% 0.022 158.4)",
+          "oklch(58% 0.023 158.4)",
+          "oklch(69% 0.022 158.4)",
+          "oklch(81% 0.018 158.4)",
+          "oklch(95% 0.007 158.4)"
+        ]
+      },
+      "control-surface": {
+        "role": "neutral",
+        "displayName": "Fundo dos controles secundários",
+        "tonalRamp": [
+          "oklch(15% 0.009 159.1)",
+          "oklch(25% 0.013 159.1)",
+          "oklch(36% 0.017 159.1)",
+          "oklch(47% 0.020 159.1)",
+          "oklch(58% 0.021 159.1)",
+          "oklch(69% 0.020 159.1)",
+          "oklch(81% 0.016 159.1)",
+          "oklch(95% 0.006 159.1)"
+        ]
+      },
+      "control-text": {
+        "role": "neutral",
+        "displayName": "Texto dos controles secundários",
+        "tonalRamp": [
+          "oklch(15% 0.004 155.1)",
+          "oklch(25% 0.006 155.1)",
+          "oklch(36% 0.008 155.1)",
+          "oklch(47% 0.010 155.1)",
+          "oklch(58% 0.010 155.1)",
+          "oklch(69% 0.009 155.1)",
+          "oklch(81% 0.008 155.1)",
+          "oklch(95% 0.003 155.1)"
+        ]
+      },
+      "disabled-text": {
+        "role": "neutral",
+        "displayName": "Texto da ação primária desativada",
+        "tonalRamp": [
+          "oklch(15% 0.011 155.0)",
+          "oklch(25% 0.016 155.0)",
+          "oklch(36% 0.021 155.0)",
+          "oklch(47% 0.024 155.0)",
+          "oklch(58% 0.025 155.0)",
+          "oklch(69% 0.024 155.0)",
+          "oklch(81% 0.019 155.0)",
+          "oklch(95% 0.008 155.0)"
+        ]
+      },
+      "quiet-danger": {
+        "role": "tertiary",
+        "displayName": "Vermelho discreto da ação Parar",
+        "tonalRamp": [
+          "oklch(15% 0.030 25.2)",
+          "oklch(25% 0.044 25.2)",
+          "oklch(36% 0.058 25.2)",
+          "oklch(47% 0.069 25.2)",
+          "oklch(58% 0.071 25.2)",
+          "oklch(69% 0.067 25.2)",
+          "oklch(81% 0.055 25.2)",
+          "oklch(95% 0.021 25.2)"
+        ]
+      },
+      "terminal-text": {
+        "role": "neutral",
+        "displayName": "Saída padrão do terminal",
+        "tonalRamp": [
+          "oklch(15% 0.008 154.9)",
+          "oklch(25% 0.013 154.9)",
+          "oklch(36% 0.017 154.9)",
+          "oklch(47% 0.020 154.9)",
+          "oklch(58% 0.020 154.9)",
+          "oklch(69% 0.019 154.9)",
+          "oklch(81% 0.016 154.9)",
+          "oklch(95% 0.006 154.9)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Total em execução",
+        "purpose": "Número de destaque no resumo da visão geral."
+      },
+      "headline": {
+        "displayName": "Título de página",
+        "purpose": "Título principal das superfícies operacionais."
+      },
+      "title": {
+        "displayName": "Título de seção",
+        "purpose": "Identificação de seções e painéis."
+      },
+      "body": {
+        "displayName": "Texto de apoio",
+        "purpose": "Descrições curtas que contextualizam a operação."
+      },
+      "label": {
+        "displayName": "Rótulo de status",
+        "purpose": "Estado do projeto junto ao ponto de cor."
+      },
+      "button": {
+        "displayName": "Rótulo de botão",
+        "purpose": "Texto de ações com ou sem ícone."
+      },
+      "terminal": {
+        "displayName": "Saída monoespaçada",
+        "purpose": "Mensagens na área de logs do projeto."
+      }
+    },
+    "shadows": [
+      {
+        "name": "dialog",
+        "value": "0 24px 80px #0008",
+        "purpose": "Elevação do diálogo sobre a área de trabalho."
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-transition",
+        "value": "150ms",
+        "purpose": "Transições de fundo e borda nos botões."
+      },
+      {
+        "name": "loading-spin",
+        "value": "1s linear infinite",
+        "purpose": "Rotação do indicador de carregamento."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Duração de animação e transição com movimento reduzido."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "desktop-wide-min",
+        "value": "1550px"
+      },
+      {
+        "name": "desktop-compact-max",
+        "value": "1150px"
+      },
+      {
+        "name": "narrow-max",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botão primário",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Iniciar quando o estado do processo permite.",
+      "html": "<button class=\"ds-button ds-primary\" type=\"button\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 3.5 20 12 6 20.5z\"/></svg>Iniciar</button>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; min-height: 39px; border: 1px solid #3a4b40; border-radius: 7px; background: #202c25; color: #e7eee9; font: 550 12px/1.3 \"Inter Variable\", Inter, sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }\n.ds-button:hover:not(:disabled) { background: #2b3a30; border-color: #617966; }\n.ds-button:focus-visible { outline: 2px solid var(--accent, #a5d4aa); outline-offset: 3px; }\n.ds-button:disabled { cursor: not-allowed; opacity: 0.45; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition-duration: 0.01ms; } }\n.ds-button.ds-primary { background: var(--accent, #a5d4aa); color: #14271b; border-color: var(--accent, #a5d4aa); }\n.ds-button.ds-primary:hover:not(:disabled) { background: #bde2c1; border-color: #bde2c1; }\n.ds-button.ds-primary:disabled { background: #202c25; color: #acbdb1; border-color: #3a4b40; }"
+    },
+    {
+      "name": "Botão primário desativado",
+      "kind": "button",
+      "refersTo": "button-primary-disabled",
+      "description": "Iniciar aparece neutro quando indisponível.",
+      "html": "<button class=\"ds-button ds-primary\" type=\"button\" disabled><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 3.5 20 12 6 20.5z\"/></svg>Iniciar</button>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; min-height: 39px; border: 1px solid #3a4b40; border-radius: 7px; background: #202c25; color: #e7eee9; font: 550 12px/1.3 \"Inter Variable\", Inter, sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }\n.ds-button:hover:not(:disabled) { background: #2b3a30; border-color: #617966; }\n.ds-button:focus-visible { outline: 2px solid var(--accent, #a5d4aa); outline-offset: 3px; }\n.ds-button:disabled { cursor: not-allowed; opacity: 0.45; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition-duration: 0.01ms; } }\n.ds-button.ds-primary { background: var(--accent, #a5d4aa); color: #14271b; border-color: var(--accent, #a5d4aa); }\n.ds-button.ds-primary:hover:not(:disabled) { background: #bde2c1; border-color: #bde2c1; }\n.ds-button.ds-primary:disabled { background: #202c25; color: #acbdb1; border-color: #3a4b40; }"
+    },
+    {
+      "name": "Botão secundário",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Reiniciar usa fundo e borda discretos.",
+      "html": "<button class=\"ds-button\" type=\"button\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 7v5h-5\"/><path d=\"M20 12a8 8 0 1 0-2.3 5.7\"/></svg>Reiniciar</button>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; min-height: 39px; border: 1px solid #3a4b40; border-radius: 7px; background: #202c25; color: #e7eee9; font: 550 12px/1.3 \"Inter Variable\", Inter, sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }\n.ds-button:hover:not(:disabled) { background: #2b3a30; border-color: #617966; }\n.ds-button:focus-visible { outline: 2px solid var(--accent, #a5d4aa); outline-offset: 3px; }\n.ds-button:disabled { cursor: not-allowed; opacity: 0.45; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition-duration: 0.01ms; } }"
+    },
+    {
+      "name": "Botão Parar",
+      "kind": "button",
+      "refersTo": "button-quiet-danger",
+      "description": "Parar usa a base secundária com texto vermelho suave.",
+      "html": "<button class=\"ds-button ds-danger\" type=\"button\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/></svg>Parar</button>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; min-height: 39px; border: 1px solid #3a4b40; border-radius: 7px; background: #202c25; color: #e7eee9; font: 550 12px/1.3 \"Inter Variable\", Inter, sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }\n.ds-button:hover:not(:disabled) { background: #2b3a30; border-color: #617966; }\n.ds-button:focus-visible { outline: 2px solid var(--accent, #a5d4aa); outline-offset: 3px; }\n.ds-button:disabled { cursor: not-allowed; opacity: 0.45; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition-duration: 0.01ms; } }\n.ds-button.ds-danger { color: #f0b4ae; }"
+    },
+    {
+      "name": "Campo de login",
+      "kind": "input",
+      "refersTo": "field-login",
+      "description": "Campo com rótulo persistente, contorno em repouso e foco visível.",
+      "html": "<label class=\"ds-login-label\">Nome de usuário<input class=\"ds-login-field\" type=\"text\" autocomplete=\"username\"></label>",
+      "css": ".ds-login-label { display: flex; flex-direction: column; gap: 8px; color: #c5d3ca; font: 12px \"Inter Variable\", Inter, sans-serif; }\n.ds-login-field { box-sizing: border-box; width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid #667c6d; border-radius: 6px; background: #111b15; color: #e9eeeb; caret-color: #b2dfbc; font: inherit; }\n.ds-login-field:focus-visible { outline: 2px solid var(--accent, #a5d4aa); outline-offset: 3px; }"
+    },
+    {
+      "name": "Item ativo da barra lateral",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Ícone e fundo identificam a seção ativa.",
+      "html": "<button class=\"ds-nav-item\" type=\"button\" aria-current=\"page\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4a2 2 0 0 1 1.6.8l.8 1.4A2 2 0 0 0 12 7h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2Z\"/></svg>Projetos</button>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 0; border-radius: 7px; background: #293d2e; color: #d6eadd; font: 12px \"Inter Variable\", Inter, sans-serif; text-align: left; cursor: pointer; }\n.ds-nav-item svg { color: var(--accent, #a5d4aa); }\n.ds-nav-item:focus-visible { outline: 2px solid var(--accent, #a5d4aa); outline-offset: 3px; }"
+    },
+    {
+      "name": "Status do projeto",
+      "kind": "chip",
+      "refersTo": "status-online",
+      "description": "Ponto e texto distinguem os estados do processo.",
+      "html": "<div class=\"ds-status-set\"><span class=\"ds-status ds-online\">Online</span><span class=\"ds-status ds-offline\">Offline</span><span class=\"ds-status ds-transition\">Reiniciando</span><span class=\"ds-status ds-error\">Erro</span></div>",
+      "css": ".ds-status-set { display: flex; flex-wrap: wrap; gap: 12px; }\n.ds-status { display: inline-flex; align-items: center; gap: 6px; color: #afbeb4; font: 500 12px \"Inter Variable\", Inter, sans-serif; white-space: nowrap; }\n.ds-status::before { content: \"\"; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }\n.ds-online { color: var(--accent, #a5d4aa); }\n.ds-offline { color: var(--muted, #a2b2a8); }\n.ds-transition { color: var(--amber, #e7c089); }\n.ds-error { color: var(--red, #f1a5a0); }"
+    },
+    {
+      "name": "Cartão de projeto remoto",
+      "kind": "card",
+      "refersTo": "remote-card",
+      "description": "Estado, métricas e ações em um painel responsivo.",
+      "html": "<section class=\"ds-card\"><div class=\"ds-card-head\"><div><span>Node.js</span><h2>Aplicação web</h2></div><span class=\"ds-status ds-offline\">Offline</span></div><div class=\"ds-card-metrics\"><div><span>CPU</span><strong>—</strong></div><div><span>RAM</span><strong>—</strong></div><div><span>Tempo ativo</span><strong>—</strong></div></div><div class=\"ds-actions\"><button class=\"ds-button ds-primary\" type=\"button\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 3.5 20 12 6 20.5z\"/></svg>Iniciar</button><button class=\"ds-button\" type=\"button\" disabled><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 7v5h-5\"/><path d=\"M20 12a8 8 0 1 0-2.3 5.7\"/></svg>Reiniciar</button><button class=\"ds-button ds-danger\" type=\"button\" disabled><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/></svg>Parar</button></div></section>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; min-height: 39px; border: 1px solid #3a4b40; border-radius: 7px; background: #202c25; color: #e7eee9; font: 550 12px/1.3 \"Inter Variable\", Inter, sans-serif; cursor: pointer; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }\n.ds-button:hover:not(:disabled) { background: #2b3a30; border-color: #617966; }\n.ds-button:focus-visible { outline: 2px solid var(--accent, #a5d4aa); outline-offset: 3px; }\n.ds-button:disabled { cursor: not-allowed; opacity: 0.45; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition-duration: 0.01ms; } }\n.ds-button.ds-primary { background: var(--accent, #a5d4aa); color: #14271b; border-color: var(--accent, #a5d4aa); }\n.ds-button.ds-primary:hover:not(:disabled) { background: #bde2c1; border-color: #bde2c1; }\n.ds-button.ds-primary:disabled { background: #202c25; color: #acbdb1; border-color: #3a4b40; }\n.ds-button.ds-danger { color: #f0b4ae; }\n.ds-status { display: inline-flex; align-items: center; gap: 6px; color: #afbeb4; font: 500 12px \"Inter Variable\", Inter, sans-serif; white-space: nowrap; }\n.ds-status::before { content: \"\"; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }\n.ds-online { color: var(--accent, #a5d4aa); }\n.ds-offline { color: var(--muted, #a2b2a8); }\n.ds-transition { color: var(--amber, #e7c089); }\n.ds-error { color: var(--red, #f1a5a0); }\n.ds-card { padding: 24px; border: 1px solid var(--border, #2c3932); border-radius: var(--radius, 12px); background: var(--surface, #171f1b); color: #e9eeeb; font: 12px \"Inter Variable\", Inter, sans-serif; overflow: hidden; }\n.ds-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }\n.ds-card-head > div > span, .ds-card-metrics span { color: var(--muted, #a2b2a8); }\n.ds-card-head h2 { margin: 8px 0 0; font-size: 18px; font-weight: 570; letter-spacing: -0.015em; overflow-wrap: anywhere; }\n.ds-card-head .ds-status { margin-top: 3px; }\n.ds-card-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; padding: 25px 0; margin-bottom: 20px; border-bottom: 1px solid var(--border, #2c3932); }\n.ds-card-metrics > div { display: flex; flex-direction: column; gap: 10px; }\n.ds-card-metrics strong { font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }\n.ds-actions { display: flex; align-items: center; gap: 8px; }\n.ds-actions .ds-button { min-height: 36px; padding: 9px 12px; font-size: 11px; }\n@media (max-width: 760px) { .ds-card { padding: 21px; } .ds-card-metrics { gap: 12px; } .ds-card-metrics strong { font-size: 14px; } .ds-actions { justify-content: space-between; } .ds-actions .ds-button { flex: 1; padding: 10px; min-height: 44px; } }"
+    },
+    {
+      "name": "Saída de logs",
+      "kind": "custom",
+      "refersTo": "terminal-output",
+      "description": "A linha de log separa horário, origem e mensagem.",
+      "html": "<div class=\"ds-terminal\" aria-label=\"Exemplo de saída da aplicação\"><div class=\"ds-log-line ds-log-system\"><time>00:00:00</time><span class=\"ds-log-stream\">system</span><code>Aplicação iniciada</code></div><div class=\"ds-log-line\"><time>00:00:01</time><span class=\"ds-log-stream\">stdout</span><code>Servidor HTTP ouvindo</code></div></div>",
+      "css": ".ds-terminal { background: #0d1510; padding: 15px 14px; overflow: auto; overscroll-behavior: contain; font: 13px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; }\n.ds-log-line { display: grid; grid-template-columns: 65px 53px minmax(0, 1fr); gap: 9px; padding: 3px 0; align-items: start; }\n.ds-log-line time { color: #97ada0; font-size: 11px; }\n.ds-log-stream { color: #a4bdae; font-size: 11px; }\n.ds-log-line code { color: #d1dfd5; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }\n.ds-log-system code { color: #adceb7; }\n@media (max-width: 760px) { .ds-terminal { padding: 10px; } .ds-log-line { grid-template-columns: 56px minmax(0, 1fr); gap: 6px; font-size: 12px; } .ds-log-stream { display: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Visibilidade operacional em primeiro lugar",
+    "overview": "O Cloudforge usa grafite com matiz verde, tipografia Inter auto-hospedada e separações finas para manter o foco nas condições da máquina e dos projetos. A densidade da interface acompanha o trabalho de quem alterna entre verificar recursos, ler logs e agir sobre processos.\n\nA hierarquia se apoia em texto, valores alinhados e diferenças tonais. A interface combina ícones Lucide com rótulos nas ações de execução. O verde fosco destaca a ação disponível e o estado Online, enquanto âmbar e vermelho identificam transições e falhas.",
+    "keyCharacteristics": [
+      "Superfícies escuras com diferenças tonais discretas e divisórias de 1px.",
+      "Métricas com algarismos tabulares e saída de processos em fonte monoespaçada.",
+      "Estados operacionais identificados por texto e cor, com foco de teclado visível."
+    ],
+    "rules": [],
+    "dos": [
+      "Combine o ponto de estado com um rótulo como Online, Offline ou Reiniciando.",
+      "Use algarismos tabulares nas métricas e mantenha visíveis os rótulos e as unidades.",
+      "Preserve os 44px de altura mínima das três ações na web até 760px.",
+      "Mantenha o contorno específico dos campos de login e o foco visível com teclado."
+    ],
+    "donts": [
+      "Evite manter o preenchimento verde primário de Iniciar quando a ação estiver indisponível.",
+      "Evite preencher lacunas de telemetria com valores simulados. Mostre o marcador de ausência ou a mensagem de espera da superfície."
+    ]
+  }
+}
