@@ -178,7 +178,7 @@ export default function App() {
           </div>
           <div className="sidebar-version">
             <span>Cloudforge</span>
-            <span>v0.1.4</span>
+            <span>v1.0.0</span>
           </div>
         </div>
       </aside>

@@ -4,7 +4,7 @@ Plataforma self-hosted para executar aplicações Python e Node.js no seu comput
 
 ## Executar no Windows
 
-Abra `release/0.1.4/win-unpacked/Cloudforge.exe` para executar a versão local diretamente da pasta do pacote. Para instalar o aplicativo, use `release/0.1.4/Cloudforge Setup 0.1.4.exe`. O arquivo `.sha256` permite verificar a integridade do instalador. As duas opções usam o SQLite local e dispensam PostgreSQL.
+Abra `release/1.0.0/win-unpacked/Cloudforge.exe` para executar a versão local diretamente da pasta do pacote. Para instalar o aplicativo, use `release/1.0.0/Cloudforge Setup 1.0.0.exe`. O arquivo `.sha256` permite verificar a integridade do instalador. As duas opções usam o SQLite local e dispensam PostgreSQL.
 
 Na primeira abertura:
 

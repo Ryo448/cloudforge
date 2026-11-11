@@ -124,7 +124,7 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.Trim(r.URL.Path, "/")
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "0.1.0"})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.0.0"})
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {
