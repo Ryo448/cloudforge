@@ -11,7 +11,9 @@ for (const name of [
   "scheduler",
   "ws",
   "lucide-react",
-  "@fontsource-variable/inter",
+  "@fontsource/poppins",
+  "@fontsource/ibm-plex-sans",
+  "@fontsource/ibm-plex-mono",
 ]) {
   const directory = path.join(root, "node_modules", name);
   const pkg = JSON.parse(

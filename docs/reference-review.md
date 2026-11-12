@@ -6,4 +6,4 @@ Consultada pelo Edge autenticado em 10/11/2026, sem extrair credenciais, código
 - Individual: cabeçalho com runtime, nome, estado e uptime; métricas resumidas; console com timestamps e controles iniciar/reiniciar/parar imediatamente acima.
 - Navegação: muda do contexto global para o contexto da aplicação; acesso explícito para voltar à lista.
 - Logs: histórico rolável, leitura em tempo real e cópia. Cloudforge oferece pesquisa e limpeza somente da visualização, sem entrada de comandos.
-- Adaptação: quatro seções desktop solicitadas, identidade grafite com acento verde discreto, lista tabular de projetos e área de trabalho organizada por tabs. Nenhuma função comercial ou recurso fora do prompt é reproduzido.
+- Adaptação: quatro seções desktop solicitadas, identidade em carbono forjado com acento laranja incandescente inspirado na logo oficial (`assets/icon/icon.png`), wordmark `Cloudforge` em Poppins Bold, lista tabular de projetos e área de trabalho organizada por tabs. Nenhuma função comercial ou recurso fora do prompt é reproduzido.

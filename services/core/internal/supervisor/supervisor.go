@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ type job struct {
 	op       sync.Mutex
 	p        model.Project
 	state    model.Runtime
+	usage    []model.UsageSample
 	logs     *Logbook
 	cancel   context.CancelFunc
 	done     chan struct{}
@@ -425,6 +427,9 @@ func (s *Supervisor) loop(ctx context.Context, j *job) {
 		j.state.LastExitCode = &code
 		j.state.CPU = nil
 		j.state.Memory = nil
+		if len(j.usage) > 0 {
+			j.recordUsage()
+		}
 		j.state.Health = "offline"
 		j.state.ActualState = "offline"
 		if runError != nil {
@@ -463,9 +468,12 @@ func (s *Supervisor) Views() []model.View {
 	s.mu.RUnlock()
 	routes, _ := s.store.Routes()
 	out := []model.View{}
+	usageSince := time.Now().Add(-usageWindow).UnixMilli()
 	for _, j := range jobs {
 		j.mu.Lock()
 		v := model.View{Project: j.p, RuntimeInfo: j.state}
+		first := sort.Search(len(j.usage), func(i int) bool { return j.usage[i].Time >= usageSince })
+		v.UsageHistory = slices.Clone(j.usage[first:])
 		v.RuntimeInfo.TerminalReady = j.terminal != nil
 		j.mu.Unlock()
 		for _, r := range routes {
@@ -577,9 +585,27 @@ func (s *Supervisor) observeOperation(j *job, op, id, action string) {
 		}
 	}
 }
+
+const (
+	usageWindow   = 2 * time.Minute
+	usageInterval = 2 * time.Second
+	usageCapacity = int(usageWindow/usageInterval) + 2
+)
+
+// recordUsage is called with j.mu held. Samples are immutable after collection.
+func (j *job) recordUsage() {
+	if len(j.usage) == usageCapacity {
+		copy(j.usage, j.usage[1:])
+		j.usage = j.usage[:usageCapacity-1]
+	}
+	j.usage = append(j.usage, model.UsageSample{
+		Time: time.Now().UnixMilli(), CPU: j.state.CPU, Memory: j.state.Memory,
+	})
+}
+
 func (s *Supervisor) monitor() {
 	cache := map[int32]*process.Process{}
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(usageInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -596,6 +622,7 @@ func (s *Supervisor) monitor() {
 		for _, j := range jobs {
 			j.mu.Lock()
 			pid := j.state.PID
+			startedAt := j.state.StartedAt
 			j.mu.Unlock()
 			if pid == 0 {
 				continue
@@ -634,13 +661,16 @@ func (s *Supervisor) monitor() {
 				}
 			}
 			j.mu.Lock()
-			if j.state.PID == pid {
+			if j.state.PID == pid && j.state.StartedAt == startedAt && j.state.ActualState == "online" {
+				j.state.CPU = nil
+				j.state.Memory = nil
 				if okCPU {
 					j.state.CPU = &cpu
 				}
 				if okRAM {
 					j.state.Memory = &memory
 				}
+				j.recordUsage()
 				j.state.Children = len(all) - 1
 				if j.p.Port > 0 {
 					conn, e := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", j.p.Port), 100*time.Millisecond)

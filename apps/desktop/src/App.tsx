@@ -8,9 +8,7 @@ import {
   ChevronRight,
   Cloud,
   Cpu,
-  FolderGit2,
   HardDrive,
-  LayoutDashboard,
   MemoryStick,
   Plus,
   RefreshCw,
@@ -27,17 +25,36 @@ import {
   bytes,
   duration,
   ErrorMessage,
+  OverviewIcon,
   percent,
+  ProjectsIcon,
   Spinner,
   Status,
   uptime,
 } from "../../../packages/ui";
+import { ProjectCard, RuntimeLogo } from "../../../packages/ui/ProjectCard";
 import { api, message } from "./api";
 import { AddProject, ProjectPage } from "./Projects";
 import { CloudflarePage } from "./Cloudflare";
 import { SettingsPage } from "./Settings";
 
 type Page = "overview" | "projects" | "cloudflare" | "settings";
+
+function CloudflareIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path d="M25.079 15.102c-0.015-0-0.032-0.001-0.049-0.001-0.087 0-0.174 0.005-0.258 0.016l0.010-0.001c-0.074 0.004-0.136 0.054-0.158 0.121l-0 0.001-0.422 1.468c-0.068 0.187-0.108 0.402-0.108 0.627 0 0.378 0.112 0.731 0.305 1.026l-0.004-0.007c0.309 0.397 0.786 0.649 1.323 0.649 0.002 0 0.004 0 0.005 0h-0l2.304 0.142c0.001-0 0.003-0 0.004-0 0.067 0 0.127 0.035 0.161 0.087l0 0.001c0.022 0.037 0.035 0.082 0.035 0.129 0 0.023-0.003 0.046-0.009 0.068l0-0.002c-0.040 0.107-0.138 0.184-0.254 0.194l-0.001 0-2.401 0.14c-1.447 0.159-2.644 1.089-3.18 2.366l-0.010 0.026-0.176 0.448c-0.006 0.015-0.010 0.032-0.010 0.050 0 0.070 0.057 0.127 0.127 0.127 0.002 0 0.004-0 0.006-0h8.244c0.001 0 0.002 0 0.002 0 0.099 0 0.182-0.066 0.208-0.156l0-0.002c0.138-0.479 0.218-1.030 0.22-1.599v-0.001c-0.009-3.262-2.653-5.903-5.916-5.907h-0zM21.634 22.054c0.068-0.186 0.107-0.401 0.107-0.625 0-0.379-0.112-0.731-0.306-1.026l0.004 0.007c-0.308-0.397-0.785-0.65-1.322-0.65-0.002 0-0.003 0-0.005 0h0l-10.821-0.14c-0.001 0-0.002 0-0.003 0-0.068 0-0.128-0.035-0.163-0.088l-0-0.001c-0.022-0.036-0.036-0.080-0.036-0.127 0-0.024 0.003-0.047 0.010-0.069l-0 0.002c0.040-0.107 0.137-0.184 0.253-0.195l0.001-0 10.917-0.14c1.447-0.16 2.643-1.090 3.182-2.366l0.010-0.026 0.624-1.626c0.017-0.039 0.027-0.085 0.027-0.133 0-0.027-0.003-0.054-0.009-0.079l0 0.002c-0.735-3.203-3.561-5.555-6.936-5.555-3.109 0-5.751 1.996-6.717 4.776l-0.015 0.050c-0.528-0.399-1.195-0.64-1.919-0.64-1.651 0-3.010 1.252-3.179 2.859l-0.001 0.014c-0.010 0.097-0.016 0.21-0.016 0.324 0 0.281 0.035 0.555 0.1 0.816l-0.005-0.023c-2.452 0.071-4.413 2.076-4.413 4.539 0 0.002 0 0.004 0 0.006v-0c0.002 0.234 0.018 0.463 0.047 0.687l-0.003-0.028c0.017 0.104 0.104 0.182 0.211 0.184h19.971c0.12-0.003 0.22-0.083 0.253-0.192l0-0.002 0.15-0.533z" />
+    </svg>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState<Snapshot | null>(null),
     [page, setPage] = useState<Page>("overview"),
@@ -149,9 +166,9 @@ export default function App() {
         <nav aria-label="Navegação principal">
           {(
             [
-              { id: "overview", label: "Visão geral", icon: LayoutDashboard },
-              { id: "projects", label: "Projetos", icon: FolderGit2 },
-              { id: "cloudflare", label: "Cloudflare", icon: Cloud },
+              { id: "overview", label: "Visão geral", icon: OverviewIcon },
+              { id: "projects", label: "Aplicações", icon: ProjectsIcon },
+              { id: "cloudflare", label: "Cloudflare", icon: CloudflareIcon },
               { id: "settings", label: "Configurações", icon: Settings2 },
             ] as const
           ).map((item) => (
@@ -173,7 +190,7 @@ export default function App() {
             <ShieldCheck size={17} />
             <div>
               <strong>Core independente</strong>
-              <p>Seus projetos continuam ativos ao fechar esta janela.</p>
+              <p>Suas aplicações continuam ativas ao fechar esta janela.</p>
             </div>
           </div>
           <div className="sidebar-version">
@@ -188,7 +205,7 @@ export default function App() {
             {
               {
                 overview: "Visão geral",
-                projects: "Projetos",
+                projects: "Aplicações",
                 cloudflare: "Cloudflare",
                 settings: "Configurações",
               }[page]
@@ -248,7 +265,7 @@ export default function App() {
             <>
               <div className="page-heading">
                 <div>
-                  <h1>Seu servidor. Seus projetos.</h1>
+                  <h1>Seu servidor. Suas aplicações.</h1>
                   <p>
                     Acompanhe a máquina e mantenha suas aplicações em movimento.
                   </p>
@@ -311,7 +328,7 @@ export default function App() {
                   <MachineHistory state={state} />
                   <div className="resource-breakdown">
                     <span>
-                      Projetos · RSS{" "}
+                      Aplicações · RSS{" "}
                       {completeMemory ? bytes(projectMemory) : "coletando"}
                     </span>
                     <span>
@@ -379,7 +396,7 @@ export default function App() {
               </div>
               <div className="section-heading projects-heading">
                 <h2>
-                  Seus projetos{" "}
+                  Suas aplicações{" "}
                   <span className="muted">{state.projects.length}</span>
                 </h2>
                 {state.projects.length > 0 && (
@@ -405,7 +422,7 @@ export default function App() {
             <>
               <div className="page-heading">
                 <div>
-                  <h1>Projetos</h1>
+                  <h1>Aplicações</h1>
                   <p>
                     Aplicações reais, executadas nos seus próprios diretórios.
                   </p>
@@ -422,6 +439,10 @@ export default function App() {
                 projects={state.projects}
                 onSelect={(p) => setSelected(p.id)}
                 onAdd={() => setAdding(true)}
+                onAction={async (id, action) => {
+                  await api("POST", `/api/projects/${id}/action`, { action });
+                  await refresh();
+                }}
                 search
               />
             </>
@@ -544,11 +565,13 @@ function ProjectList({
   projects,
   onSelect,
   onAdd,
+  onAction,
   search = false,
 }: {
   projects: Project[];
   onSelect: (p: Project) => void;
   onAdd: () => void;
+  onAction?: (id: string, action: string) => Promise<void>;
   search?: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -556,7 +579,11 @@ function ProjectList({
     `${p.name} ${p.runtime}`.toLowerCase().includes(q.toLowerCase()),
   );
   return (
-    <section className="project-list">
+    <section
+      className={
+        onAction && filtered.length ? "project-catalog" : "project-list"
+      }
+    >
       {search && (
         <div className="list-toolbar">
           <label className="search-field">
@@ -576,7 +603,7 @@ function ProjectList({
       {!projects.length ? (
         <div className="empty-state">
           <div className="empty-icon">
-            <FolderGit2 size={30} strokeWidth={1.4} />
+            <ProjectsIcon size={30} />
           </div>
           <h3>Uma casa para seus projetos.</h3>
           <p>
@@ -599,6 +626,18 @@ function ProjectList({
           <button className="button" onClick={() => setQ("")}>
             Limpar pesquisa
           </button>
+        </div>
+      ) : onAction ? (
+        <div className="project-cards">
+          {filtered.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              onOpen={() => onSelect(project)}
+              onOpenDomain={window.cloudforge.openExternal}
+              onAction={(action) => onAction(project.id, action)}
+            />
+          ))}
         </div>
       ) : (
         <div className="table-scroll">
@@ -624,7 +663,7 @@ function ProjectList({
                       onClick={() => onSelect(p)}
                     >
                       <span className={`runtime-icon ${p.runtime}`}>
-                        <FolderGit2 size={20} />
+                        <RuntimeLogo runtime={p.runtime} />
                       </span>
                       <span>
                         <strong>{p.name}</strong>

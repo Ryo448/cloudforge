@@ -168,9 +168,7 @@ export function ProjectPort({ project, onChanged }: Props) {
       </form>
       <div className="settings-subsection">
         <h3>Terminal</h3>
-        <p className="muted">
-          Permita abrir o terminal do projeto.
-        </p>
+        <p className="muted">Permita abrir o terminal do projeto.</p>
         <label className="checkbox-label">
           <input
             type="checkbox"

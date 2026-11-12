@@ -563,7 +563,14 @@ func (s *Server) remoteViews() []map[string]any {
 			errorMessage = "Falha na execução. Consulte os detalhes no aplicativo desktop."
 		}
 		execution := map[string]any{"actualState": v.RuntimeInfo.ActualState, "startedAt": v.RuntimeInfo.StartedAt, "cpu": v.RuntimeInfo.CPU, "memory": v.RuntimeInfo.Memory, "lastError": errorMessage}
-		out = append(out, map[string]any{"id": v.ID, "name": v.Name, "runtime": v.Runtime, "execution": execution})
+		project := map[string]any{"id": v.ID, "name": v.Name, "runtime": v.Runtime, "execution": execution}
+		if len(v.UsageHistory) > 0 {
+			project["usageHistory"] = v.UsageHistory
+		}
+		if v.Hostname != "" {
+			project["hostname"] = v.Hostname
+		}
+		out = append(out, project)
 	}
 	return out
 }

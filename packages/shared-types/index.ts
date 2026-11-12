@@ -11,6 +11,8 @@ export interface Execution {
   restarts: number;
   health: string;
 }
+export type UsageSample = Pick<Execution, "cpu" | "memory"> & { time: number };
+
 export interface Project {
   id: string;
   name: string;
@@ -27,6 +29,7 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   execution: Execution;
+  usageHistory?: UsageSample[];
   hostname?: string;
   routePort?: number;
 }
@@ -125,7 +128,10 @@ export interface Session {
   expiresAt: number;
   device: string;
 }
-export type RemoteProject = Pick<Project, "id" | "name" | "runtime"> & {
+export type RemoteProject = Pick<
+  Project,
+  "id" | "name" | "runtime" | "hostname" | "usageHistory"
+> & {
   execution: Pick<
     Execution,
     "actualState" | "startedAt" | "cpu" | "memory" | "lastError"

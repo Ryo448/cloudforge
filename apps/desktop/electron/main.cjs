@@ -14,6 +14,9 @@ const WebSocket = require("ws");
 const { pathToFileURL } = require("node:url");
 app.setName("Cloudforge");
 const root = path.resolve(__dirname, "../../..");
+const iconPath = app.isPackaged
+  ? path.join(process.resourcesPath, "icon.png")
+  : path.join(root, "assets/icon/icon.png");
 const dataDir =
   process.env.CLOUDFORGE_DATA ||
   path.join(app.getPath("appData"), "Cloudforge");
@@ -90,7 +93,8 @@ function openTuiWindow(project) {
     height: 700,
     minWidth: 600,
     minHeight: 400,
-    backgroundColor: "#0d1510",
+    backgroundColor: "#080a0d",
+    icon: iconPath,
     title: `Terminal · ${project.name}`,
     autoHideMenuBar: true,
     webPreferences: {
@@ -233,7 +237,8 @@ function createWindow() {
     height: 880,
     minWidth: 900,
     minHeight: 650,
-    backgroundColor: "#111715",
+    backgroundColor: "#0b0d11",
+    icon: iconPath,
     title: "Cloudforge",
     autoHideMenuBar: true,
     webPreferences: {
@@ -245,6 +250,19 @@ function createWindow() {
     },
   });
   const dev = process.env.CLOUDFORGE_DEV === "1";
+  window.webContents.on("console-message", (details) => {
+    console.error(
+      `[Renderer:${details.level}] ${details.message} (${details.sourceId}:${details.lineNumber})`,
+    );
+  });
+  window.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL) => {
+      console.error(
+        `Falha ao carregar a interface (${errorCode}): ${errorDescription} — ${validatedURL}`,
+      );
+    },
+  );
   if (dev) window.loadURL("http://127.0.0.1:5173");
   else window.loadFile(path.join(__dirname, "../dist/index.html"));
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));

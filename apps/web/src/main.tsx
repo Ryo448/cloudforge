@@ -1,26 +1,22 @@
 import React, { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import {
-  FolderGit2,
-  LogOut,
-  RefreshCw,
-  ShieldCheck,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
-import "@fontsource-variable/inter";
+import { LogOut, RefreshCw, ShieldCheck, Wifi, WifiOff } from "lucide-react";
+import "@fontsource/poppins/500.css";
+import "@fontsource/poppins/600.css";
+import "@fontsource/poppins/700.css";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
 import "../../../packages/ui/styles.css";
 import {
-  Actions,
   Brand,
-  bytes,
   ErrorMessage,
-  Modal,
-  percent,
+  ProjectsIcon,
   Spinner,
-  Status,
-  uptime,
 } from "../../../packages/ui";
+import { ProjectCard } from "../../../packages/ui/ProjectCard";
 import type { RemoteProject } from "../../../packages/shared-types";
 type Session = {
   authenticated: boolean;
@@ -35,12 +31,7 @@ function App() {
     [password, setPassword] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(""),
-    [connected, setConnected] = useState(false),
-    [confirm, setConfirm] = useState<{
-      id: string;
-      name: string;
-      action: string;
-    } | null>(null);
+    [connected, setConnected] = useState(false);
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [session?.authenticated]);
@@ -170,19 +161,8 @@ function App() {
     }
   }
   async function action(id: string, action: string) {
-    setBusy(id);
-    setConfirm(null);
-    setError("");
-    try {
-      await request("POST", `/api/projects/${id}/action`, { action });
-      setProjects(await request<RemoteProject[]>("GET", "/api/projects"));
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Não foi possível executar a ação.",
-      );
-    } finally {
-      setBusy("");
-    }
+    await request("POST", `/api/projects/${id}/action`, { action });
+    setProjects(await request<RemoteProject[]>("GET", "/api/projects"));
   }
   if (!session)
     return (
@@ -302,7 +282,7 @@ function App() {
         ) : !projects.length ? (
           <section className="project-list">
             <div className="empty-state">
-              <FolderGit2 size={34} />
+              <ProjectsIcon size={34} />
               <h2>Nenhum projeto cadastrado</h2>
               <p>
                 Adicione seus projetos no aplicativo desktop. Eles aparecerão
@@ -311,53 +291,13 @@ function App() {
             </div>
           </section>
         ) : (
-          <div className="remote-projects">
+          <div className="project-cards">
             {projects.map((project) => (
-              <section className="remote-project" key={project.id}>
-                <div className="remote-project-head">
-                  <div>
-                    <span className="muted small">
-                      {project.runtime === "node" ? "Node.js" : "Python"}
-                    </span>
-                    <h2>{project.name}</h2>
-                  </div>
-                  <Status state={project.execution.actualState} />
-                </div>
-                <div className="remote-metrics">
-                  <div>
-                    <span>CPU</span>
-                    <strong>{percent(project.execution.cpu)}</strong>
-                  </div>
-                  <div>
-                    <span>RAM</span>
-                    <strong>
-                      {project.execution.memory == null
-                        ? "—"
-                        : bytes(project.execution.memory)}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Tempo ativo</span>
-                    <strong>{uptime(project.execution.startedAt)}</strong>
-                  </div>
-                </div>
-                {project.execution.lastError && (
-                  <ErrorMessage error={project.execution.lastError} />
-                )}
-                <Actions
-                  state={project.execution.actualState}
-                  busy={busy === project.id}
-                  onAction={(name) =>
-                    name === "start"
-                      ? void action(project.id, name)
-                      : setConfirm({
-                          id: project.id,
-                          name: project.name,
-                          action: name,
-                        })
-                  }
-                />
-              </section>
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onAction={(name) => action(project.id, name)}
+              />
             ))}
           </div>
         )}
@@ -367,34 +307,6 @@ function App() {
           desktop.
         </p>
       </main>
-      {confirm && (
-        <Modal
-          title={
-            confirm.action === "stop"
-              ? "Parar aplicação?"
-              : "Reiniciar aplicação?"
-          }
-          onClose={() => setConfirm(null)}
-        >
-          <p>
-            {confirm.name}{" "}
-            {confirm.action === "stop"
-              ? "será encerrado."
-              : "ficará indisponível durante a reinicialização."}
-          </p>
-          <div className="form-footer">
-            <button className="button" onClick={() => setConfirm(null)}>
-              Cancelar
-            </button>
-            <button
-              className="button primary"
-              onClick={() => void action(confirm.id, confirm.action)}
-            >
-              Confirmar
-            </button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

@@ -7,7 +7,8 @@
   "files": ["dist/**/*", "electron/**/*", "package.json"],
   "extraResources": [
     { "from": "dist/core", "to": ".", "filter": ["cloudforge-core*"] },
-    { "from": "apps/web/dist", "to": "web" }
+    { "from": "apps/web/dist", "to": "web" },
+    { "from": "assets/icon/icon.png", "to": "icon.png" }
   ],
   "win": {
     "target": "nsis",

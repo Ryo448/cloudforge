@@ -34,11 +34,17 @@ type Runtime struct {
 	Health           string     `json:"health"`
 	TerminalReady    bool       `json:"terminalReady,omitempty"`
 }
+type UsageSample struct {
+	Time   int64    `json:"time"`
+	CPU    *float64 `json:"cpu"`
+	Memory *uint64  `json:"memory"`
+}
 type View struct {
 	Project
-	RuntimeInfo Runtime `json:"execution"`
-	Hostname    string  `json:"hostname,omitempty"`
-	RoutePort   int     `json:"routePort,omitempty"`
+	RuntimeInfo  Runtime       `json:"execution"`
+	UsageHistory []UsageSample `json:"usageHistory,omitempty"`
+	Hostname     string        `json:"hostname,omitempty"`
+	RoutePort    int           `json:"routePort,omitempty"`
 }
 type Dependencies struct {
 	EnvironmentFingerprint string    `json:"environmentFingerprint"`

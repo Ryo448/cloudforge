@@ -21,14 +21,14 @@ export default function TerminalWindow() {
     if (!container.current) return;
     const terminal = new Terminal({
       cursorBlink: true,
-      fontFamily: "Consolas, ui-monospace, monospace",
+      fontFamily: '"IBM Plex Mono", Consolas, ui-monospace, monospace',
       fontSize: 14,
       scrollback: 2000,
       theme: {
-        background: "#0d1510",
-        foreground: "#d1dfd5",
-        cursor: "#a5d4aa",
-        selectionBackground: "#456d50",
+        background: "#080a0d",
+        foreground: "#dce2ec",
+        cursor: "#ff7a1a",
+        selectionBackground: "#4d280d",
       },
     });
     const fit = new FitAddon();
