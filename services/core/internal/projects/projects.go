@@ -135,9 +135,14 @@ func Validate(p *model.Project) error {
 	if p.Port < 0 || p.Port > 65535 {
 		return errors.New("porta inválida")
 	}
+	return ValidateStartup(p)
+}
+
+func ValidateStartup(p *model.Project) error {
 	if len(p.Arguments) > 64 {
 		return errors.New("argumentos demais")
 	}
+	root := p.Path
 	switch p.Runtime {
 	case "python":
 		entry, e := SafePath(root, p.EntryPoint)

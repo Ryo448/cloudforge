@@ -28,11 +28,8 @@ function usagePaths(
   samples: UsageSample[],
   metric: "cpu" | "memory",
   now: number,
+  scale: number,
 ) {
-  const scale = Math.max(
-    metric === "cpu" ? 100 : 128 * 1024 ** 2,
-    ...samples.map((s) => s[metric] ?? 0),
-  );
   const segments: [number, number][][] = [];
   let segment: [number, number][] = [];
   let previousTime = 0;
@@ -53,19 +50,29 @@ function usagePaths(
   return segments;
 }
 
-function ProjectUsage({
+export function ProjectUsage({
   history,
   online,
+  metric,
 }: {
   history?: UsageSample[];
   online: boolean;
+  metric?: "cpu" | "memory";
 }) {
   const fill = useId();
   const now = Math.max(Date.now(), history?.at(-1)?.time ?? 0);
   const samples =
     history?.filter((sample) => now - sample.time <= historyWindow) ?? [];
-  const cpu = usagePaths(samples, "cpu", now);
-  const memory = usagePaths(samples, "memory", now);
+  const scales = {
+    cpu: Math.ceil(
+      Math.max(metric ? 1 : 100, ...samples.map((s) => s.cpu ?? 0)),
+    ),
+    memory: Math.max(128 * 1024 ** 2, ...samples.map((s) => s.memory ?? 0)),
+  };
+  const cpu =
+    metric === "memory" ? [] : usagePaths(samples, "cpu", now, scales.cpu);
+  const memory =
+    metric === "cpu" ? [] : usagePaths(samples, "memory", now, scales.memory);
   if (!cpu.length && !memory.length) {
     return (
       <div className="project-chart project-chart-empty">
@@ -73,16 +80,26 @@ function ProjectUsage({
       </div>
     );
   }
-  return (
+  const label =
+    metric === "cpu" ? "CPU" : metric === "memory" ? "RAM" : "CPU e RAM";
+  const area = metric === "cpu" ? cpu : memory;
+  const chart = (
     <svg
       className="project-chart"
       viewBox={`0 0 ${chartWidth} ${chartHeight}`}
       preserveAspectRatio="none"
       role="img"
-      aria-label="Histórico de CPU e RAM nos últimos 2 minutos"
+      aria-label={`Histórico de ${label} nos últimos 2 minutos`}
     >
       <defs>
-        <linearGradient id={fill} x1="0" y1="0" x2="0" y2="1">
+        <linearGradient
+          id={fill}
+          className={metric ?? "memory"}
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
           <stop offset="0%" className="project-chart-fill-top" />
           <stop offset="100%" className="project-chart-fill-bottom" />
         </linearGradient>
@@ -91,7 +108,7 @@ function ProjectUsage({
         className="project-chart-guide"
         d={`M0 22H${chartWidth} M0 44H${chartWidth}`}
       />
-      {memory.map((segment) => {
+      {area.map((segment) => {
         const first = segment[0];
         const last = segment[segment.length - 1];
         return (
@@ -130,6 +147,23 @@ function ProjectUsage({
         }),
       )}
     </svg>
+  );
+  if (!metric) return chart;
+  return (
+    <div className="project-detail-chart">
+      <div className="project-chart-axis" aria-hidden="true">
+        <span>
+          {metric === "cpu" ? percent(scales.cpu) : bytes(scales.memory)}
+        </span>
+        <span>{metric === "cpu" ? "0%" : "0 B"}</span>
+      </div>
+      {chart}
+      <div className="project-chart-times" aria-hidden="true">
+        <span>−2 min</span>
+        <span>−1 min</span>
+        <span>Agora</span>
+      </div>
+    </div>
   );
 }
 

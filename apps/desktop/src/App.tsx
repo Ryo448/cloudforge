@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Activity,
+  ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   Check,
@@ -8,6 +9,8 @@ import {
   ChevronRight,
   Cloud,
   Cpu,
+  Folder,
+  Globe,
   HardDrive,
   MemoryStick,
   Plus,
@@ -16,6 +19,7 @@ import {
   Server,
   Settings2,
   ShieldCheck,
+  Terminal,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -34,11 +38,19 @@ import {
 } from "../../../packages/ui";
 import { ProjectCard, RuntimeLogo } from "../../../packages/ui/ProjectCard";
 import { api, message } from "./api";
-import { AddProject, ProjectPage } from "./Projects";
+import { AddProject, ProjectPage, type ProjectSection } from "./Projects";
 import { CloudflarePage } from "./Cloudflare";
 import { SettingsPage } from "./Settings";
 
 type Page = "overview" | "projects" | "cloudflare" | "settings";
+
+const projectNavigation = [
+  { id: "logs", label: "Logs", icon: Terminal },
+  { id: "overview", label: "Visão geral", icon: OverviewIcon },
+  { id: "files", label: "Arquivos", icon: Folder },
+  { id: "domain", label: "Network", icon: Globe },
+  { id: "settings", label: "Configurações", icon: Settings2 },
+] as const;
 
 function CloudflareIcon({ size = 24 }: { size?: number }) {
   return (
@@ -59,6 +71,7 @@ export default function App() {
   const [state, setState] = useState<Snapshot | null>(null),
     [page, setPage] = useState<Page>("overview"),
     [selected, setSelected] = useState<string | null>(null),
+    [projectSection, setProjectSection] = useState<ProjectSection>("overview"),
     [adding, setAdding] = useState(false),
     [error, setError] = useState(""),
     [removalNotice, setRemovalNotice] = useState(""),
@@ -90,6 +103,9 @@ export default function App() {
       clearInterval(timer);
     };
   }, []);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [page, selected, projectSection]);
   if (!state)
     return (
       <div className="connection-page">
@@ -151,40 +167,82 @@ export default function App() {
     setPage(p);
     setSelected(null);
   };
+  const openProject = (project: Project) => {
+    setPage("projects");
+    setSelected(project.id);
+    setProjectSection("overview");
+  };
+  const sectionLabel = projectNavigation.find(
+    (item) => item.id === projectSection,
+  )?.label;
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <Brand />
-        <div className="local-node">
-          <span className={connected ? "node-light" : "node-light offline"} />
-          <div>
-            <strong>{state.system.hostname}</strong>
-            <span>Servidor local</span>
+        {!project && (
+          <div className="local-node">
+            <span className={connected ? "node-light" : "node-light offline"} />
+            <div>
+              <strong>{state.system.hostname}</strong>
+              <span>Servidor local</span>
+            </div>
+            <Server size={16} />
           </div>
-          <Server size={16} />
-        </div>
-        <nav aria-label="Navegação principal">
-          {(
-            [
-              { id: "overview", label: "Visão geral", icon: OverviewIcon },
-              { id: "projects", label: "Aplicações", icon: ProjectsIcon },
-              { id: "cloudflare", label: "Cloudflare", icon: CloudflareIcon },
-              { id: "settings", label: "Configurações", icon: Settings2 },
-            ] as const
-          ).map((item) => (
+        )}
+        {project ? (
+          <nav aria-label="Navegação do projeto">
             <button
-              key={item.id}
-              className={page === item.id ? "nav-item active" : "nav-item"}
-              onClick={() => navigate(item.id)}
+              className="nav-item project-nav-back"
+              aria-label="Todas as aplicações"
+              title="Todas as aplicações"
+              onClick={() => navigate("projects")}
             >
-              <item.icon size={18} />
-              <span>{item.label}</span>
-              {item.id === "projects" && (
-                <span className="nav-count">{state.projects.length}</span>
-              )}
+              <ArrowLeft size={18} />
+              <span>Todas as aplicações</span>
             </button>
-          ))}
-        </nav>
+            {projectNavigation.map((item) => (
+              <button
+                key={item.id}
+                className={
+                  projectSection === item.id ? "nav-item active" : "nav-item"
+                }
+                aria-current={projectSection === item.id ? "page" : undefined}
+                aria-label={item.label}
+                title={item.label}
+                onClick={() => setProjectSection(item.id)}
+              >
+                <item.icon size={18} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        ) : (
+          <nav aria-label="Navegação principal">
+            {(
+              [
+                { id: "overview", label: "Visão geral", icon: OverviewIcon },
+                { id: "projects", label: "Aplicações", icon: ProjectsIcon },
+                { id: "cloudflare", label: "Cloudflare", icon: CloudflareIcon },
+                { id: "settings", label: "Configurações", icon: Settings2 },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                className={page === item.id ? "nav-item active" : "nav-item"}
+                aria-current={page === item.id ? "page" : undefined}
+                aria-label={item.label}
+                title={item.label}
+                onClick={() => navigate(item.id)}
+              >
+                <item.icon size={18} />
+                <span>{item.label}</span>
+                {item.id === "projects" && (
+                  <span className="nav-count">{state.projects.length}</span>
+                )}
+              </button>
+            ))}
+          </nav>
+        )}
         <div className="sidebar-bottom">
           <div className="service-note">
             <ShieldCheck size={17} />
@@ -201,21 +259,25 @@ export default function App() {
       </aside>
       <div className="workspace">
         <header className="topbar">
-          <span>
-            {
-              {
-                overview: "Visão geral",
-                projects: "Aplicações",
-                cloudflare: "Cloudflare",
-                settings: "Configurações",
-              }[page]
-            }
-          </span>
-          {project && (
+          {project ? (
             <>
-              <ChevronRight size={14} />
-              <strong>{project.name}</strong>
+              <span className="topbar-project-name" title={project.name}>
+                {project.name}
+              </span>
+              <ChevronRight size={14} aria-hidden="true" />
+              <strong>{sectionLabel}</strong>
             </>
+          ) : (
+            <span>
+              {
+                {
+                  overview: "Visão geral",
+                  projects: "Aplicações",
+                  cloudflare: "Cloudflare",
+                  settings: "Configurações",
+                }[page]
+              }
+            </span>
           )}
           <div className="topbar-right">
             <span className="connection-state">
@@ -238,9 +300,11 @@ export default function App() {
           )}
           {project ? (
             <ProjectPage
+              key={project.id}
               project={project}
               cloud={state.cloudflare}
-              onBack={() => setSelected(null)}
+              section={projectSection}
+              onSectionChange={setProjectSection}
               onChanged={refresh}
               onRemoved={(warning) => {
                 setState((data) =>
@@ -411,10 +475,7 @@ export default function App() {
               </div>
               <ProjectList
                 projects={state.projects.slice(0, 5)}
-                onSelect={(p) => {
-                  setPage("projects");
-                  setSelected(p.id);
-                }}
+                onSelect={openProject}
                 onAdd={() => setAdding(true)}
               />
             </>
@@ -437,7 +498,7 @@ export default function App() {
               </div>
               <ProjectList
                 projects={state.projects}
-                onSelect={(p) => setSelected(p.id)}
+                onSelect={openProject}
                 onAdd={() => setAdding(true)}
                 onAction={async (id, action) => {
                   await api("POST", `/api/projects/${id}/action`, { action });

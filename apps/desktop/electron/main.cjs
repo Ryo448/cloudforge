@@ -24,7 +24,7 @@ const profileDir = path.join(dataDir, "electron");
 require("node:fs").mkdirSync(profileDir, { recursive: true });
 app.setPath("userData", profileDir);
 const address = "http://127.0.0.1:28931";
-const coreAPIVersion = 3;
+const coreAPIVersion = 4;
 const terminalSessions = new Map();
 let window,
   key,
@@ -299,7 +299,10 @@ const routes = [
   ],
   ["GET", /^\/api\/projects\/[A-Za-z0-9_-]+\/(logs|files|file)(\?[^#]*)?$/],
   ["POST", /^\/api\/projects\/[A-Za-z0-9_-]+\/(action|route)$/],
-  ["PATCH", /^\/api\/projects\/[A-Za-z0-9_-]+\/(port|terminal-enabled)$/],
+  [
+    "PATCH",
+    /^\/api\/projects\/[A-Za-z0-9_-]+\/(port|startup|terminal-enabled)$/,
+  ],
   ["DELETE", /^\/api\/projects\/[A-Za-z0-9_-]+(?:\/route)?$/],
   ["DELETE", /^\/api\/sessions\/[A-Za-z0-9_-]+$/],
 ];

@@ -5,6 +5,7 @@ import (
 	"cloudforge/core/internal/model"
 	"cloudforge/core/internal/persistence"
 	"cloudforge/core/internal/processes"
+	"cloudforge/core/internal/projects"
 	"cloudforge/core/internal/runtimes"
 	"context"
 	"errors"
@@ -198,6 +199,37 @@ func (s *Supervisor) SetPort(id string, port int) error {
 	if port == 0 {
 		j.state.Health = "not-configured"
 	}
+	return nil
+}
+
+func (s *Supervisor) SetStartup(id string, command []string, entry string, args []string) error {
+	j, err := s.get(id)
+	if err != nil {
+		return err
+	}
+	if !j.op.TryLock() {
+		return errors.New("aguarde a operação em andamento neste projeto")
+	}
+	defer j.op.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.removing {
+		return errors.New("projeto em exclusão ou já excluído")
+	}
+	p := j.p
+	if p.Runtime == "node" {
+		p.StartCommand = command
+	} else {
+		p.EntryPoint, p.Arguments = entry, args
+	}
+	if err := projects.ValidateStartup(&p); err != nil {
+		return err
+	}
+	p.UpdatedAt = time.Now().UTC()
+	if err := s.store.SaveProject(p); err != nil {
+		return err
+	}
+	j.p = p
 	return nil
 }
 

@@ -124,7 +124,7 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.Trim(r.URL.Path, "/")
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.0.0", "apiVersion": 3})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.0.0", "apiVersion": 4})
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {
@@ -457,6 +457,23 @@ func (s *Server) projectLocal(w http.ResponseWriter, r *http.Request, parts []st
 		}
 		if err := s.Supervisor.SetTerminalEnabled(id, *body.Enabled); err != nil {
 			fail(w, 500, err)
+			return
+		}
+		write(w, 200, map[string]bool{"ok": true})
+		return
+	}
+	if section == "startup" && r.Method == "PATCH" {
+		var body struct {
+			Command   []string `json:"startCommand"`
+			Entry     string   `json:"entryPoint"`
+			Arguments []string `json:"arguments"`
+		}
+		if err := decode(w, r, &body); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		if err := s.Supervisor.SetStartup(id, body.Command, body.Entry, body.Arguments); err != nil {
+			fail(w, 400, err)
 			return
 		}
 		write(w, 200, map[string]bool{"ok": true})

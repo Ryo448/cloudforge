@@ -1,19 +1,28 @@
-import { useEffect, useState, type FormEvent } from "react";
 import {
-  ArrowLeft,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  ArrowRight,
   ArrowUp,
+  ArrowUpRight,
   Check,
   ChevronRight,
   Copy,
+  Cpu,
   FileText,
   Folder,
   FolderOpen,
-  FolderSearch,
   Globe,
+  MemoryStick,
   Plus,
   RefreshCw,
   Search,
-  Settings2,
+  Server,
   Terminal,
   Trash2,
 } from "lucide-react";
@@ -35,7 +44,9 @@ import {
   Status,
   uptime,
 } from "../../../packages/ui";
+import { ProjectUsage, RuntimeLogo } from "../../../packages/ui/ProjectCard";
 import { api, message } from "./api";
+import "./add-project.css";
 export function parseArguments(text: string): string[] {
   const tokens: string[] = [];
   let token = "",
@@ -64,6 +75,17 @@ export function parseArguments(text: string): string[] {
   if (active) tokens.push(token);
   return tokens;
 }
+
+function formatArguments(tokens: string[] | null): string {
+  return (tokens ?? [])
+    .map((token) =>
+      token && !/[\s'"]/.test(token)
+        ? token
+        : `'${token.replaceAll("'", `'"'"'`)}'`,
+    )
+    .join(" ");
+}
+
 export function AddProject({
   onClose,
   onCreated,
@@ -81,11 +103,14 @@ export function AddProject({
     [port, setPort] = useState(""),
     [policy, setPolicy] = useState("on-failure"),
     [approved, setApproved] = useState(false),
-    [busy, setBusy] = useState(false),
+    [pending, setPending] = useState<"choose" | "inspect" | "save" | null>(
+      null,
+    ),
     [error, setError] = useState("");
   async function inspect(value: string) {
     setError("");
-    setBusy(true);
+    setPath(value);
+    setPending("inspect");
     try {
       const d = await api<Detection>("POST", "/api/projects/inspect", {
         path: value,
@@ -118,12 +143,13 @@ export function AddProject({
     } catch (e) {
       setError(message(e));
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   }
   async function save(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
+    if (pending || !approved || !runtime) return;
+    setPending("save");
     setError("");
     try {
       await api("POST", "/api/projects", {
@@ -144,231 +170,365 @@ export function AddProject({
     } catch (e) {
       setError(message(e));
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   }
+  const chooseButton = useRef<HTMLButtonElement>(null);
+  const configHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (detection) configHeading.current?.focus();
+    else chooseButton.current?.focus();
+  }, [detection]);
+
+  async function chooseDirectory() {
+    setError("");
+    setPending("choose");
+    try {
+      const selected = await window.cloudforge.chooseDirectory();
+      if (selected) await inspect(selected);
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  function changeDirectory() {
+    setDetection(null);
+    setApproved(false);
+    setError("");
+  }
+
   return (
-    <Modal title="Adicionar projeto" onClose={onClose}>
-      <p className="muted">
-        Selecione o diretório original. O Cloudforge não copia nem move seus
-        arquivos.
-      </p>
+    <Modal
+      title="Adicionar projeto"
+      className="add-project"
+      onClose={onClose}
+      closeDisabled={pending === "save"}
+    >
+      <ol
+        className="add-project-steps"
+        aria-label="Etapas para adicionar um projeto"
+      >
+        <li
+          className={detection ? "is-complete" : undefined}
+          aria-current={detection ? undefined : "step"}
+        >
+          <span aria-hidden="true">
+            {detection ? <Check size={14} /> : "1"}
+          </span>
+          Pasta do projeto
+        </li>
+        <li aria-current={detection ? "step" : undefined}>
+          <span aria-hidden="true">2</span>
+          Configuração
+        </li>
+      </ol>
       {!detection ? (
-        <div className="folder-picker">
-          <FolderSearch size={38} strokeWidth={1.3} />
-          <h3>Onde seu projeto está?</h3>
-          <button
-            className="button primary"
-            disabled={busy}
-            onClick={async () => {
-              try {
-                const selected = await window.cloudforge.chooseDirectory();
-                if (selected) await inspect(selected);
-              } catch (e) {
-                setError(message(e));
-              }
-            }}
-          >
-            <FolderOpen size={17} />
-            Selecionar pasta
-          </button>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void inspect(path);
-            }}
-          >
-            <label>
-              Ou informe o caminho absoluto
-              <input
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                placeholder="C:\Projetos\minha-aplicacao"
-                required
-              />
-            </label>
-            <button className="button" disabled={busy || !path}>
-              {busy ? <Spinner /> : <Search size={15} />}Inspecionar diretório
-            </button>
-          </form>
-        </div>
-      ) : (
-        <form onSubmit={save}>
-          <div className="selected-folder">
-            <Folder size={19} />
-            <span>{path}</span>
-            <button
-              type="button"
-              className="text-button"
-              disabled={busy}
-              onClick={() => {
-                setDetection(null);
-                setApproved(false);
-              }}
-            >
-              Trocar
-            </button>
-          </div>
-          <label>
-            Nome do projeto
-            <input
-              required
-              maxLength={100}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label>
-            Runtime
-            <select
-              required
-              value={runtime}
-              onChange={(e) => setRuntime(e.target.value)}
-            >
-              <option value="">
-                {detection.runtimes.length > 1
-                  ? "Há mais de um runtime. Escolha um."
-                  : "Selecione"}
-              </option>
-              {detection.runtimes.map((r) => (
-                <option key={r} value={r}>
-                  {r === "node" ? "Node.js" : "Python"}
-                </option>
-              ))}
-            </select>
-          </label>
-          {runtime === "python" ? (
-            <>
-              <label>
-                Arquivo principal
-                <input
-                  list="python-files"
-                  required
-                  value={entry}
-                  onChange={(e) => setEntry(e.target.value)}
-                />
-                <datalist id="python-files">
-                  {detection.pythonFiles.map((f) => (
-                    <option key={f} value={f} />
-                  ))}
-                </datalist>
-                <small>
-                  A venv e o pip são gerenciados dentro desta pasta.
-                </small>
-              </label>
-              <label>
-                Argumentos de execução
-                <input
-                  value={args}
-                  onChange={(e) => setArgs(e.target.value)}
-                  placeholder="Ex.: --host 127.0.0.1"
-                />
-              </label>
-            </>
-          ) : runtime === "node" ? (
-            <label>
-              Comando de inicialização
-              <input
-                list="node-scripts"
-                required
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-              />
-              <datalist id="node-scripts">
-                {detection.scripts.map((script) => (
-                  <option
-                    key={script}
-                    value={`${detection.packageManager} run ${script}`}
-                  />
-                ))}
-              </datalist>
-              <small>
-                Escolha um script detectado ou use node arquivo.js. Não há
-                execução por shell.
-              </small>
-            </label>
-          ) : null}
-          <div className="form-grid">
-            <label>
-              Porta HTTP <span className="muted">opcional</span>
-              <input
-                type="number"
-                min={1}
-                max={65535}
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-                placeholder="Ex.: 3000"
-              />
-              <small>
-                Use a porta que o código realmente abre. Deixe em branco para
-                bots e scripts sem HTTP.
-              </small>
-            </label>
-            <label>
-              Reinicialização automática
-              <select
-                value={policy}
-                onChange={(e) => setPolicy(e.target.value)}
+        <form
+          className="add-project-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (path.trim() && !pending) void inspect(path.trim());
+          }}
+        >
+          <div className="add-project-body add-project-source">
+            <div className="add-project-folder-choice">
+              <div className="add-project-folder-icon" aria-hidden="true">
+                <FolderOpen size={25} strokeWidth={1.6} />
+              </div>
+              <div>
+                <h3>Escolha a pasta original</h3>
+                <p>
+                  O Cloudforge usa seus arquivos no local, sem copiá-los ou
+                  movê-los.
+                </p>
+              </div>
+              <button
+                ref={chooseButton}
+                className="button primary"
+                type="button"
+                disabled={!!pending}
+                onClick={chooseDirectory}
               >
-                <option value="never">Nunca</option>
-                <option value="on-failure">Em caso de falha</option>
-                <option value="always">Sempre, exceto parada manual</option>
-              </select>
-            </label>
+                {pending === "choose" ? "Abrindo seletor…" : "Selecionar pasta"}
+                <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="add-project-manual">
+              <label htmlFor="add-project-path">
+                Ou informe o caminho absoluto
+              </label>
+              <div className="add-project-path-controls">
+                <input
+                  className="add-project-code"
+                  id="add-project-path"
+                  value={path}
+                  onChange={(e) => {
+                    setPath(e.target.value);
+                    setError("");
+                  }}
+                  placeholder="C:\Projetos\minha-aplicacao"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={!!pending}
+                  required
+                />
+                <button className="button" disabled={!!pending || !path.trim()}>
+                  <Search size={15} aria-hidden="true" />
+                  Verificar pasta
+                </button>
+              </div>
+            </div>
+            <ErrorMessage error={error} />
           </div>
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={approved}
-              onChange={(e) => setApproved(e.target.checked)}
-              required
-            />
-            <span>
-              Confio neste projeto e autorizo a execução do seu código e dos
-              scripts de instalação de dependências. Ele terá os privilégios do
-              meu usuário.
-            </span>
-          </label>
-          <ErrorMessage error={error} />
-          <div className="form-footer">
+          <div className="add-project-footer">
+            <p role="status">
+              {pending === "inspect" ? (
+                <>
+                  <Spinner /> Verificando a pasta…
+                </>
+              ) : (
+                "Projetos Python e Node.js"
+              )}
+            </p>
+            <button type="button" className="button" onClick={onClose}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      ) : (
+        <form className="add-project-form" onSubmit={save}>
+          <div className="add-project-body add-project-config">
+            <div className="add-project-selected">
+              <Folder size={21} aria-hidden="true" />
+              <div>
+                <h3 ref={configHeading} tabIndex={-1}>
+                  Pasta selecionada
+                </h3>
+                <code>{path}</code>
+              </div>
+              <button
+                type="button"
+                className="button"
+                disabled={!!pending}
+                onClick={changeDirectory}
+              >
+                Trocar pasta
+              </button>
+            </div>
+            <fieldset className="add-project-fields" disabled={!!pending}>
+              <section
+                className="add-project-section"
+                aria-labelledby="add-project-identity"
+              >
+                <h3 id="add-project-identity">Identificação</h3>
+                <div className="add-project-grid">
+                  <label>
+                    Nome do projeto
+                    <input
+                      required
+                      maxLength={100}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Ambiente de execução
+                    <select
+                      required
+                      value={runtime}
+                      onChange={(e) => setRuntime(e.target.value)}
+                    >
+                      <option value="" disabled>
+                        Escolha um ambiente
+                      </option>
+                      {detection.runtimes.map((r) => (
+                        <option key={r} value={r}>
+                          {r === "node" ? "Node.js" : "Python"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </section>
+              <section
+                className="add-project-section"
+                aria-labelledby="add-project-launch"
+              >
+                <h3 id="add-project-launch">Execução</h3>
+                <div className="add-project-grid">
+                  {runtime === "python" ? (
+                    <>
+                      <label>
+                        Arquivo principal
+                        <input
+                          className="add-project-code"
+                          list="python-files"
+                          required
+                          value={entry}
+                          onChange={(e) => setEntry(e.target.value)}
+                          aria-describedby="add-project-python-help"
+                        />
+                        <datalist id="python-files">
+                          {detection.pythonFiles.map((f) => (
+                            <option key={f} value={f} />
+                          ))}
+                        </datalist>
+                        <small id="add-project-python-help">
+                          A venv e o pip são gerenciados nesta pasta.
+                        </small>
+                      </label>
+                      <label>
+                        <span>
+                          Argumentos <small>opcional</small>
+                        </span>
+                        <input
+                          className="add-project-code"
+                          value={args}
+                          onChange={(e) => setArgs(e.target.value)}
+                          placeholder="--host 127.0.0.1"
+                        />
+                      </label>
+                    </>
+                  ) : runtime === "node" ? (
+                    <label className="add-project-full">
+                      Comando de inicialização
+                      <input
+                        className="add-project-code"
+                        list="node-scripts"
+                        required
+                        value={command}
+                        onChange={(e) => setCommand(e.target.value)}
+                        aria-describedby="add-project-node-help"
+                      />
+                      <datalist id="node-scripts">
+                        {detection.scripts.map((script) => (
+                          <option
+                            key={script}
+                            value={detection.packageManager + " run " + script}
+                          />
+                        ))}
+                      </datalist>
+                      <small id="add-project-node-help">
+                        Escolha um script detectado ou informe um comando como{" "}
+                        <code>node index.js</code>. A execução é feita sem
+                        shell.
+                      </small>
+                    </label>
+                  ) : null}
+                  <label>
+                    <span>
+                      Porta HTTP <small>opcional</small>
+                    </span>
+                    <input
+                      className="add-project-code"
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={port}
+                      onChange={(e) => setPort(e.target.value)}
+                      placeholder="3000"
+                      aria-describedby="add-project-port-help"
+                    />
+                    <small id="add-project-port-help">
+                      Deixe em branco para projetos sem HTTP.
+                    </small>
+                  </label>
+                  <label>
+                    Reinicialização automática
+                    <select
+                      value={policy}
+                      onChange={(e) => setPolicy(e.target.value)}
+                    >
+                      <option value="never">Nunca</option>
+                      <option value="on-failure">Em caso de falha</option>
+                      <option value="always">
+                        Sempre, exceto parada manual
+                      </option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+              <label className="add-project-trust">
+                <input
+                  type="checkbox"
+                  checked={approved}
+                  onChange={(e) => setApproved(e.target.checked)}
+                  aria-describedby="add-project-trust-help"
+                  required
+                />
+                <span>
+                  <strong>Confio neste projeto</strong>
+                  <small id="add-project-trust-help">
+                    Autorizo a execução do código e dos scripts de instalação de
+                    dependências com as permissões do meu usuário.
+                  </small>
+                </span>
+              </label>
+            </fieldset>
+          </div>
+          <div className="add-project-footer add-project-save">
+            <ErrorMessage error={error} />
             <button
               type="button"
               className="button"
-              disabled={busy}
+              disabled={!!pending}
               onClick={onClose}
             >
               Cancelar
             </button>
             <button
               className="button primary"
-              disabled={busy || !approved || !runtime}
+              disabled={!!pending || !approved || !runtime}
             >
-              {busy ? <Spinner /> : <Plus size={16} />}Cadastrar projeto
+              {pending === "save" ? (
+                <>
+                  <Spinner /> Adicionando…
+                </>
+              ) : (
+                <>
+                  <Plus size={16} aria-hidden="true" /> Adicionar projeto
+                </>
+              )}
             </button>
           </div>
         </form>
       )}
-      {!detection && <ErrorMessage error={error} />}
     </Modal>
   );
 }
+
+export type ProjectSection =
+  "overview" | "logs" | "files" | "domain" | "settings";
+
 export function ProjectPage({
   project,
   cloud,
-  onBack,
+  section,
+  onSectionChange,
   onChanged,
   onRemoved,
 }: {
   project: Project;
   cloud: CloudConfig;
-  onBack: () => void;
+  section: ProjectSection;
+  onSectionChange: (section: ProjectSection) => void;
   onChanged: () => void;
   onRemoved: (warning: string) => void;
 }) {
-  const [tab, setTab] = useState("logs"),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [confirm, setConfirm] = useState("");
+  const overview = section === "overview";
+  const execution = project.execution;
+  const online = execution.actualState === "online";
+  const health =
+    {
+      running: "Ativo",
+      "http-listening": "Porta acessível",
+      "port-unavailable": "Porta sem resposta",
+    }[execution.health] ?? "Offline";
   async function action(action: string) {
     setBusy(true);
     setError("");
@@ -384,131 +544,173 @@ export function ProjectPage({
   }
   return (
     <>
-      <button className="back-link" onClick={onBack}>
-        <ArrowLeft size={15} />
-        Todos os projetos
-      </button>
-      <div className="page-heading project-heading">
-        <div>
-          <div className="title-line">
-            <h1>{project.name}</h1>
-            <Status state={project.execution.actualState} />
+      {overview ? (
+        <section className="project-summary" aria-labelledby="project-name">
+          <div className="project-summary-header">
+            <div className="project-summary-identity">
+              <RuntimeLogo runtime={project.runtime} />
+              <div>
+                <h1 id="project-name">{project.name}</h1>
+                <p className="project-path">
+                  <span>
+                    {project.runtime === "node" ? "Node.js" : "Python"}
+                  </span>
+                  <span>{project.path}</span>
+                </p>
+                {project.hostname && (
+                  <button
+                    className="button project-public-link"
+                    onClick={() => {
+                      setError("");
+                      void window.cloudforge
+                        .openExternal(`https://${project.hostname}`)
+                        .catch((e) => setError(message(e)));
+                    }}
+                  >
+                    <span>Visitar {project.hostname}</span>
+                    <ArrowUpRight size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="project-summary-status">
+              <Status state={execution.actualState} />
+              {online && execution.startedAt && (
+                <span className="muted">Há {uptime(execution.startedAt)}</span>
+              )}
+            </div>
           </div>
-          <p className="project-path">
-            <span className="runtime-label">
-              {project.runtime === "node" ? "Node.js" : "Python"}
-            </span>
-            <span>{project.path}</span>
-          </p>
+          <dl className="project-resources">
+            <div>
+              <dt>
+                <Cpu size={15} /> CPU
+              </dt>
+              <dd>{percent(execution.cpu)}</dd>
+            </div>
+            <div>
+              <dt>
+                <MemoryStick size={15} /> RAM
+              </dt>
+              <dd>
+                {execution.memory == null ? "—" : bytes(execution.memory)}
+              </dd>
+            </div>
+            <div>
+              <dt>
+                <Server size={15} /> Processos
+              </dt>
+              <dd>
+                {execution.pid || "—"}
+                {execution.pid > 0 && (
+                  <small>{execution.children} filhos</small>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>
+                <Globe size={15} /> Porta HTTP
+              </dt>
+              <dd>
+                {project.port || "Sem HTTP"}
+                {project.port > 0 && <small>{health}</small>}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      ) : (
+        <div className="page-heading project-section-heading">
+          <h1>
+            {
+              {
+                logs: "Logs",
+                files: "Arquivos",
+                domain: "Subdomínio",
+                settings: "Configurações",
+              }[section]
+            }
+          </h1>
         </div>
-        <Actions
-          state={project.execution.actualState}
-          busy={busy}
-          onAction={(actionName) =>
-            actionName === "start"
-              ? void action(actionName)
-              : setConfirm(actionName)
-          }
-        />
-      </div>
-      <ErrorMessage error={error || project.execution.lastError} />
-      {project.execution.health === "port-unavailable" && (
+      )}
+      {overview && <ErrorMessage error={error || execution.lastError} />}
+      {overview && execution.health === "port-unavailable" && (
         <div className="notice">
           Nenhum serviço respondeu na porta {project.port}. Confira a porta no
           código.{" "}
-          <button className="text-button" onClick={() => setTab("port")}>
+          <button
+            className="text-button"
+            onClick={() => onSectionChange("settings")}
+          >
             Editar porta
           </button>
         </div>
       )}
-      <div className="project-resources">
-        <div>
-          <span>CPU do projeto</span>
-          <strong>{percent(project.execution.cpu)}</strong>
-        </div>
-        <div>
-          <span>Memória do projeto</span>
-          <strong>{bytes(project.execution.memory)}</strong>
-        </div>
-        <div>
-          <span>Tempo em execução</span>
-          <strong>{uptime(project.execution.startedAt)}</strong>
-        </div>
-        <div>
-          <span>Processos</span>
-          <strong>
-            {project.execution.pid
-              ? `${project.execution.pid} + ${project.execution.children} filhos`
-              : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>Porta / saúde</span>
-          <strong>
-            {project.port || "Sem HTTP"} ·{" "}
-            {project.execution.health === "running"
-              ? "Ativo"
-              : project.execution.health === "http-listening"
-                ? "Porta acessível"
-                : project.execution.health === "port-unavailable"
-                  ? "Porta sem resposta"
-                  : "Offline"}
-          </strong>
-        </div>
-      </div>
-      <div
-        className="tabs"
-        role="tablist"
-        aria-label="Gerenciamento do projeto"
-      >
-        {[
-          { id: "logs", label: "Logs", icon: Terminal },
-          { id: "files", label: "Arquivos", icon: Folder },
-          { id: "domain", label: "Subdomínio", icon: Globe },
-          { id: "port", label: "Configurações", icon: Settings2 },
-        ].map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            className={tab === t.id ? "tab active" : "tab"}
-            onClick={() => setTab(t.id)}
-          >
-            <t.icon size={16} />
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {tab === "logs" ? (
-        <Logs project={project} />
-      ) : tab === "files" ? (
+      {overview && (
+        <h2 className="project-console-heading">Console em tempo real</h2>
+      )}
+      {overview || section === "logs" ? (
+        <Logs
+          project={project}
+          controls={
+            overview && (
+              <Actions
+                state={execution.actualState}
+                busy={busy}
+                onAction={(name) =>
+                  name === "start" ? void action(name) : setConfirm(name)
+                }
+              />
+            )
+          }
+        />
+      ) : section === "files" ? (
         <Files project={project} />
-      ) : tab === "domain" ? (
+      ) : section === "domain" ? (
         <ProjectDomain
-          key={project.id}
           project={project}
           cloud={cloud}
           onChanged={onChanged}
-          onEditPort={() => setTab("port")}
+          onEditPort={() => onSectionChange("settings")}
         />
       ) : (
         <>
-          <ProjectPort
-            key={project.id}
-            project={project}
-            onChanged={onChanged}
-          />
-          <ProjectRemoval
-            key={`remove-${project.id}`}
-            project={project}
-            onRemoved={onRemoved}
-          />
+          <ProjectStartup project={project} onChanged={onChanged} />
+          <ProjectPort project={project} onChanged={onChanged} />
+          <ProjectRemoval project={project} onRemoved={onRemoved} />
         </>
       )}
-      <p className="small muted resource-note">
-        CPU e RAM incluem o processo principal e os filhos detectados. RAM usa
-        RSS e pode contar memória compartilhada mais de uma vez.
-      </p>
+      {overview && (
+        <section
+          className="project-metrics"
+          aria-labelledby="project-metrics-heading"
+        >
+          <div className="section-heading">
+            <h2 id="project-metrics-heading">Métricas</h2>
+            <span className="muted small">Últimos 2 minutos</span>
+          </div>
+          <div className="project-metrics-grid">
+            <div>
+              <h3>CPU</h3>
+              <ProjectUsage
+                history={project.usageHistory}
+                online={online}
+                metric="cpu"
+              />
+            </div>
+            <div>
+              <h3>RAM</h3>
+              <ProjectUsage
+                history={project.usageHistory}
+                online={online}
+                metric="memory"
+              />
+            </div>
+          </div>
+          <p className="small muted resource-note">
+            CPU e RAM incluem o processo principal e os filhos detectados. RAM
+            usa RSS e pode contar memória compartilhada mais de uma vez.
+          </p>
+        </section>
+      )}
       {confirm && (
         <Modal
           title={
@@ -537,13 +739,143 @@ export function ProjectPage({
     </>
   );
 }
-function Logs({ project }: { project: Project }) {
+
+function ProjectStartup({
+  project,
+  onChanged,
+}: {
+  project: Project;
+  onChanged: () => void;
+}) {
+  const node = project.runtime === "node";
+  const initialValues = {
+    command: formatArguments(project.startCommand),
+    entry: project.entryPoint,
+    args: formatArguments(project.arguments),
+  };
+  const [saved, setSaved] = useState(initialValues);
+  const [values, setValues] = useState(initialValues);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const changed = node
+    ? values.command.trim() !== saved.command
+    : values.entry.trim() !== saved.entry || values.args.trim() !== saved.args;
+
+  function edit(field: keyof typeof values, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+    setError("");
+    setNotice("");
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setNotice("");
+    const next = {
+      command: values.command.trim(),
+      entry: values.entry.trim(),
+      args: values.args.trim(),
+    };
+    try {
+      await api(
+        "PATCH",
+        `/api/projects/${project.id}/startup`,
+        node
+          ? { startCommand: parseArguments(next.command) }
+          : { entryPoint: next.entry, arguments: parseArguments(next.args) },
+      );
+      setSaved(next);
+      setValues(next);
+      setNotice("Configuração salva. A mudança vale na próxima inicialização.");
+      onChanged();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="settings-section">
+      <h2>Inicialização</h2>
+      <form className="narrow-form" onSubmit={save}>
+        {node ? (
+          <label>
+            Comando de inicialização
+            <input
+              required
+              value={values.command}
+              disabled={busy}
+              onChange={(event) => edit("command", event.target.value)}
+            />
+            <small>
+              Use <code>node arquivo.js</code> ou um script do{" "}
+              <code>package.json</code>, como <code>npm run start</code>.
+            </small>
+          </label>
+        ) : (
+          <>
+            <label>
+              Arquivo principal
+              <input
+                required
+                value={values.entry}
+                disabled={busy}
+                onChange={(event) => edit("entry", event.target.value)}
+              />
+            </label>
+            <label>
+              Argumentos de execução
+              <input
+                value={values.args}
+                disabled={busy}
+                onChange={(event) => edit("args", event.target.value)}
+              />
+            </label>
+          </>
+        )}
+        <ErrorMessage error={error} />
+        {notice && (
+          <div className="notice" role="status">
+            <Check size={17} /> {notice}
+          </div>
+        )}
+        <button
+          className="button primary"
+          disabled={
+            busy ||
+            !changed ||
+            !(node ? values.command.trim() : values.entry.trim())
+          }
+        >
+          {busy ? <Spinner /> : <Check size={16} />} Salvar inicialização
+        </button>
+      </form>
+    </section>
+  );
+}
+function Logs({
+  project,
+  controls,
+}: {
+  project: Project;
+  controls?: ReactNode;
+}) {
   const [logs, setLogs] = useState<Log[]>([]),
     [q, setQ] = useState(""),
     [hiddenUntil, setHiddenUntil] = useState(0),
     [error, setError] = useState(""),
     [openingTui, setOpeningTui] = useState(false),
     [copied, setCopied] = useState(false);
+  const output = useRef<HTMLDivElement>(null);
+  const followOutput = useRef(true);
+  useLayoutEffect(() => {
+    if (followOutput.current && output.current) {
+      output.current.scrollTop = output.current.scrollHeight;
+    }
+  }, [logs, q, hiddenUntil, Boolean(controls)]);
   async function openTui() {
     if (openingTui) return;
     setOpeningTui(true);
@@ -579,9 +911,9 @@ function Logs({ project }: { project: Project }) {
         setError("");
       }
     });
-    void window.cloudforge
-      .watchProject(project.id)
-      .catch((e) => setError(message(e)));
+    void window.cloudforge.watchProject(project.id).catch((e) => {
+      if (active) setError(message(e));
+    });
     const timer = setInterval(() => void load(), 10000);
     return () => {
       active = false;
@@ -595,13 +927,15 @@ function Logs({ project }: { project: Project }) {
       l.seq > hiddenUntil && l.message.toLowerCase().includes(q.toLowerCase()),
   );
   return (
-    <section className="log-panel">
+    <section className={controls ? "log-panel project-console" : "log-panel"}>
       <div className="log-toolbar">
-        <div className="log-title">
-          <Terminal size={16} />
-          <strong>Saída da aplicação</strong>
-          <span className="host-chip">Somente leitura</span>
-        </div>
+        {controls || (
+          <div className="log-title">
+            <Terminal size={16} />
+            <strong>Saída da aplicação</strong>
+            <span className="host-chip">Somente leitura</span>
+          </div>
+        )}
         <div className="log-tools">
           {project.terminalEnabled && (
             <button
@@ -649,9 +983,15 @@ function Logs({ project }: { project: Project }) {
       </div>
       <ErrorMessage error={error} />
       <div
+        ref={output}
         className="terminal-output"
         role="log"
         aria-label="Logs da aplicação"
+        tabIndex={0}
+        onScroll={(event) => {
+          const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
+          followOutput.current = scrollHeight - scrollTop - clientHeight < 24;
+        }}
       >
         {!filtered.length ? (
           <div className="terminal-empty">

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -103,6 +104,9 @@ func TestPublicBoundaryAndCSRF(t *testing.T) {
 	}
 	if w = invoke(s, false, "DELETE", "/api/projects/test-project", "", "http://127.0.0.1", csrf, cookies); w.Code != 404 {
 		t.Fatalf("project deletion exposed on the public API: %d", w.Code)
+	}
+	if w = invoke(s, false, "PATCH", "/api/projects/test-project/startup", `{}`, "http://127.0.0.1", csrf, cookies); w.Code != 404 {
+		t.Fatalf("startup settings exposed on the public API: %d", w.Code)
 	}
 	w = invoke(s, false, "POST", "/api/logout", `{}`, "http://127.0.0.1", csrf, cookies)
 	if w.Code != 200 {
@@ -231,5 +235,93 @@ func TestProjectPortChangesPublicDestinationAndKeepsProjectStopped(t *testing.T)
 	stored, err := s.Store.Project(p.ID)
 	if err != nil || stored.Port != 80 {
 		t.Fatalf("port not persisted: %+v %v", stored, err)
+	}
+}
+
+func TestProjectStartupUpdate(t *testing.T) {
+	s := fixture(t)
+	if err := s.Auth.Bootstrap("admin", "fixture-long-password"); err != nil {
+		t.Fatal(err)
+	}
+	for _, runtime := range []string{"node", "python"} {
+		t.Run(runtime, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, content := range map[string]string{
+				"package.json": `{"scripts":{"start":"node app.js","dev":"node app.js"}}`,
+				"app.py":       "",
+				"worker.py":    "",
+			} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			p := model.Project{
+				ID: runtime, Name: "Startup", Runtime: runtime, Path: root,
+				WorkingDirectory: root, DesiredState: "stopped", Port: 8080,
+			}
+			var invalid, valid string
+			if runtime == "node" {
+				p.StartCommand = []string{"npm", "run", "start"}
+				invalid = `{"startCommand":["npm","run","missing"]}`
+				valid = `{"startCommand":["npm","run","dev"]}`
+			} else {
+				p.EntryPoint = filepath.Join(root, "app.py")
+				p.Arguments = []string{"--old"}
+				invalid = `{"entryPoint":"package.json"}`
+				valid = `{"entryPoint":"worker.py","arguments":["--label","two words",""]}`
+			}
+			if err := s.Store.SaveProject(p); err != nil {
+				t.Fatal(err)
+			}
+			s.Supervisor.Add(p)
+			path := "/api/projects/" + p.ID + "/startup"
+			update := func(body string, status int) {
+				t.Helper()
+				w := invoke(s, true, "PATCH", path, body, "", "", nil)
+				if w.Code != status {
+					t.Fatalf("%s: got %d %s", body, w.Code, w.Body.String())
+				}
+			}
+			check := func(project model.Project, command, args []string, entry string) {
+				t.Helper()
+				if !slices.Equal(project.StartCommand, command) || !slices.Equal(project.Arguments, args) ||
+					project.EntryPoint != entry || project.DesiredState != "stopped" || project.Port != p.Port {
+					t.Fatalf("unexpected project settings: %+v", project)
+				}
+			}
+			stored := func() model.Project {
+				t.Helper()
+				project, err := s.Store.Project(p.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return project
+			}
+			update(invalid, 400)
+			check(stored(), p.StartCommand, p.Arguments, p.EntryPoint)
+			update(valid, 200)
+			command, args := p.StartCommand, p.Arguments
+			entry := p.EntryPoint
+			if runtime == "node" {
+				command = []string{"npm", "run", "dev"}
+			} else {
+				args = []string{"--label", "two words", ""}
+				entry = filepath.Join(root, "worker.py")
+			}
+			check(stored(), command, args, entry)
+			for _, view := range s.Supervisor.Views() {
+				if view.ID == p.ID {
+					check(view.Project, command, args, entry)
+					if view.RuntimeInfo.ActualState != "offline" || view.RuntimeInfo.PID != 0 {
+						t.Fatalf("saving started the project: %+v", view.RuntimeInfo)
+					}
+					return
+				}
+			}
+			t.Fatal("project missing from supervisor")
+		})
 	}
 }
