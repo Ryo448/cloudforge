@@ -18,6 +18,10 @@ type Project struct {
 	CreatedAt        time.Time `json:"createdAt"`
 	UpdatedAt        time.Time `json:"updatedAt"`
 }
+type EnvironmentVariable struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
 type Runtime struct {
 	ProcessCreatedAt int64      `json:"processCreatedAt,omitempty"`
 	Executable       string     `json:"executable,omitempty"`

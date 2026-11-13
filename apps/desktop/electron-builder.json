@@ -8,7 +8,8 @@
   "extraResources": [
     { "from": "dist/core", "to": ".", "filter": ["cloudforge-core*"] },
     { "from": "apps/web/dist", "to": "web" },
-    { "from": "assets/icon/icon.png", "to": "icon.png" }
+    { "from": "assets/icon/icon.png", "to": "icon.png" },
+    { "from": "LICENSE", "to": "LICENSE" }
   ],
   "win": {
     "target": "nsis",

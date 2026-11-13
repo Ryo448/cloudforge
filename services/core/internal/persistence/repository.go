@@ -8,6 +8,8 @@ type Repository interface {
 	AuthRepository
 	Setting(string, any) error
 	Set(string, any) error
+	Environment(string) ([]model.EnvironmentVariable, error)
+	SetEnvironment(string, []model.EnvironmentVariable) error
 	Projects() ([]model.Project, error)
 	Project(string) (model.Project, error)
 	SaveProject(model.Project) error

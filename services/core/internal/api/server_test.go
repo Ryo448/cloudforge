@@ -8,6 +8,7 @@ import (
 	"cloudforge/core/internal/supervisor"
 	"context"
 	"encoding/json"
+	"github.com/zalando/go-keyring"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -51,6 +52,68 @@ func invoke(s *Server, local bool, method, path, body, origin, csrf string, cook
 	}
 	return w
 }
+func TestLocalEnvironmentModes(t *testing.T) {
+	s := fixture(t)
+	vault := &testEnvironmentVault{values: map[string]string{}}
+	s.Store.(*persistence.Store).EnvironmentVault = vault
+	if err := s.Auth.Bootstrap("admin", "a-long-test-password"); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	project := model.Project{ID: "environment-test", Name: "Environment", Runtime: "node", Path: root}
+	if err := s.Store.SaveProject(project); err != nil {
+		t.Fatal(err)
+	}
+	url := "/api/projects/" + project.ID + "/environment"
+	response := invoke(s, true, "GET", url, "", "", "", nil)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"mode":"empty"`) {
+		t.Fatalf("empty mode: %d %s", response.Code, response.Body.String())
+	}
+	response = invoke(s, true, "PUT", url, `{"mode":"exclusive","variables":[{"key":"DB_HOST","value":"memory-host"}]}`, "", "", nil)
+	if response.Code != 200 {
+		t.Fatalf("exclusive save: %d %s", response.Code, response.Body.String())
+	}
+	var stored string
+	if err := s.Store.Setting("environment:"+project.ID, &stored); err != nil || strings.Contains(stored, "memory-host") {
+		t.Fatalf("exclusive variable was not encrypted: %v", err)
+	}
+	response = invoke(s, true, "GET", url, "", "", "", nil)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"value":"memory-host"`) {
+		t.Fatalf("exclusive load: %d %s", response.Code, response.Body.String())
+	}
+	delete(vault.values, "master")
+	response = invoke(s, true, "PUT", url, `{"mode":"exclusive","variables":[{"key":"DB_HOST","value":"other-host"}]}`, "", "", nil)
+	if response.Code != 500 {
+		t.Fatalf("missing vault key was silently rotated: %d %s", response.Code, response.Body.String())
+	}
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("# note\nDB_HOST=old\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	response = invoke(s, true, "GET", url, "", "", "", nil)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"mode":"file"`) {
+		t.Fatalf("file mode: %d %s", response.Code, response.Body.String())
+	}
+	response = invoke(s, true, "PUT", url, `{"mode":"file","file":".env","variables":[{"key":"DB_HOST","value":"new"}]}`, "", "", nil)
+	if response.Code != 200 {
+		t.Fatalf("file save: %d %s", response.Code, response.Body.String())
+	}
+	raw, err := os.ReadFile(filepath.Join(root, ".env"))
+	if err != nil || !strings.Contains(string(raw), "# note\nDB_HOST=new") {
+		t.Fatalf("file content: %q, %v", raw, err)
+	}
+}
+
+type testEnvironmentVault struct{ values map[string]string }
+
+func (v *testEnvironmentVault) Get(id string) (string, error) {
+	value, ok := v.values[id]
+	if !ok {
+		return "", keyring.ErrNotFound
+	}
+	return value, nil
+}
+func (v *testEnvironmentVault) Set(id, value string) error { v.values[id] = value; return nil }
+func (v *testEnvironmentVault) Delete(id string) error     { delete(v.values, id); return nil }
 func TestPublicBoundaryAndCSRF(t *testing.T) {
 	s := fixture(t)
 	if e := s.Auth.Bootstrap("admin", "a-long-test-password"); e != nil {
@@ -323,5 +386,56 @@ func TestProjectStartupUpdate(t *testing.T) {
 			}
 			t.Fatal("project missing from supervisor")
 		})
+	}
+}
+
+func TestLocalFileEditorAndMedia(t *testing.T) {
+	s := fixture(t)
+	if err := s.Auth.Bootstrap("admin", "fixture-long-password"); err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "app.py"), []byte("print('old')\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "cover.png"), []byte("image-bytes"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := model.Project{ID: "files-test", Name: "Files", Runtime: "python", Path: root, WorkingDirectory: root, DesiredState: "stopped", Port: 8080, EntryPoint: filepath.Join(root, "app.py")}
+	if err := s.Store.SaveProject(p); err != nil {
+		t.Fatal(err)
+	}
+	s.Supervisor.Add(p)
+	fileURL := "/api/projects/files-test/file?path=app.py"
+	response := invoke(s, true, "GET", fileURL, "", "", "", nil)
+	if response.Code != 200 {
+		t.Fatalf("read: %d %s", response.Code, response.Body.String())
+	}
+	var read struct {
+		Content string `json:"content"`
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &read); err != nil || read.Content != "print('old')\n" || read.Version == "" {
+		t.Fatalf("read: %+v %v", read, err)
+	}
+	body, _ := json.Marshal(map[string]string{"path": "app.py", "content": "print('new')\n", "version": read.Version})
+	response = invoke(s, true, "PUT", "/api/projects/files-test/file", string(body), "", "", nil)
+	if response.Code != 200 {
+		t.Fatalf("save: %d %s", response.Code, response.Body.String())
+	}
+	response = invoke(s, true, "PUT", "/api/projects/files-test/file", string(body), "", "", nil)
+	if response.Code != 409 {
+		t.Fatalf("stale save: %d %s", response.Code, response.Body.String())
+	}
+	response = invoke(s, true, "GET", "/api/projects/files-test/media?path=cover.png", "", "", "", nil)
+	if response.Code != 200 || response.Body.String() != "image-bytes" || response.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("media: %d %q %q", response.Code, response.Header().Get("Content-Type"), response.Body.String())
+	}
+	response = invoke(s, false, "GET", "/api/projects/files-test/media?path=cover.png", "", "", "", nil)
+	if response.Code == 200 {
+		t.Fatal("public interface exposed project media")
 	}
 }

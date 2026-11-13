@@ -10,15 +10,18 @@ import (
 	"cloudforge/core/internal/supervisor"
 	"context"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -77,7 +80,13 @@ func decode(w http.ResponseWriter, r *http.Request, out any) error {
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		return errors.New("Content-Type deve ser application/json")
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	limit := int64(32 * 1024)
+	if strings.HasSuffix(r.URL.Path, "/environment") {
+		limit = 1024 * 1024
+	} else if strings.HasSuffix(r.URL.Path, "/file") {
+		limit = 32 * 1024 * 1024
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if e := d.Decode(out); e != nil {
@@ -87,6 +96,32 @@ func decode(w http.ResponseWriter, r *http.Request, out any) error {
 		return errors.New("corpo JSON inválido")
 	}
 	return nil
+}
+func mediaType(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".svg":
+		return "image/svg+xml"
+	case ".mp4", ".m4v":
+		return "video/mp4"
+	case ".mov":
+		return "video/quicktime"
+	case ".webm":
+		return "video/webm"
+	case ".ogv":
+		return "video/ogg"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".m4a":
+		return "audio/mp4"
+	case ".opus":
+		return "audio/ogg"
+	case ".flac":
+		return "audio/flac"
+	}
+	if kind := mime.TypeByExtension(strings.ToLower(filepath.Ext(path))); kind != "" {
+		return kind
+	}
+	return "application/octet-stream"
 }
 func security(w http.ResponseWriter) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -127,7 +162,7 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.Trim(r.URL.Path, "/")
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.0.0", "apiVersion": 4})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.0.0", "apiVersion": 5})
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {
@@ -492,12 +527,187 @@ func (s *Server) projectLocal(w http.ResponseWriter, r *http.Request, parts []st
 		return
 	}
 	if section == "file" && r.Method == "GET" {
-		content, e := projects.Read(p.Path, r.URL.Query().Get("path"))
+		content, version, e := projects.ReadText(p.Path, r.URL.Query().Get("path"))
 		if e != nil {
 			fail(w, 400, e)
 			return
 		}
-		write(w, 200, map[string]string{"content": content})
+		write(w, 200, map[string]string{"content": content, "version": version})
+		return
+	}
+	if section == "file" && r.Method == "PUT" {
+		var body struct {
+			Path    string `json:"path"`
+			Content string `json:"content"`
+			Version string `json:"version"`
+		}
+		if err := decode(w, r, &body); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		version, err := projects.WriteText(p.Path, body.Path, body.Content, body.Version)
+		if err != nil {
+			fail(w, 409, err)
+			return
+		}
+		write(w, 200, map[string]string{"version": version})
+		return
+	}
+	if section == "media" && r.Method == "GET" {
+		file, err := projects.SafePath(p.Path, r.URL.Query().Get("path"))
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		info, err := os.Stat(file)
+		if err != nil || !info.Mode().IsRegular() {
+			fail(w, 400, errors.New("arquivo de mídia inválido"))
+			return
+		}
+		if info.Size() > 100*1024*1024 {
+			fail(w, 413, errors.New("prévia limitada a arquivos de até 100 MB"))
+			return
+		}
+		data, err := os.Open(file)
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		defer data.Close()
+		w.Header().Set("Content-Type", mediaType(file))
+		http.ServeContent(w, r, info.Name(), info.ModTime(), data)
+		return
+	}
+	if section == "environment" && r.Method == "GET" {
+		files, err := projects.EnvironmentFiles(p.Path)
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		name := r.URL.Query().Get("file")
+		if name == "" && len(files) > 0 {
+			_ = s.Store.Setting("environment-file:"+id, &name)
+			if !slices.Contains(files, name) {
+				name = files[0]
+				for _, file := range files {
+					if file == ".env" {
+						name = file
+						break
+					}
+				}
+			}
+		}
+		values := []projects.EnvironmentVariable{}
+		mode := "empty"
+		if name != "" {
+			values, err = projects.ReadEnvironment(p.Path, name)
+			mode = "file"
+		} else {
+			values, err = s.Store.Environment(id)
+			if err == nil {
+				mode = "exclusive"
+			} else if errors.Is(err, sql.ErrNoRows) {
+				err = nil
+			}
+		}
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		if values == nil {
+			values = []projects.EnvironmentVariable{}
+		}
+		write(w, 200, map[string]any{"mode": mode, "files": files, "file": name, "variables": values})
+		return
+	}
+	if section == "environment" && r.Method == "PUT" {
+		var body struct {
+			Mode      string                         `json:"mode"`
+			File      string                         `json:"file"`
+			Variables []projects.EnvironmentVariable `json:"variables"`
+		}
+		if err := decode(w, r, &body); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		if err := projects.ValidateEnvironment(body.Variables); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		if body.Mode == "file" {
+			if err := projects.WriteEnvironment(p.Path, body.File, body.Variables); err != nil {
+				fail(w, 400, err)
+				return
+			}
+			if err := s.Store.Set("environment-file:"+id, body.File); err != nil {
+				fail(w, 500, err)
+				return
+			}
+		} else if body.Mode == "exclusive" {
+			files, err := projects.EnvironmentFiles(p.Path)
+			if err != nil {
+				fail(w, 400, err)
+				return
+			}
+			if len(files) > 0 {
+				fail(w, 409, errors.New("já existe um arquivo .env no projeto"))
+				return
+			}
+			if err := s.Store.SetEnvironment(id, body.Variables); err != nil {
+				fail(w, 500, err)
+				return
+			}
+		} else {
+			fail(w, 400, errors.New("modo de variáveis inválido"))
+			return
+		}
+		write(w, 200, map[string]bool{"ok": true})
+		return
+	}
+	if section == "environment-import" && r.Method == "POST" {
+		var body struct {
+			Path string `json:"path"`
+		}
+		if err := decode(w, r, &body); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		path, err := projects.SafePath(p.Path, body.Path)
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() > 1024*1024 {
+			fail(w, 400, errors.New("escolha um arquivo de até 1 MB"))
+			return
+		}
+		name := filepath.Base(path)
+		if (name == ".env" || strings.HasPrefix(name, ".env.")) && !strings.HasSuffix(name, ".example") && !strings.HasSuffix(name, ".sample") && !strings.HasSuffix(name, ".template") {
+			rel, _ := filepath.Rel(p.Path, path)
+			name = filepath.ToSlash(rel)
+		} else {
+			name = ".env"
+			target := filepath.Join(p.Path, name)
+			if _, err := os.Stat(target); err == nil {
+				fail(w, 409, errors.New("já existe um arquivo .env na raiz"))
+				return
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				fail(w, 400, err)
+				return
+			}
+			if err := os.WriteFile(target, raw, 0600); err != nil {
+				fail(w, 400, err)
+				return
+			}
+		}
+		if err := s.Store.Set("environment-file:"+id, name); err != nil {
+			fail(w, 500, err)
+			return
+		}
+		write(w, 200, map[string]string{"file": name})
 		return
 	}
 	if section == "route" && r.Method == "POST" {

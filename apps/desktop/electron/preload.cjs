@@ -11,8 +11,12 @@ contextBridge.exposeInMainWorld("windowControls", {
 contextBridge.exposeInMainWorld("cloudforge", {
   request: (method, path, body) =>
     ipcRenderer.invoke("core:request", method, path, body),
+  readMedia: (id, path) => ipcRenderer.invoke("core:media", id, path),
   reconnect: () => ipcRenderer.invoke("core:reconnect"),
   chooseDirectory: () => ipcRenderer.invoke("project:choose"),
+  importEnvironment: (id) => ipcRenderer.invoke("environment:import", id),
+  exportEnvironment: (id, content) =>
+    ipcRenderer.invoke("environment:export", id, content),
   openProject: (id) => ipcRenderer.invoke("project:open", id),
   openTerminal: (id) => ipcRenderer.invoke("project:terminal", id),
   openExternal: (url) => ipcRenderer.invoke("external:open", url),

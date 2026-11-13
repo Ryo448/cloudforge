@@ -31,3 +31,29 @@ func TestDetectionAndPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteTextChecksVersionAndProjectBoundary(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "app.py")
+	if err := os.WriteFile(path, []byte("print('old')\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, version, err := ReadText(root, "app.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := WriteText(root, "app.py", "print('new')\n", version)
+	if err != nil || next == version {
+		t.Fatalf("save: version=%q err=%v", next, err)
+	}
+	if _, err := WriteText(root, "app.py", "overwrite", version); err == nil {
+		t.Fatal("stale version overwrote the file")
+	}
+	content, _, err := ReadText(root, "app.py")
+	if err != nil || content != "print('new')\n" {
+		t.Fatalf("content after conflict: %q, %v", content, err)
+	}
+	if _, err := WriteText(root, "../outside", "bad", next); err == nil {
+		t.Fatal("write escaped the project")
+	}
+}

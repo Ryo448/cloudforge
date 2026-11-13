@@ -5,8 +5,14 @@ interface Bridge {
     path: string,
     body?: unknown,
   ) => Promise<T>;
+  readMedia: (
+    id: string,
+    path: string,
+  ) => Promise<{ type: string; data: Uint8Array }>;
   reconnect: () => Promise<boolean>;
   chooseDirectory: () => Promise<string | null>;
+  importEnvironment: (id: string) => Promise<string | null>;
+  exportEnvironment: (id: string, content: string) => Promise<boolean>;
   openProject: (id: string) => Promise<void>;
   openTerminal: (id: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;

@@ -10,13 +10,18 @@ import (
 	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-type Store struct{ DB *sql.DB }
+type Store struct {
+	DB               *sql.DB
+	EnvironmentVault EnvironmentVault
+	envMu            sync.Mutex
+}
 
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -27,7 +32,7 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db}
+	s := &Store{DB: db, EnvironmentVault: environmentVault(path)}
 	for _, q := range []string{"PRAGMA journal_mode=WAL", "PRAGMA foreign_keys=ON", "PRAGMA busy_timeout=5000", "CREATE TABLE IF NOT EXISTS schema_migrations(version TEXT PRIMARY KEY)"} {
 		if _, err = db.Exec(q); err != nil {
 			db.Close()
@@ -124,6 +129,7 @@ func (s *Store) DeleteProject(id string) error {
 	}
 	defer tx.Rollback()
 	for _, statement := range []string{
+		"DELETE FROM settings WHERE key IN ('environment:'||?1, 'environment-file:'||?1)",
 		"DELETE FROM project_routes WHERE project_id=?",
 		"DELETE FROM project_runtime WHERE project_id=?",
 		"DELETE FROM project_dependencies WHERE project_id=?",

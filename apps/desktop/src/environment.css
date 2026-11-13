@@ -1,0 +1,357 @@
+.env-page {
+  max-width: 1180px;
+}
+.env-intro {
+  margin: -11px 0 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.env-intro p {
+  margin: 0;
+}
+.env-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+.env-file-bar {
+  min-height: 54px;
+  padding: 11px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  color: #e8edf5;
+  font-size: 12px;
+}
+.env-file-bar > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.env-file-bar svg {
+  color: var(--accent);
+}
+.env-file-select {
+  display: flex;
+  align-items: center;
+  background: #0e1218;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  min-width: 150px;
+  max-width: 55%;
+}
+.env-file-select select {
+  appearance: none;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: #e8edf5;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.env-file-select svg {
+  margin-right: 9px;
+  flex: none;
+  pointer-events: none;
+}
+.env-exclusive-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.env-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 19px 20px 12px;
+}
+.env-toolbar .search-field {
+  flex: 1;
+  max-width: 500px;
+}
+.env-toolbar > span {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.env-columns {
+  display: grid;
+  grid-template-columns: minmax(170px, 35%) minmax(0, 1fr) 36px;
+  gap: 8px;
+  padding: 0 20px 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.env-groups {
+  padding: 0 20px 12px;
+}
+.env-group {
+  margin-top: 11px;
+}
+.env-group h2 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.env-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 35%) minmax(0, 1fr) 36px;
+  gap: 8px;
+  margin: 5px 0;
+}
+.env-row > input,
+.env-value {
+  min-width: 0;
+  height: 40px;
+  background: #0e1218;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: #f1f3f7;
+}
+.env-row > input {
+  padding: 0 12px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+}
+.env-value {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-right: 3px;
+}
+.env-value input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: #f1f3f7;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  outline: none;
+}
+.env-value input.env-value-hidden {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: #f1f3f7;
+}
+.env-value-mask {
+  position: absolute;
+  left: 12px;
+  color: #f1f3f7;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+}
+.env-value:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.env-icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.env-icon:hover {
+  color: #fff;
+  background: #242b37;
+}
+.env-remove {
+  align-self: center;
+  color: var(--muted);
+}
+.env-remove:hover {
+  color: var(--red);
+}
+.env-no-results {
+  padding: 18px 0 24px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.env-add {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 20px 20px;
+}
+.env-add .button {
+  min-width: 210px;
+  justify-content: center;
+}
+.env-add span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.env-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 20px;
+  border-top: 1px solid var(--border);
+  background: #10131a;
+}
+.env-footer .primary {
+  min-width: 100px;
+  justify-content: center;
+}
+.env-empty {
+  text-align: center;
+  padding: 56px 20px 60px;
+}
+.env-empty-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 18px;
+  background: #2c1b12;
+  color: var(--accent);
+  border-radius: 12px;
+}
+.env-empty h2 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.env-empty p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 22px;
+}
+.env-empty-actions,
+.env-dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.env-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  padding: 20px;
+}
+.env-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.65);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.env-dialog {
+  width: min(480px, 100%);
+  max-height: min(70vh, 600px);
+  display: flex;
+  flex-direction: column;
+  background: #151922;
+  border: 1px solid #333b49;
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+  padding: 24px;
+}
+.env-dialog h2 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.env-dialog p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 20px;
+}
+.env-dialog-close {
+  align-self: flex-end;
+  margin-top: 20px;
+}
+.env-browser-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.env-browser-path > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.env-browser-path .text-button:last-child {
+  margin-left: auto;
+}
+.env-browser-list {
+  min-height: 100px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #0d1117;
+}
+.env-browser-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: #e8edf5;
+  text-align: left;
+  font-size: 12px;
+}
+.env-browser-list button:hover {
+  background: #232a35;
+}
+.env-browser-list svg {
+  color: var(--accent);
+  flex: none;
+}
+@media (max-width: 760px) {
+  .env-columns,
+  .env-row {
+    grid-template-columns: minmax(115px, 40%) minmax(0, 1fr) 30px;
+    gap: 5px;
+  }
+  .env-groups {
+    padding-inline: 12px;
+  }
+  .env-columns {
+    padding-inline: 12px;
+  }
+  .env-toolbar,
+  .env-file-bar,
+  .env-footer {
+    padding-inline: 12px;
+  }
+  .env-add {
+    padding-inline: 12px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .env-add span {
+    text-align: center;
+  }
+  .env-value input {
+    padding-inline: 7px;
+  }
+  .env-icon {
+    width: 28px;
+  }
+}

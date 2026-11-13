@@ -3,6 +3,8 @@ package projects
 import (
 	"cloudforge/core/internal/auth"
 	"cloudforge/core/internal/model"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type Detection struct {
@@ -275,8 +278,8 @@ func Read(root, path string) (string, error) {
 	if e != nil {
 		return "", e
 	}
-	if info.Size() > 1024*1024 {
-		return "", errors.New("visualização limitada a arquivos de até 1 MB")
+	if info.Size() > 5*1024*1024 {
+		return "", errors.New("visualização limitada a arquivos de até 5 MB")
 	}
 	data, e := os.ReadFile(file)
 	if e != nil {
@@ -286,4 +289,54 @@ func Read(root, path string) (string, error) {
 		return "", errors.New("arquivo binário; abra pelo explorador do sistema")
 	}
 	return string(data), nil
+}
+
+// ReadText includes a version derived from the file bytes so edits can detect
+// changes made outside Cloudforge while the editor is open.
+func ReadText(root, path string) (string, string, error) {
+	content, err := Read(root, path)
+	if err != nil {
+		return "", "", err
+	}
+	if !utf8.ValidString(content) {
+		return "", "", errors.New("arquivo de texto não está em UTF-8")
+	}
+	hash := sha256.Sum256([]byte(content))
+	return content, hex.EncodeToString(hash[:]), nil
+}
+
+func WriteText(root, path, content, expectedVersion string) (string, error) {
+	if path == "" || expectedVersion == "" {
+		return "", errors.New("caminho e versão do arquivo são obrigatórios")
+	}
+	if len(content) > 5*1024*1024 || !utf8.ValidString(content) || strings.ContainsRune(content, 0) {
+		return "", errors.New("salvamento limitado a texto UTF-8 de até 5 MB")
+	}
+	file, err := SafePath(root, path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() || info.Size() > 5*1024*1024 {
+		return "", errors.New("somente arquivos de texto de até 5 MB podem ser editados")
+	}
+	current, err := os.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(current)
+	if hex.EncodeToString(hash[:]) != expectedVersion {
+		return "", errors.New("o arquivo mudou no disco; reabra-o antes de salvar")
+	}
+	if !utf8.Valid(current) || strings.ContainsRune(string(current), 0) {
+		return "", errors.New("arquivo binário não pode ser editado como texto")
+	}
+	if err := os.WriteFile(file, []byte(content), info.Mode().Perm()); err != nil {
+		return "", err
+	}
+	hash = sha256.Sum256([]byte(content))
+	return hex.EncodeToString(hash[:]), nil
 }

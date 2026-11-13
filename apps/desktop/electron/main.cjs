@@ -24,7 +24,7 @@ const profileDir = path.join(dataDir, "electron");
 require("node:fs").mkdirSync(profileDir, { recursive: true });
 app.setPath("userData", profileDir);
 const address = "http://127.0.0.1:28931";
-const coreAPIVersion = 4;
+const coreAPIVersion = 5;
 const terminalSessions = new Map();
 let window,
   key,
@@ -330,6 +330,13 @@ const routes = [
     /^\/api\/(setup|projects|projects\/inspect|password|autostart|cloudflare\/(login|cancel-login|provision|verify|recover|panel-domain))$/,
   ],
   ["GET", /^\/api\/projects\/[A-Za-z0-9_-]+\/(logs|files|file)(\?[^#]*)?$/],
+  ["PUT", /^\/api\/projects\/[A-Za-z0-9_-]+\/file$/],
+  [
+    "GET",
+    /^\/api\/projects\/[A-Za-z0-9_-]+\/environment(\?file=[^#]{1,1024})?$/,
+  ],
+  ["PUT", /^\/api\/projects\/[A-Za-z0-9_-]+\/environment$/],
+  ["POST", /^\/api\/projects\/[A-Za-z0-9_-]+\/environment-import$/],
   ["POST", /^\/api\/projects\/[A-Za-z0-9_-]+\/(action|route)$/],
   [
     "PATCH",
@@ -347,9 +354,49 @@ ipcMain.handle("core:request", async (event, method, route, body) => {
     !routes.some(([m, re]) => m === method && re.test(route))
   )
     throw new Error("Operação não permitida");
-  if (body !== undefined && JSON.stringify(body).length > 32768)
+  const maxBody = route.endsWith("/file")
+    ? 32 * 1024 * 1024
+    : route.endsWith("/environment")
+      ? 1024 * 1024
+      : 32768;
+  if (body !== undefined && JSON.stringify(body).length > maxBody)
     throw new Error("Dados excedem o limite");
   return request(method, route, body);
+});
+ipcMain.handle("core:media", async (event, id, filePath) => {
+  checkSender(event);
+  if (
+    !/^[A-Za-z0-9_-]+$/.test(id) ||
+    typeof filePath !== "string" ||
+    filePath.length > 4096
+  )
+    throw new Error("Arquivo de mídia inválido");
+  if (!key)
+    key = (await fs.readFile(path.join(dataDir, "admin.key"), "utf8")).trim();
+  const response = await fetch(
+    `${address}/api/projects/${id}/media?path=${encodeURIComponent(filePath)}`,
+    {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(120000),
+    },
+  );
+  if (!response.ok) {
+    const detail = await response.text();
+    try {
+      throw new Error(JSON.parse(detail).error);
+    } catch (error) {
+      if (error instanceof SyntaxError)
+        throw new Error(`Erro HTTP ${response.status}`);
+      throw error;
+    }
+  }
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength > 100 * 1024 * 1024)
+    throw new Error("Prévia limitada a arquivos de até 100 MB");
+  return {
+    type: response.headers.get("content-type") || "application/octet-stream",
+    data: new Uint8Array(bytes),
+  };
 });
 ipcMain.handle("core:reconnect", async (event) => {
   checkSender(event);
@@ -364,6 +411,56 @@ ipcMain.handle("project:choose", async (event) => {
     properties: ["openDirectory"],
   });
   return result.canceled ? null : result.filePaths[0];
+});
+async function environmentProject(event, id) {
+  checkSender(event);
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(id))
+    throw new Error("Projeto inválido");
+  const projects = await request("GET", "/api/projects");
+  const project = projects.find((item) => item.id === id);
+  if (!project) throw new Error("Projeto não encontrado");
+  return project;
+}
+ipcMain.handle("environment:import", async (event, id) => {
+  const project = await environmentProject(event, id);
+  const result = await dialog.showOpenDialog(window, {
+    title: "Importar arquivo de variáveis",
+    properties: ["openFile"],
+  });
+  if (result.canceled) return null;
+  const source = result.filePaths[0];
+  const originalName = path.basename(source);
+  const name =
+    (originalName === ".env" || originalName.startsWith(".env.")) &&
+    !/\.(example|sample|template)$/.test(originalName)
+      ? originalName
+      : ".env";
+  const info = await fs.stat(source);
+  if (!info.isFile() || info.size > 1024 * 1024)
+    throw new Error("O arquivo deve ter até 1 MB");
+  const target = path.join(project.path, name);
+  if (path.resolve(source).toLowerCase() !== path.resolve(target).toLowerCase())
+    await fs.copyFile(
+      source,
+      target,
+      require("node:fs").constants.COPYFILE_EXCL,
+    );
+  return name;
+});
+ipcMain.handle("environment:export", async (event, id, content) => {
+  await environmentProject(event, id);
+  const environment = await request("GET", `/api/projects/${id}/environment`);
+  if (environment.mode !== "exclusive")
+    throw new Error("Exportação disponível apenas para variáveis exclusivas");
+  if (typeof content !== "string" || content.length > 1024 * 1024)
+    throw new Error("Conteúdo inválido");
+  const result = await dialog.showSaveDialog(window, {
+    title: "Exportar variáveis",
+    defaultPath: ".env",
+  });
+  if (result.canceled || !result.filePath) return false;
+  await fs.writeFile(result.filePath, content, { mode: 0o600 });
+  return true;
 });
 ipcMain.handle("project:open", async (event, id) => {
   checkSender(event);

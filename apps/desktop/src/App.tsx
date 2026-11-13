@@ -42,6 +42,7 @@ import { AddProject, ProjectPage, type ProjectSection } from "./Projects";
 import { CloudflarePage } from "./Cloudflare";
 import { SettingsPage } from "./Settings";
 import WindowControls from "./WindowControls";
+import { EnvironmentIcon } from "./EnvironmentIcon";
 
 type Page = "overview" | "projects" | "cloudflare" | "settings";
 
@@ -49,9 +50,28 @@ const projectNavigation = [
   { id: "logs", label: "Logs", icon: Terminal },
   { id: "overview", label: "Visão geral", icon: OverviewIcon },
   { id: "files", label: "Arquivos", icon: Folder },
-  { id: "domain", label: "Network", icon: Globe },
-  { id: "settings", label: "Configurações", icon: Settings2 },
 ] as const;
+
+const projectSettingsNavigation = [
+  { id: "settings", label: "Geral", icon: Settings2 },
+  { id: "environment", label: "Variáveis de ambiente", icon: EnvironmentIcon },
+  { id: "domain", label: "Network", icon: Globe },
+  { id: "risk", label: "Área de risco", icon: ProjectRiskIcon },
+] as const;
+
+function ProjectRiskIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 256 256"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z" />
+    </svg>
+  );
+}
 
 function CloudflareIcon({ size = 24 }: { size?: number }) {
   return (
@@ -73,6 +93,7 @@ export default function App() {
     [page, setPage] = useState<Page>("overview"),
     [selected, setSelected] = useState<string | null>(null),
     [projectSection, setProjectSection] = useState<ProjectSection>("overview"),
+    [filesDirty, setFilesDirty] = useState(false),
     [adding, setAdding] = useState(false),
     [error, setError] = useState(""),
     [removalNotice, setRemovalNotice] = useState(""),
@@ -180,17 +201,40 @@ export default function App() {
     (p) => p.execution.pid === 0 || p.execution.memory !== null,
   );
   const navigate = (p: Page) => {
+    if (
+      filesDirty &&
+      !window.confirm("Há alterações não salvas. Sair sem salvar?")
+    )
+      return;
+    setFilesDirty(false);
     setPage(p);
     setSelected(null);
   };
   const openProject = (project: Project) => {
+    if (
+      filesDirty &&
+      !window.confirm("Há alterações não salvas. Sair sem salvar?")
+    )
+      return;
+    setFilesDirty(false);
     setPage("projects");
     setSelected(project.id);
     setProjectSection("overview");
   };
-  const sectionLabel = projectNavigation.find(
-    (item) => item.id === projectSection,
-  )?.label;
+  const changeProjectSection = (section: ProjectSection) => {
+    if (section === projectSection) return;
+    if (
+      filesDirty &&
+      !window.confirm("Há alterações não salvas. Sair sem salvar?")
+    )
+      return;
+    setFilesDirty(false);
+    setProjectSection(section);
+  };
+  const sectionLabel = [
+    ...projectNavigation,
+    ...projectSettingsNavigation,
+  ].find((item) => item.id === projectSection)?.label;
   return (
     <>
       <WindowControls
@@ -263,7 +307,24 @@ export default function App() {
                   aria-current={projectSection === item.id ? "page" : undefined}
                   aria-label={item.label}
                   title={item.label}
-                  onClick={() => setProjectSection(item.id)}
+                  onClick={() => changeProjectSection(item.id)}
+                >
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+              <div className="project-nav-divider" aria-hidden="true" />
+              <span className="project-nav-heading">Configurações</span>
+              {projectSettingsNavigation.map((item) => (
+                <button
+                  key={item.id}
+                  className={
+                    projectSection === item.id ? "nav-item active" : "nav-item"
+                  }
+                  aria-current={projectSection === item.id ? "page" : undefined}
+                  aria-label={item.label}
+                  title={item.label}
+                  onClick={() => changeProjectSection(item.id)}
                 >
                   <item.icon size={18} />
                   <span>{item.label}</span>
@@ -329,7 +390,8 @@ export default function App() {
                 project={project}
                 cloud={state.cloudflare}
                 section={projectSection}
-                onSectionChange={setProjectSection}
+                onSectionChange={changeProjectSection}
+                onFilesDirtyChange={setFilesDirty}
                 onChanged={refresh}
                 onRemoved={(warning) => {
                   setState((data) =>

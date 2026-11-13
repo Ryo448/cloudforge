@@ -394,6 +394,18 @@ nav {
   margin-bottom: 14px;
   position: relative;
 }
+.project-nav-divider {
+  border-top: 1px solid var(--border);
+  margin: 9px 4px 5px;
+}
+.project-nav-heading {
+  color: #838d9f;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.075em;
+  padding: 3px 12px 2px;
+  text-transform: uppercase;
+}
 .project-nav-back::after {
   position: absolute;
   inset: auto 0 -10px;
@@ -1181,9 +1193,6 @@ form small {
 .settings-section .actions {
   flex-wrap: wrap;
 }
-.project-delete-path {
-  overflow-wrap: anywhere;
-}
 .project-resources {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1461,6 +1470,118 @@ form small {
 }
 .settings-section > h2 {
   margin-bottom: 15px;
+}
+.project-section-heading {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 5px;
+}
+.project-section-heading .project-risk-description {
+  color: var(--muted);
+  font-size: 12px;
+}
+.project-risk-section {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  max-width: 860px;
+  padding: 24px 26px;
+}
+.project-risk-content {
+  min-width: 0;
+}
+.project-risk-content h2 {
+  margin-bottom: 8px;
+}
+.project-risk-content p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  max-width: 62ch;
+}
+.project-risk-content > span {
+  color: #e9a7a2;
+  display: block;
+  font-size: 11px;
+  margin-top: 8px;
+}
+.project-delete-trigger {
+  flex-shrink: 0;
+}
+.project-delete-button {
+  background: #bd3038;
+  border-color: #bd3038;
+  color: #ffffff;
+}
+.project-delete-button:hover:not(:disabled) {
+  background: #d43b43;
+  border-color: #d43b43;
+}
+.project-delete-modal {
+  width: min(520px, calc(100% - 36px));
+}
+.project-delete-modal form {
+  margin-top: 0;
+}
+.project-delete-summary {
+  color: #c9d1df;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.project-delete-summary strong {
+  color: var(--text);
+}
+.project-delete-preserved {
+  background: #1b2029;
+  border: 1px solid #303849;
+  border-radius: 7px;
+  display: grid;
+  gap: 5px;
+  margin-top: 20px;
+  padding: 12px 14px;
+}
+.project-delete-preserved span {
+  color: #d2d9e4;
+  font-size: 12px;
+  font-weight: 500;
+}
+.project-delete-preserved code {
+  color: #aab5c5;
+  font:
+    11px/1.5 "IBM Plex Mono",
+    ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.project-delete-confirm-label {
+  color: #d2d9e4;
+  display: grid;
+  font-size: 12px;
+  gap: 9px;
+  margin: 24px 0 0;
+}
+.project-delete-confirm-label strong {
+  background: #252b36;
+  border: 1px solid #394252;
+  border-radius: 5px;
+  color: var(--text);
+  display: inline-block;
+  font:
+    500 12px/1.5 "IBM Plex Mono",
+    ui-monospace,
+    monospace;
+  justify-self: start;
+  overflow-wrap: anywhere;
+  padding: 5px 8px;
+}
+.project-delete-confirm-label input {
+  background: #080a0d;
+  margin-top: 2px;
+}
+.project-delete-modal .form-footer {
+  margin-top: 24px;
 }
 .settings-subsection {
   max-width: 600px;
@@ -2130,6 +2251,8 @@ form small {
   }
   .local-node,
   .nav-item > span,
+  .project-nav-divider,
+  .project-nav-heading,
   .sidebar-bottom {
     display: none;
   }
@@ -2210,6 +2333,15 @@ form small {
   }
   .settings-section {
     padding: 20px;
+  }
+  .project-risk-section {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  }
+  .project-delete-trigger {
+    align-self: flex-start;
   }
   .section-heading {
     align-items: flex-start;

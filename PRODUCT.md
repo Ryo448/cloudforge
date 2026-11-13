@@ -15,7 +15,7 @@ Administrador que executa seus próprios projetos confiáveis em um computador p
 Hospedar aplicações Python e Node.js com processos reais, dependências, logs, métricas e recuperação persistente sem depender da janela desktop.
 
 ## Capabilities and Constraints
-Desktop administra diretórios, projetos e integração Cloudflare. Web permite apenas visualizar e iniciar/parar/reiniciar. Não simular métricas, não modificar código dos projetos, não criar credenciais padrão. Segredos no armazenamento do SO; código confiável executa com privilégios do usuário, sem isolamento de containers.
+Desktop administra diretórios, projetos e integração Cloudflare, além de navegar, visualizar e editar arquivos de texto dos projetos. Web permite apenas visualizar e iniciar/parar/reiniciar. Não simular métricas nem criar credenciais padrão. Segredos no armazenamento do SO; código confiável executa com privilégios do usuário, sem isolamento de containers.
 
 ## Brand Commitments
 Marca oficial Cloudforge com ícone em `assets/icon/icon.png` (nuvem com bigorna e centelha em gradiente laranja-âmbar) e logotipo tipográfico `Cloudforge` em Poppins Bold (`Cloud` branco e `forge` laranja `#fc7800`). Tema escuro em carbono e aço temperado, tipografia IBM Plex Sans e IBM Plex Mono, sidebar, ícones Lucide, espaçamento consistente, movimento discreto. Referência de fluxo SquareCloud, com identidade própria.

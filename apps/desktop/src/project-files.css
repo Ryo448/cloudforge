@@ -1,0 +1,332 @@
+.project-files {
+  min-height: 570px;
+  height: min(72vh, 820px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 10px 28px rgba(0, 0, 0, 0.22);
+}
+.project-files-toolbar {
+  min-height: 58px;
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  border-bottom: 1px solid var(--border);
+}
+.project-files-location,
+.project-files-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.project-files-location {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.project-files-location svg {
+  color: var(--accent);
+  flex: none;
+}
+.project-files-location span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-files-actions {
+  flex: none;
+}
+.project-files-body {
+  display: grid;
+  grid-template-columns: minmax(215px, 28%) minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+.project-files-tree {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: #0e1116;
+}
+.project-files-tree-heading {
+  height: 45px;
+  padding: 15px 15px 12px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border);
+}
+.project-files-tree-heading span {
+  margin-left: 6px;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.project-files-tree-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 6px 12px;
+}
+.project-file-row {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px 5px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #dce2ec;
+  text-align: left;
+  font:
+    12px "IBM Plex Sans",
+    sans-serif;
+  cursor: pointer;
+}
+.project-file-row:hover {
+  background: #1a2029;
+}
+.project-file-row.active {
+  background: #302117;
+  color: #fff;
+}
+.project-file-row:focus-visible,
+.project-file-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.project-file-row svg {
+  flex: none;
+  color: #91a0b2;
+}
+.project-file-row.active svg,
+.project-file-row:hover svg {
+  color: var(--accent);
+}
+.project-file-spacer {
+  display: inline-block;
+  width: 14px;
+  flex: none;
+}
+.project-file-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-file-dirty {
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.project-file-folder-status {
+  margin: 0;
+  padding: 9px 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.project-files-viewer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #050608;
+}
+.project-files-viewer-header {
+  height: 45px;
+  padding: 6px 12px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #1b1e23;
+  background: #08090c;
+}
+.project-files-viewer-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #dce2ec;
+  font-size: 12px;
+  font-weight: 600;
+}
+.project-files-viewer-title > span:first-of-type {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.project-file-close {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.project-file-close:hover {
+  background: #252b34;
+  color: #fff;
+}
+.project-files-unsaved {
+  color: #f7b955;
+  font-size: 11px;
+  font-weight: 500;
+}
+.project-files-viewer-header .button {
+  min-height: 30px;
+  padding: 5px 9px;
+}
+.project-files-viewer-header .button:disabled {
+  opacity: 0.55;
+}
+.project-files-message {
+  flex: none;
+  padding: 8px 15px;
+  border-bottom: 1px solid var(--border);
+  background: var(--raised);
+  color: #f1f3f7;
+  font-size: 11px;
+}
+.project-files-message.error {
+  background: var(--raised);
+  color: var(--red);
+}
+.project-files-stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+.project-file-code {
+  height: 100%;
+}
+.project-file-code .cm-editor {
+  height: 100%;
+}
+.project-files-empty {
+  height: 100%;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.project-files-empty svg {
+  color: var(--accent);
+}
+.project-files-empty h2 {
+  margin: 7px 0 0;
+  color: #f1f3f7;
+  font:
+    600 17px "Poppins",
+    sans-serif;
+}
+.project-files-empty p {
+  margin: 0;
+}
+.project-files-media {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 25px;
+  overflow: auto;
+  color: #dce2ec;
+}
+.project-files-media img,
+.project-files-media video {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.project-files-media video {
+  width: min(100%, 860px);
+}
+.project-files-media audio {
+  width: min(100%, 500px);
+}
+.project-files-media > svg {
+  color: var(--accent);
+}
+.project-files-status {
+  min-height: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 5px 12px;
+  border-top: 1px solid #1b1e23;
+  background: #08090c;
+  color: var(--muted);
+  font:
+    10px "IBM Plex Mono",
+    monospace;
+}
+.project-files-status span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-files-status span:last-child {
+  flex: none;
+}
+@media (max-width: 850px) {
+  .project-files {
+    height: auto;
+    min-height: 680px;
+  }
+  .project-files-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 235px minmax(420px, 1fr);
+  }
+  .project-files-tree {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .project-files-toolbar {
+    flex-wrap: wrap;
+  }
+  .project-files-actions {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 480px) {
+  .project-files-toolbar .button {
+    font-size: 11px;
+  }
+  .project-files-status span:last-child {
+    display: none;
+  }
+}

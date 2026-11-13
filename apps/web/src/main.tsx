@@ -99,7 +99,9 @@ function App() {
         try {
           const data = JSON.parse(event.data);
           if (data.projects)
-            setProjects((previous) => mergeProjectUsage(previous, data.projects));
+            setProjects((previous) =>
+              mergeProjectUsage(previous, data.projects),
+            );
           setConnected(true);
           setError("");
           attempt = 0;
@@ -150,7 +152,9 @@ function App() {
   }, [session?.authenticated, session?.csrf]);
 
   if (denied)
-    return <ErrorScreen kind="denied" onRetry={() => window.location.reload()} />;
+    return (
+      <ErrorScreen kind="denied" onRetry={() => window.location.reload()} />
+    );
 
   async function login(e: FormEvent) {
     e.preventDefault();
@@ -176,22 +180,20 @@ function App() {
     setProjects((previous) => mergeProjectUsage(previous, incoming));
   }
   if (!session)
-    return (
-      error ? (
-        <ErrorScreen
-          kind={
-            error === "Resposta inválida do servidor." ? "unknown" : "unavailable"
-          }
-          onRetry={() => void loadSession()}
-        />
-      ) : (
-        <div className="connection-page">
-          <Brand />
-          <div className="connection-panel">
-            <Spinner />
-          </div>
+    return error ? (
+      <ErrorScreen
+        kind={
+          error === "Resposta inválida do servidor." ? "unknown" : "unavailable"
+        }
+        onRetry={() => void loadSession()}
+      />
+    ) : (
+      <div className="connection-page">
+        <Brand />
+        <div className="connection-panel">
+          <Spinner />
         </div>
-      )
+      </div>
     );
   if (!session.authenticated)
     return (

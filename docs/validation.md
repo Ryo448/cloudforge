@@ -33,5 +33,5 @@ Fixtures e credenciais efêmeras de QA são geradas em diretórios temporários 
 - Criação real de túnel/DNS, conexão cloudflared e resposta HTTPS pelo domínio.
 - Ativação real da inicialização automática e reinício físico da máquina.
 - Testes de execução em Linux, pnpm e Yarn. A compilação cruzada não substitui execução nesses ambientes.
-- Assinatura de distribuição e licença do próprio projeto.
+- Assinatura de distribuição.
 

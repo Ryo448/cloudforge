@@ -12,16 +12,23 @@ export function mergeProjectUsage<T extends ProjectWithUsage>(
   previous: T[] | null | undefined,
   incoming: T[],
 ): T[] {
-  const oldProjects = new Map(previous?.map((project) => [project.id, project]));
+  const oldProjects = new Map(
+    previous?.map((project) => [project.id, project]),
+  );
   const now = Date.now();
   return incoming.map((project) => {
     const old = oldProjects.get(project.id);
     const previousHistory =
       old?.execution.startedAt === project.execution.startedAt
-        ? old?.usageHistory?.filter((sample) => now - sample.time <= windowMs) ?? []
+        ? (old?.usageHistory?.filter(
+            (sample) => now - sample.time <= windowMs,
+          ) ?? [])
         : [];
     const samples = new Map<number, UsageSample>();
-    for (const sample of [...previousHistory, ...(project.usageHistory ?? [])]) {
+    for (const sample of [
+      ...previousHistory,
+      ...(project.usageHistory ?? []),
+    ]) {
       if (now - sample.time <= windowMs) samples.set(sample.time, sample);
     }
     const history = [...samples.values()].sort((a, b) => a.time - b.time);

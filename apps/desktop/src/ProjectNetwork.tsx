@@ -14,8 +14,10 @@ export function ProjectRemoval({
   onRemoved: (warning: string) => void;
 }) {
   const [confirm, setConfirm] = useState(false);
+  const [projectName, setProjectName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const nameMatches = projectName === project.name;
 
   async function remove() {
     setBusy(true);
@@ -33,16 +35,20 @@ export function ProjectRemoval({
   }
 
   return (
-    <section className="settings-section">
-      <h2>Excluir projeto</h2>
-      <p className="muted">
-        Remove o projeto, seus logs e seu endereço público do Cloudforge. A
-        pasta e os arquivos são preservados.
-      </p>
+    <section className="settings-section project-risk-section">
+      <div className="project-risk-content">
+        <h2>Excluir projeto</h2>
+        <p>
+          Remove o projeto, os logs e o endereço público do Cloudforge. A pasta
+          e os arquivos permanecem no computador.
+        </p>
+        <span>Esta ação não pode ser desfeita.</span>
+      </div>
       <button
-        className="button danger-quiet"
+        className="button danger-quiet project-delete-trigger"
         onClick={() => {
           setError("");
+          setProjectName("");
           setConfirm(true);
         }}
       >
@@ -50,36 +56,69 @@ export function ProjectRemoval({
       </button>
       {confirm && (
         <Modal
-          title="Excluir projeto do Cloudforge?"
-          onClose={() => !busy && setConfirm(false)}
+          title="Excluir projeto"
+          className="project-delete-modal"
+          onClose={() => {
+            if (!busy) {
+              setConfirm(false);
+              setProjectName("");
+            }
+          }}
+          closeDisabled={busy}
         >
-          <p>
-            O processo de <strong>{project.name}</strong> será encerrado e o
-            cadastro será excluído.
-            {project.hostname &&
-              ` O endereço ${project.hostname} deixará de abrir o projeto.`}
-          </p>
-          <p className="project-delete-path muted">
-            Pasta preservada: {project.path}
-          </p>
-          <ErrorMessage error={error} />
-          <div className="form-footer">
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() => setConfirm(false)}
-            >
-              Cancelar
-            </button>
-            <button
-              className="button danger-quiet"
-              disabled={busy}
-              onClick={() => void remove()}
-            >
-              {busy ? <Spinner /> : <Trash2 size={16} />}{" "}
-              {busy ? "Excluindo projeto…" : "Excluir projeto"}
-            </button>
-          </div>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!busy && nameMatches) void remove();
+            }}
+          >
+            <p className="project-delete-summary">
+              O processo de <strong>{project.name}</strong> será encerrado. O
+              projeto, os logs e o endereço público serão removidos do
+              Cloudforge. Esta ação não pode ser desfeita.
+              {project.hostname &&
+                ` O endereço ${project.hostname} deixará de abrir o projeto.`}
+            </p>
+            <div className="project-delete-preserved">
+              <span>A pasta e os arquivos serão preservados</span>
+              <code>{project.path}</code>
+            </div>
+            <label className="project-delete-confirm-label">
+              <span>Digite o nome do projeto para confirmar</span>
+              <strong>{project.name}</strong>
+              <input
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                aria-label={`Digite ${project.name} para confirmar a exclusão`}
+                disabled={busy}
+              />
+            </label>
+            <ErrorMessage error={error} />
+            <div className="form-footer">
+              <button
+                type="button"
+                className="button"
+                disabled={busy}
+                onClick={() => {
+                  setConfirm(false);
+                  setProjectName("");
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="button project-delete-button"
+                disabled={busy || !nameMatches}
+              >
+                {busy ? <Spinner /> : <Trash2 size={16} />}{" "}
+                {busy ? "Excluindo projeto…" : "Excluir projeto"}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </section>

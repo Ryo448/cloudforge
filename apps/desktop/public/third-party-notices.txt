@@ -1,5 +1,5 @@
 Cloudforge — avisos de terceiros
-Gerado a partir das licenças distribuídas nas dependências. A licença do próprio Cloudforge é definida separadamente pelo mantenedor.
+Gerado a partir das licenças distribuídas nas dependências. O Cloudforge é licenciado sob MIT (consulte LICENSE na raiz do projeto).
 
 ========================================================================
 react 19.3.1

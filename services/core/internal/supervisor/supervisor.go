@@ -8,6 +8,7 @@ import (
 	"cloudforge/core/internal/projects"
 	"cloudforge/core/internal/runtimes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/shirou/gopsutil/v4/process"
@@ -334,6 +335,18 @@ func (s *Supervisor) loop(ctx context.Context, j *job) {
 		if ctx.Err() != nil {
 			return
 		}
+		// Each process attempt starts with a fresh log view, including automatic retries.
+		// Remove keeps sequence numbers increasing so UI-only clears stay valid.
+		if err := j.logs.Remove(); err != nil {
+			j.mu.Lock()
+			j.state.ActualState = "error"
+			j.state.LastError = "Não foi possível limpar os logs: " + err.Error()
+			j.state.Health = "offline"
+			state := j.state
+			j.mu.Unlock()
+			_ = s.store.Runtime(state)
+			return
+		}
 		j.mu.Lock()
 		p := j.p
 		j.state.ActualState = "starting"
@@ -358,9 +371,42 @@ func (s *Supervisor) loop(ctx context.Context, j *job) {
 			fresh := exec.Command(cmd.Path, cmd.Args[1:]...)
 			cmd = fresh
 			cmd.Dir = p.WorkingDirectory
-			cmd.Env = nil
+			cmd.Env = os.Environ()
+			files, envErr := projects.EnvironmentFiles(p.Path)
+			if envErr == nil && len(files) > 0 {
+				selected := files[0]
+				for _, file := range files {
+					if file == ".env" {
+						selected = file
+						break
+					}
+				}
+				var chosen string
+				if s.store.Setting("environment-file:"+p.ID, &chosen) == nil && slices.Contains(files, chosen) {
+					selected = chosen
+				}
+				var values []projects.EnvironmentVariable
+				values, envErr = projects.ReadEnvironment(p.Path, selected)
+				if envErr == nil {
+					for _, v := range values {
+						cmd.Env = append(cmd.Env, v.Key+"="+v.Value)
+					}
+				}
+			} else if envErr == nil {
+				values, e := s.store.Environment(p.ID)
+				if e == nil {
+					for _, v := range values {
+						cmd.Env = append(cmd.Env, v.Key+"="+v.Value)
+					}
+				} else if !errors.Is(e, sql.ErrNoRows) {
+					envErr = e
+				}
+			}
+			if envErr != nil {
+				runError = envErr
+			}
 			if p.Port > 0 {
-				cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", p.Port))
+				cmd.Env = append(cmd.Env, fmt.Sprintf("PORT=%d", p.Port))
 			}
 			var terminal *terminalSession
 			if p.TerminalEnabled {

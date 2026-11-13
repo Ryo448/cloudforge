@@ -7,6 +7,9 @@
 
 .window-titlebar {
   -webkit-app-region: drag;
+  position: sticky;
+  top: 0;
+  z-index: 10;
   height: var(--window-titlebar-height);
   flex: 0 0 var(--window-titlebar-height);
   display: flex;

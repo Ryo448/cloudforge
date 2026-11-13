@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { root, go } from "./util.mjs";
 const heading =
-  "Cloudforge — avisos de terceiros\nGerado a partir das licenças distribuídas nas dependências. A licença do próprio Cloudforge é definida separadamente pelo mantenedor.\n";
+  "Cloudforge — avisos de terceiros\nGerado a partir das licenças distribuídas nas dependências. O Cloudforge é licenciado sob MIT (consulte LICENSE na raiz do projeto).\n";
 let frontend = heading;
 for (const name of [
   "react",

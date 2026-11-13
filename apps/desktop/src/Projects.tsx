@@ -8,13 +8,11 @@ import {
 } from "react";
 import {
   ArrowRight,
-  ArrowUp,
   ArrowUpRight,
   Check,
   ChevronRight,
   Copy,
   Cpu,
-  FileText,
   Folder,
   FolderOpen,
   Globe,
@@ -29,7 +27,6 @@ import {
 import type {
   CloudConfig,
   Detection,
-  FileEntry,
   Log,
   Project,
 } from "../../../packages/shared-types";
@@ -46,6 +43,8 @@ import {
 } from "../../../packages/ui";
 import { ProjectUsage, RuntimeLogo } from "../../../packages/ui/ProjectCard";
 import { api, message } from "./api";
+import { EnvironmentPage } from "./Environment";
+import { ProjectFiles } from "./ProjectFiles";
 import "./add-project.css";
 export function parseArguments(text: string): string[] {
   const tokens: string[] = [];
@@ -500,13 +499,20 @@ export function AddProject({
 }
 
 export type ProjectSection =
-  "overview" | "logs" | "files" | "domain" | "settings";
+  | "overview"
+  | "logs"
+  | "files"
+  | "environment"
+  | "domain"
+  | "settings"
+  | "risk";
 
 export function ProjectPage({
   project,
   cloud,
   section,
   onSectionChange,
+  onFilesDirtyChange,
   onChanged,
   onRemoved,
 }: {
@@ -514,6 +520,7 @@ export function ProjectPage({
   cloud: CloudConfig;
   section: ProjectSection;
   onSectionChange: (section: ProjectSection) => void;
+  onFilesDirtyChange: (dirty: boolean) => void;
   onChanged: () => void;
   onRemoved: (warning: string) => void;
 }) {
@@ -624,11 +631,18 @@ export function ProjectPage({
               {
                 logs: "Logs",
                 files: "Arquivos",
-                domain: "Subdomínio",
-                settings: "Configurações",
+                environment: "Variáveis de ambiente",
+                domain: "Network",
+                settings: "Geral",
+                risk: "Área de risco",
               }[section]
             }
           </h1>
+          {section === "risk" && (
+            <p className="project-risk-description">
+              Ações permanentes deste projeto.
+            </p>
+          )}
         </div>
       )}
       {overview && <ErrorMessage error={error || execution.lastError} />}
@@ -663,7 +677,9 @@ export function ProjectPage({
           }
         />
       ) : section === "files" ? (
-        <Files project={project} />
+        <ProjectFiles project={project} onDirtyChange={onFilesDirtyChange} />
+      ) : section === "environment" ? (
+        <EnvironmentPage project={project} />
       ) : section === "domain" ? (
         <ProjectDomain
           project={project}
@@ -671,11 +687,12 @@ export function ProjectPage({
           onChanged={onChanged}
           onEditPort={() => onSectionChange("settings")}
         />
+      ) : section === "risk" ? (
+        <ProjectRemoval project={project} onRemoved={onRemoved} />
       ) : (
         <>
           <ProjectStartup project={project} onChanged={onChanged} />
           <ProjectPort project={project} onChanged={onChanged} />
-          <ProjectRemoval project={project} onRemoved={onRemoved} />
         </>
       )}
       {overview && (
@@ -894,23 +911,26 @@ function Logs({
   }
   useEffect(() => {
     let active = true;
+    let version = 0;
     const load = async () => {
+      const requestVersion = ++version;
       try {
         const result = await api<Log[]>(
           "GET",
           `/api/projects/${project.id}/logs`,
         );
-        if (active) {
+        if (active && requestVersion === version) {
           setLogs(result);
           setError("");
         }
       } catch (e) {
-        if (active) setError(message(e));
+        if (active && requestVersion === version) setError(message(e));
       }
     };
     void load();
     const unsubscribe = window.cloudforge.onState((state) => {
       if (active && state.logProject === project.id && state.logs) {
+        version++;
         setLogs(state.logs);
         setError("");
       }
@@ -1027,147 +1047,6 @@ function Logs({
         </span>
         <span>stdout + stderr</span>
       </div>
-    </section>
-  );
-}
-function Files({ project }: { project: Project }) {
-  const [path, setPath] = useState(""),
-    [files, setFiles] = useState<FileEntry[]>([]),
-    [content, setContent] = useState<{ name: string; text: string } | null>(
-      null,
-    ),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  async function load() {
-    setBusy(true);
-    setError("");
-    try {
-      setFiles(
-        await api<FileEntry[]>(
-          "GET",
-          `/api/projects/${project.id}/files?path=${encodeURIComponent(path)}`,
-        ),
-      );
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  useEffect(() => {
-    void load();
-  }, [path, project.id]);
-  async function open(file: FileEntry) {
-    if (file.directory) {
-      setPath(file.path);
-      return;
-    }
-    setError("");
-    try {
-      const result = await api<{ content: string }>(
-        "GET",
-        `/api/projects/${project.id}/file?path=${encodeURIComponent(file.path)}`,
-      );
-      setContent({ name: file.path, text: result.content });
-    } catch (e) {
-      setError(message(e));
-    }
-  }
-  return (
-    <section className="file-panel">
-      <div className="list-toolbar">
-        <div className="file-breadcrumb">
-          <button
-            className="icon-button"
-            aria-label="Diretório anterior"
-            disabled={!path}
-            onClick={() => setPath(path.split(/[\\/]/).slice(0, -1).join("/"))}
-          >
-            <ArrowUp size={16} />
-          </button>
-          <button className="text-button" onClick={() => setPath("")}>
-            {project.name}
-          </button>
-          {path && (
-            <>
-              <ChevronRight size={14} />
-              <span>{path}</span>
-            </>
-          )}
-        </div>
-        <button
-          className="button"
-          onClick={async () => {
-            try {
-              await window.cloudforge.openProject(project.id);
-            } catch (e) {
-              setError(message(e));
-            }
-          }}
-        >
-          <FolderOpen size={16} />
-          Abrir no explorador
-        </button>
-      </div>
-      <ErrorMessage error={error} />
-      {busy ? (
-        <div className="empty-state compact">
-          <Spinner />
-        </div>
-      ) : !files.length ? (
-        <div className="empty-state compact">
-          <Folder size={26} />
-          <p>Este diretório está vazio.</p>
-        </div>
-      ) : (
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Tamanho</th>
-                <th>Modificado em</th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.map((file) => (
-                <tr key={file.path}>
-                  <td>
-                    <button
-                      className="file-name"
-                      onClick={() => void open(file)}
-                    >
-                      {file.directory ? (
-                        <Folder size={17} />
-                      ) : (
-                        <FileText size={17} />
-                      )}
-                      <span>{file.name}</span>
-                    </button>
-                  </td>
-                  <td className="muted numeric">
-                    {file.directory
-                      ? "—"
-                      : file.size < 1024
-                        ? `${file.size} B`
-                        : file.size < 1024 ** 2
-                          ? `${(file.size / 1024).toFixed(1)} KB`
-                          : bytes(file.size)}
-                  </td>
-                  <td className="muted numeric">
-                    {new Date(file.modified).toLocaleString("pt-BR")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {content && (
-        <Modal title={content.name} onClose={() => setContent(null)} wide>
-          <pre className="file-content">{content.text}</pre>
-        </Modal>
-      )}
     </section>
   );
 }
