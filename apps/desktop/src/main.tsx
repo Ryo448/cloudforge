@@ -9,14 +9,18 @@ import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "../../../packages/ui/styles.css";
+import "./window-controls.css";
 import App from "./App";
 import TerminalWindow from "./TerminalWindow";
+const isTerminal = location.hash === "#tui";
 createRoot(document.getElementById("root")!).render(
-  location.hash === "#tui" ? (
-    <TerminalWindow />
-  ) : (
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  ),
+  <div className="desktop-window">
+    {isTerminal ? (
+      <TerminalWindow />
+    ) : (
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    )}
+  </div>,
 );

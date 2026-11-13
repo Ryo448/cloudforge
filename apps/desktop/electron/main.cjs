@@ -96,6 +96,7 @@ function openTuiWindow(project) {
     backgroundColor: "#080a0d",
     icon: iconPath,
     title: `Terminal · ${project.name}`,
+    frame: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "terminal-preload.cjs"),
@@ -123,12 +124,22 @@ function openTuiWindow(project) {
     clearTimeout(session.retry);
     session.socket?.close();
   });
+  watchWindowState(terminal);
   if (process.env.CLOUDFORGE_DEV === "1")
-    terminal.loadURL("http://127.0.0.1:5173/#tui");
+    terminal.loadURL(
+      `http://127.0.0.1:5173/?project=${encodeURIComponent(project.name)}#tui`,
+    );
   else
     terminal.loadFile(path.join(__dirname, "../dist/index.html"), {
+      query: { project: project.name },
       hash: "tui",
     });
+}
+function watchWindowState(target) {
+  const sendState = () =>
+    target.webContents.send("window:maximized", target.isMaximized());
+  target.on("maximize", sendState);
+  target.on("unmaximize", sendState);
 }
 function connectTerminal(session) {
   if (!session.ready || session.terminal.isDestroyed() || closing) return;
@@ -240,6 +251,7 @@ function createWindow() {
     backgroundColor: "#0b0d11",
     icon: iconPath,
     title: "Cloudforge",
+    frame: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -273,6 +285,7 @@ function createWindow() {
   window.on("closed", () => {
     window = undefined;
   });
+  watchWindowState(window);
 }
 function checkSender(event) {
   if (
@@ -288,6 +301,25 @@ function checkSender(event) {
   if (event.senderFrame.url !== expected)
     throw new Error("Documento IPC não autorizado");
 }
+function controlledWindow(event) {
+  if (window && event.sender === window.webContents) {
+    checkSender(event);
+    return window;
+  }
+  return terminalSession(event).terminal;
+}
+ipcMain.handle("window:is-maximized", (event) =>
+  controlledWindow(event).isMaximized(),
+);
+ipcMain.handle("window:action", (event, action) => {
+  const target = controlledWindow(event);
+  if (action === "minimize") target.minimize();
+  else if (action === "maximize") {
+    if (target.isMaximized()) target.unmaximize();
+    else target.maximize();
+  } else if (action === "close") target.close();
+  else throw new Error("Ação de janela inválida");
+});
 const routes = [
   [
     "GET",

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -374,8 +375,13 @@ func (s *Supervisor) loop(ctx context.Context, j *job) {
 				processes.Configure(cmd)
 				stdout := &streamWriter{book: j.logs, stream: "stdout"}
 				stderr := &streamWriter{book: j.logs, stream: "stderr"}
+				flushStdout := stdout.Flush
 				if terminal == nil {
 					cmd.Stdout = stdout
+				} else if runtime.GOOS == "windows" {
+					terminalLogs := &terminalLogWriter{book: j.logs}
+					cmd.Stdout = io.MultiWriter(terminal, terminalLogs)
+					flushStdout = terminalLogs.Flush
 				} else {
 					cmd.Stdout = io.MultiWriter(stdout, terminal)
 				}
@@ -421,7 +427,7 @@ func (s *Supervisor) loop(ctx context.Context, j *job) {
 						}
 						j.logs.Add("system", fmt.Sprintf("Aplicação iniciada · PID %d", cmd.Process.Pid))
 						wait := make(chan error, 1)
-						go func() { result := cmd.Wait(); stdout.Flush(); stderr.Flush(); wait <- result }()
+						go func() { result := cmd.Wait(); flushStdout(); stderr.Flush(); wait <- result }()
 						select {
 						case runError = <-wait:
 						case <-ctx.Done():

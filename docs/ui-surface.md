@@ -10,7 +10,7 @@ OWN-WORLD: superfícies em carbono obsidiana (`#0b0d11`) e aço escuro (`#13171e
 
 STORY: o administrador verifica a máquina, cria a conta, adiciona uma pasta e acompanha logs reais. Configurar o acesso público é uma ação separada e explícita.
 
-FIRST VIEWPORT: sidebar fixa à esquerda com a marca oficial Cloudforge, barra de conexão superior, recursos da máquina ao centro, resumo de projetos à direita e lista abaixo. A ação Adicionar projeto permanece no cabeçalho. A página individual mantém ações ao lado do nome, métricas em uma faixa e logs na área principal. No celular, a web transforma projetos em blocos com três ações grandes.
+FIRST VIEWPORT: barra única no topo com a marca oficial Cloudforge à esquerda, nome da página e conexão no centro, e controles da janela à direita. A sidebar começa abaixo da barra; os recursos da máquina ficam ao centro, o resumo de projetos à direita e a lista abaixo. A ação Adicionar projeto permanece no cabeçalho do conteúdo. A página individual mantém ações ao lado do nome, métricas em uma faixa e logs na área principal. No celular, a web transforma projetos em blocos com três ações grandes.
 
 FORM: organização administrativa convencional solicitada no prompt. Brief fixou a estrutura e o tema; referência consultada no navegador. seed:97f5cc002378c97b, execução degradada sem challengers; telas de aplicação construídas em código.
 

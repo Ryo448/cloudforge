@@ -1,6 +1,6 @@
 import React, { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { LogOut, RefreshCw, ShieldCheck, Wifi, WifiOff } from "lucide-react";
+import { LogOut, ShieldCheck, Wifi, WifiOff } from "lucide-react";
 import "@fontsource/poppins/500.css";
 import "@fontsource/poppins/600.css";
 import "@fontsource/poppins/700.css";
@@ -18,6 +18,8 @@ import {
 } from "../../../packages/ui";
 import { ProjectCard } from "../../../packages/ui/ProjectCard";
 import type { RemoteProject } from "../../../packages/shared-types";
+import { mergeProjectUsage } from "../../../packages/shared-types/usage";
+import { ErrorScreen } from "./ErrorScreen";
 type Session = {
   authenticated: boolean;
   csrf: string;
@@ -30,6 +32,7 @@ function App() {
     [username, setUsername] = useState(""),
     [password, setPassword] = useState(""),
     [error, setError] = useState(""),
+    [denied, setDenied] = useState(false),
     [busy, setBusy] = useState(""),
     [connected, setConnected] = useState(false);
   useEffect(() => {
@@ -53,6 +56,7 @@ function App() {
       .json()
       .catch(() => ({ error: "Resposta inválida do servidor." }));
     if (!response.ok) {
+      if (response.status === 403) setDenied(true);
       if (response.status === 401 && path !== "/api/login") {
         setSession(null);
         void loadSession();
@@ -80,7 +84,8 @@ function App() {
     let attempt = 0;
     const load = async () => {
       try {
-        setProjects(await request<RemoteProject[]>("GET", "/api/projects"));
+        const incoming = await request<RemoteProject[]>("GET", "/api/projects");
+        setProjects((previous) => mergeProjectUsage(previous, incoming));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Falha na conexão.");
       }
@@ -93,7 +98,8 @@ function App() {
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.projects) setProjects(data.projects);
+          if (data.projects)
+            setProjects((previous) => mergeProjectUsage(previous, data.projects));
           setConnected(true);
           setError("");
           attempt = 0;
@@ -142,6 +148,10 @@ function App() {
     const timer = setInterval(() => void renew(), 3600000);
     return () => clearInterval(timer);
   }, [session?.authenticated, session?.csrf]);
+
+  if (denied)
+    return <ErrorScreen kind="denied" onRetry={() => window.location.reload()} />;
+
   async function login(e: FormEvent) {
     e.preventDefault();
     setBusy("login");
@@ -162,26 +172,26 @@ function App() {
   }
   async function action(id: string, action: string) {
     await request("POST", `/api/projects/${id}/action`, { action });
-    setProjects(await request<RemoteProject[]>("GET", "/api/projects"));
+    const incoming = await request<RemoteProject[]>("GET", "/api/projects");
+    setProjects((previous) => mergeProjectUsage(previous, incoming));
   }
   if (!session)
     return (
-      <div className="connection-page">
-        <Brand />
-        <div className="connection-panel">
-          {error ? (
-            <>
-              <ErrorMessage error={error} />
-              <button className="button" onClick={() => void loadSession()}>
-                <RefreshCw size={16} />
-                Tentar novamente
-              </button>
-            </>
-          ) : (
+      error ? (
+        <ErrorScreen
+          kind={
+            error === "Resposta inválida do servidor." ? "unknown" : "unavailable"
+          }
+          onRetry={() => void loadSession()}
+        />
+      ) : (
+        <div className="connection-page">
+          <Brand />
+          <div className="connection-panel">
             <Spinner />
-          )}
+          </div>
         </div>
-      </div>
+      )
     );
   if (!session.authenticated)
     return (

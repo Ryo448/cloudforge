@@ -21,6 +21,7 @@ import {
 } from "./index";
 
 const historyWindow = 120_000;
+const maxSampleGap = 20_000;
 const chartWidth = 480;
 const chartHeight = 64;
 
@@ -36,7 +37,7 @@ function usagePaths(
 
   for (const sample of samples) {
     const value = sample[metric];
-    if (value == null || sample.time - previousTime > 6000) {
+    if (value == null || sample.time - previousTime > maxSampleGap) {
       segment = [];
     }
     if (value == null) continue;
@@ -54,15 +55,27 @@ export function ProjectUsage({
   history,
   online,
   metric,
+  currentCpu,
+  currentMemory,
 }: {
   history?: UsageSample[];
   online: boolean;
   metric?: "cpu" | "memory";
+  currentCpu?: number | null;
+  currentMemory?: number | null;
 }) {
   const fill = useId();
   const now = Math.max(Date.now(), history?.at(-1)?.time ?? 0);
-  const samples =
+  const recentSamples =
     history?.filter((sample) => now - sample.time <= historyWindow) ?? [];
+  const samples =
+    online &&
+    !recentSamples.some((sample) => sample.cpu != null || sample.memory != null)
+      ? [
+          ...recentSamples,
+          { time: now, cpu: currentCpu ?? null, memory: currentMemory ?? null },
+        ]
+      : recentSamples;
   const scales = {
     cpu: Math.ceil(
       Math.max(metric ? 1 : 100, ...samples.map((s) => s.cpu ?? 0)),
@@ -265,6 +278,8 @@ export function ProjectCard({
       <ProjectUsage
         history={project.usageHistory}
         online={execution.actualState === "online"}
+        currentCpu={execution.cpu}
+        currentMemory={execution.memory}
       />
       <div className="project-card-metrics">
         <span className="project-card-metric">

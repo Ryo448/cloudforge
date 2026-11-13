@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import WindowControls from "./WindowControls";
 
 declare global {
   interface Window {
@@ -59,10 +60,15 @@ export default function TerminalWindow() {
     };
   }, []);
   return (
-    <main
-      className="tui-window"
-      ref={container}
-      aria-label="Terminal do projeto"
-    />
+    <>
+      <WindowControls
+        heading={`Terminal · ${new URLSearchParams(location.search).get("project") || "Cloudforge"}`}
+      />
+      <main
+        className="tui-window"
+        ref={container}
+        aria-label="Terminal do projeto"
+      />
+    </>
   );
 }

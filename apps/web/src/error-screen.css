@@ -1,0 +1,201 @@
+.pingo-error {
+  min-height: 100vh;
+  padding: 0 clamp(20px, 5vw, 72px);
+  display: flex;
+  flex-direction: column;
+  color: #f1f3f7;
+  background: #0b0d11;
+}
+
+.pingo-error-header,
+.pingo-error-footer {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #232834;
+}
+
+.pingo-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #fff;
+  font-family: "Poppins", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pingo-brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.pingo-brand-name {
+  display: inline-flex;
+  align-items: baseline;
+  color: #fff;
+}
+
+.pingo-brand-name span {
+  color: #fc7800;
+}
+
+.pingo-error-status {
+  color: #f87a74;
+  font:
+    500 12px/1.5 "IBM Plex Mono",
+    monospace;
+  letter-spacing: 0.06em;
+}
+
+.pingo-error-content {
+  width: min(1120px, 100%);
+  flex: 1;
+  margin: 0 auto;
+  padding: clamp(64px, 9vh, 112px) 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: center;
+  gap: clamp(48px, 7vw, 104px);
+}
+
+.pingo-error-copy {
+  max-width: 620px;
+}
+
+.pingo-error-copy h1 {
+  max-width: 17ch;
+  margin: 0 0 24px;
+  font:
+    600 42px/1.14 "Poppins",
+    "IBM Plex Sans",
+    sans-serif;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.pingo-error-message {
+  max-width: 56ch;
+  margin: 0;
+  color: #ebedf2;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.pingo-error-guidance {
+  max-width: 54ch;
+  margin: 28px 0 0;
+  padding-top: 22px;
+  border-top: 1px solid #232834;
+  color: #949eae;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.pingo-error-action {
+  min-height: 48px;
+  margin-top: 28px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #ff7a1a;
+  border-radius: 7px;
+  background: #ff7a1a;
+  color: #140800;
+  font:
+    600 14px/1.3 "IBM Plex Sans",
+    sans-serif;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.pingo-error-action:hover {
+  border-color: #ff9138;
+  background: #ff9138;
+}
+
+.pingo-error-action:focus-visible {
+  outline: 2px solid #f1f3f7;
+  outline-offset: 3px;
+}
+
+.pingo-error-mascot {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  justify-self: center;
+}
+
+.pingo-error-footer {
+  min-height: 58px;
+  justify-content: flex-start;
+  border-top: 1px solid #232834;
+  border-bottom: 0;
+  color: #949eae;
+  font:
+    12px/1.5 "IBM Plex Mono",
+    monospace;
+}
+
+@media (max-width: 900px) {
+  .pingo-error-content {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+    gap: 36px;
+  }
+
+  .pingo-error-copy h1 {
+    font-size: 36px;
+  }
+}
+
+@media (max-width: 700px) {
+  .pingo-error {
+    padding: 0 20px;
+  }
+
+  .pingo-error-header {
+    min-height: 64px;
+  }
+
+  .pingo-error-status {
+    max-width: 52%;
+    text-align: right;
+  }
+
+  .pingo-error-content {
+    min-height: unset;
+    padding: 56px 0 48px;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .pingo-error-mascot {
+    grid-row: 1;
+    width: min(50vw, 190px);
+  }
+
+  .pingo-error-copy {
+    grid-row: 2;
+  }
+
+  .pingo-error-copy h1 {
+    max-width: 18ch;
+    font-size: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pingo-error-action {
+    transition-duration: 0.01ms;
+  }
+}

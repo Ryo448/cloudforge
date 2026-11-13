@@ -299,25 +299,11 @@ strong {
   position: fixed;
   inset: 0 auto 0 0;
   width: 224px;
-  background:
-    radial-gradient(
-      200px 110px at 38% 24px,
-      rgba(252, 120, 0, 0.08),
-      transparent 75%
-    ),
-    #0e1116;
+  background: #0e1116;
   border-right: 1px solid var(--border);
   padding: 27px 16px 15px;
   display: flex;
   flex-direction: column;
-}
-.sidebar > .brand {
-  padding-left: 6px;
-  margin-bottom: 33px;
-  font-size: 20px;
-}
-.sidebar > .brand .brand-mark {
-  height: 34px;
 }
 .local-node {
   border: 1px solid var(--border);
@@ -470,37 +456,6 @@ nav {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-}
-.topbar {
-  height: 65px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(11, 13, 17, 0.78);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 34px;
-  color: #b3bdcd;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.topbar strong {
-  color: #f3f5f8;
-  flex-shrink: 0;
-}
-.topbar-project-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.topbar-project-name + svg {
-  flex-shrink: 0;
-}
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-left: auto;
 }
 .connection-state {
   display: inline-flex;
@@ -1687,11 +1642,6 @@ form small {
     ),
     var(--bg);
 }
-.setup-brand {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
 .setup-layout {
   display: grid;
   grid-template-columns: 1fr 1.35fr;
@@ -2140,22 +2090,12 @@ form small {
   .sidebar {
     width: 200px;
   }
-  .sidebar > .brand {
-    font-size: 18px;
-    padding-left: 4px;
-  }
-  .sidebar > .brand .brand-mark {
-    height: 30px;
-  }
   .workspace {
     margin-left: 200px;
     width: calc(100% - 200px);
   }
   .main-content {
     padding: 28px 24px;
-  }
-  .topbar {
-    padding: 0 24px;
   }
   .overview-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -2188,19 +2128,10 @@ form small {
     width: 68px;
     padding: 23px 8px;
   }
-  .sidebar .brand {
-    justify-content: center;
-    padding: 0;
-  }
-  .sidebar .brand > span,
   .local-node,
   .nav-item > span,
   .sidebar-bottom {
     display: none;
-  }
-  .sidebar > .brand .brand-mark {
-    width: 38px;
-    height: auto;
   }
   .nav-item {
     justify-content: center;
@@ -2209,12 +2140,6 @@ form small {
   .workspace {
     margin-left: 68px;
     width: calc(100% - 68px);
-  }
-  .topbar {
-    padding: 0 18px;
-  }
-  .topbar .host-chip {
-    display: none;
   }
   .main-content {
     padding: 25px 18px;
@@ -2362,9 +2287,6 @@ form small {
   }
   .setup-panel {
     padding: 24px;
-  }
-  .setup-brand > .host-chip {
-    font-size: 9px;
   }
   .setup-panel .form-footer > .small {
     max-width: none;

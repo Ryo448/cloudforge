@@ -1,0 +1,185 @@
+.desktop-window {
+  --window-titlebar-height: 56px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.window-titlebar {
+  -webkit-app-region: drag;
+  height: var(--window-titlebar-height);
+  flex: 0 0 var(--window-titlebar-height);
+  display: flex;
+  align-items: center;
+  background: rgba(11, 13, 17, 0.94);
+  border-bottom: 1px solid var(--border);
+  color: #b3bdcd;
+  font-size: 12px;
+  user-select: none;
+}
+
+.window-titlebar-brand {
+  width: 224px;
+  height: 100%;
+  flex: 0 0 224px;
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  background:
+    radial-gradient(
+      200px 110px at 38% 50%,
+      rgba(252, 120, 0, 0.08),
+      transparent 75%
+    ),
+    #0e1116;
+  border-right: 1px solid var(--border);
+}
+
+.window-titlebar-brand .brand {
+  min-width: 0;
+  font-size: 22px;
+}
+
+.window-titlebar-brand .brand-mark {
+  height: 34px;
+}
+
+.window-titlebar-heading {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 34px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.window-titlebar-heading strong {
+  color: #f3f5f8;
+  flex-shrink: 0;
+}
+
+.window-titlebar-project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.window-titlebar-heading > svg {
+  flex-shrink: 0;
+}
+
+.window-titlebar-details {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+  padding-right: 20px;
+}
+
+.window-titlebar-actions {
+  -webkit-app-region: no-drag;
+  height: 100%;
+  display: flex;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.window-titlebar-actions button {
+  -webkit-app-region: no-drag;
+  width: 46px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  transition:
+    background 150ms,
+    color 150ms;
+}
+
+.window-titlebar-actions button:hover {
+  background: color-mix(in srgb, var(--raised) 80%, var(--muted));
+  color: #fff;
+}
+
+.window-titlebar-actions .window-titlebar-close:hover {
+  background: color-mix(in srgb, var(--red) 55%, var(--bg));
+  color: #fff;
+}
+
+.window-titlebar-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.desktop-window > .app-shell,
+.desktop-window > .connection-page,
+.desktop-window > .setup-page {
+  min-height: calc(100vh - var(--window-titlebar-height));
+}
+
+.desktop-window .sidebar {
+  top: var(--window-titlebar-height);
+}
+
+.desktop-window .workspace {
+  min-height: calc(100vh - var(--window-titlebar-height));
+}
+
+.desktop-window > .tui-window {
+  height: calc(100vh - var(--window-titlebar-height));
+}
+
+@media (max-width: 1150px) {
+  .window-titlebar-brand {
+    width: 200px;
+    flex-basis: 200px;
+    padding: 0 20px;
+  }
+
+  .window-titlebar-brand .brand {
+    font-size: 17px;
+  }
+
+  .window-titlebar-brand .brand-mark {
+    height: 30px;
+  }
+
+  .window-titlebar-heading {
+    padding: 0 24px;
+  }
+}
+
+@media (max-width: 760px) {
+  .window-titlebar-brand {
+    width: 68px;
+    flex-basis: 68px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .window-titlebar-brand .brand-wordmark,
+  .window-titlebar-details .host-chip {
+    display: none;
+  }
+
+  .window-titlebar-brand .brand-mark {
+    height: 36px;
+  }
+
+  .window-titlebar-heading {
+    padding: 0 18px;
+  }
+
+  .window-titlebar-details {
+    padding-right: 10px;
+  }
+
+  .window-titlebar-actions button {
+    width: 38px;
+  }
+}

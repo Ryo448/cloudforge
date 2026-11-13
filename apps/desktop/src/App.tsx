@@ -24,8 +24,8 @@ import {
   WifiOff,
 } from "lucide-react";
 import type { Project, Snapshot } from "../../../packages/shared-types";
+import { mergeProjectUsage } from "../../../packages/shared-types/usage";
 import {
-  Brand,
   bytes,
   duration,
   ErrorMessage,
@@ -41,6 +41,7 @@ import { api, message } from "./api";
 import { AddProject, ProjectPage, type ProjectSection } from "./Projects";
 import { CloudflarePage } from "./Cloudflare";
 import { SettingsPage } from "./Settings";
+import WindowControls from "./WindowControls";
 
 type Page = "overview" | "projects" | "cloudflare" | "settings";
 
@@ -80,7 +81,10 @@ export default function App() {
   async function refresh() {
     try {
       const data = await api<Snapshot>("GET", "/api/state");
-      setState(data);
+      setState((previous) => ({
+        ...data,
+        projects: mergeProjectUsage(previous?.projects, data.projects),
+      }));
       setWizard((value) => (value === null ? !data.ready : value));
       setError("");
       setConnected(true);
@@ -92,7 +96,10 @@ export default function App() {
   useEffect(() => {
     void refresh();
     const unsubscribe = window.cloudforge?.onState((data) => {
-      setState(data);
+      setState((previous) => ({
+        ...data,
+        projects: mergeProjectUsage(previous?.projects, data.projects),
+      }));
       setConnected(true);
       setError("");
       setWizard((value) => (value === null ? !data.ready : value));
@@ -108,49 +115,58 @@ export default function App() {
   }, [page, selected, projectSection]);
   if (!state)
     return (
-      <div className="connection-page">
-        <Brand />
-        <div className="connection-panel">
-          <Server size={36} />
-          <h1>{error ? "Core indisponível" : "Conectando ao seu servidor"}</h1>
-          <p>
-            {error ||
-              "O serviço local está iniciando. Seus projetos são gerenciados independentemente desta janela."}
-          </p>
-          {error ? (
-            <button
-              className="button primary"
-              onClick={async () => {
-                try {
-                  await window.cloudforge?.reconnect();
-                  await refresh();
-                } catch (e) {
-                  setError(message(e));
-                }
-              }}
-            >
-              <RefreshCw size={16} />
-              Tentar novamente
-            </button>
-          ) : (
-            <Spinner />
-          )}
+      <>
+        <WindowControls
+          heading={error ? "Core indisponível" : "Conectando ao Core"}
+        />
+        <div className="connection-page">
+          <div className="connection-panel">
+            <Server size={36} />
+            <h1>
+              {error ? "Core indisponível" : "Conectando ao seu servidor"}
+            </h1>
+            <p>
+              {error ||
+                "O serviço local está iniciando. Seus projetos são gerenciados independentemente desta janela."}
+            </p>
+            {error ? (
+              <button
+                className="button primary"
+                onClick={async () => {
+                  try {
+                    await window.cloudforge?.reconnect();
+                    await refresh();
+                  } catch (e) {
+                    setError(message(e));
+                  }
+                }}
+              >
+                <RefreshCw size={16} />
+                Tentar novamente
+              </button>
+            ) : (
+              <Spinner />
+            )}
+          </div>
         </div>
-      </div>
+      </>
     );
   if (wizard)
     return (
-      <Setup
-        state={state}
-        onComplete={() => {
-          setWizard(false);
-          void refresh();
-        }}
-        onCloud={() => {
-          setWizard(false);
-          setPage("cloudflare");
-        }}
-      />
+      <>
+        <WindowControls heading="Configuração inicial" />
+        <Setup
+          state={state}
+          onComplete={() => {
+            setWizard(false);
+            void refresh();
+          }}
+          onCloud={() => {
+            setWizard(false);
+            setPage("cloudflare");
+          }}
+        />
+      </>
     );
   const project = state.projects.find((p) => p.id === selected);
   const online = state.projects.filter(
@@ -176,110 +192,31 @@ export default function App() {
     (item) => item.id === projectSection,
   )?.label;
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <Brand />
-        {!project && (
-          <div className="local-node">
-            <span className={connected ? "node-light" : "node-light offline"} />
-            <div>
-              <strong>{state.system.hostname}</strong>
-              <span>Servidor local</span>
-            </div>
-            <Server size={16} />
-          </div>
-        )}
-        {project ? (
-          <nav aria-label="Navegação do projeto">
-            <button
-              className="nav-item project-nav-back"
-              aria-label="Todas as aplicações"
-              title="Todas as aplicações"
-              onClick={() => navigate("projects")}
-            >
-              <ArrowLeft size={18} />
-              <span>Todas as aplicações</span>
-            </button>
-            {projectNavigation.map((item) => (
-              <button
-                key={item.id}
-                className={
-                  projectSection === item.id ? "nav-item active" : "nav-item"
-                }
-                aria-current={projectSection === item.id ? "page" : undefined}
-                aria-label={item.label}
-                title={item.label}
-                onClick={() => setProjectSection(item.id)}
-              >
-                <item.icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-        ) : (
-          <nav aria-label="Navegação principal">
-            {(
-              [
-                { id: "overview", label: "Visão geral", icon: OverviewIcon },
-                { id: "projects", label: "Aplicações", icon: ProjectsIcon },
-                { id: "cloudflare", label: "Cloudflare", icon: CloudflareIcon },
-                { id: "settings", label: "Configurações", icon: Settings2 },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.id}
-                className={page === item.id ? "nav-item active" : "nav-item"}
-                aria-current={page === item.id ? "page" : undefined}
-                aria-label={item.label}
-                title={item.label}
-                onClick={() => navigate(item.id)}
-              >
-                <item.icon size={18} />
-                <span>{item.label}</span>
-                {item.id === "projects" && (
-                  <span className="nav-count">{state.projects.length}</span>
-                )}
-              </button>
-            ))}
-          </nav>
-        )}
-        <div className="sidebar-bottom">
-          <div className="service-note">
-            <ShieldCheck size={17} />
-            <div>
-              <strong>Core independente</strong>
-              <p>Suas aplicações continuam ativas ao fechar esta janela.</p>
-            </div>
-          </div>
-          <div className="sidebar-version">
-            <span>Cloudforge</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      </aside>
-      <div className="workspace">
-        <header className="topbar">
-          {project ? (
+    <>
+      <WindowControls
+        heading={
+          project ? (
             <>
-              <span className="topbar-project-name" title={project.name}>
+              <span
+                className="window-titlebar-project-name"
+                title={project.name}
+              >
                 {project.name}
               </span>
               <ChevronRight size={14} aria-hidden="true" />
               <strong>{sectionLabel}</strong>
             </>
           ) : (
-            <span>
-              {
-                {
-                  overview: "Visão geral",
-                  projects: "Aplicações",
-                  cloudflare: "Cloudflare",
-                  settings: "Configurações",
-                }[page]
-              }
-            </span>
-          )}
-          <div className="topbar-right">
+            {
+              overview: "Visão geral",
+              projects: "Aplicações",
+              cloudflare: "Cloudflare",
+              settings: "Configurações",
+            }[page]
+          )
+        }
+        details={
+          <>
             <span className="connection-state">
               <span
                 className={connected ? "node-light" : "node-light offline"}
@@ -289,261 +226,351 @@ export default function App() {
             <span className="host-chip">
               {state.system.os} / {state.system.arch}
             </span>
-          </div>
-        </header>
-        <main className="main-content">
-          <ErrorMessage error={error} />
-          {page === "projects" && !project && removalNotice && (
-            <div className="notice" role="status">
-              {removalNotice}
+          </>
+        }
+      />
+      <div className="app-shell">
+        <aside className="sidebar">
+          {!project && (
+            <div className="local-node">
+              <span
+                className={connected ? "node-light" : "node-light offline"}
+              />
+              <div>
+                <strong>{state.system.hostname}</strong>
+                <span>Servidor local</span>
+              </div>
+              <Server size={16} />
             </div>
           )}
           {project ? (
-            <ProjectPage
-              key={project.id}
-              project={project}
-              cloud={state.cloudflare}
-              section={projectSection}
-              onSectionChange={setProjectSection}
-              onChanged={refresh}
-              onRemoved={(warning) => {
-                setState((data) =>
-                  data
-                    ? {
-                        ...data,
-                        projects: data.projects.filter(
-                          (item) => item.id !== project.id,
-                        ),
-                      }
-                    : data,
-                );
-                setSelected(null);
-                setPage("projects");
-                setRemovalNotice(
-                  `${project.name} foi excluído do Cloudforge.${warning ? ` ${warning}` : ""}`,
-                );
-                void refresh();
-              }}
-            />
-          ) : page === "overview" ? (
-            <>
-              <div className="page-heading">
-                <div>
-                  <h1>Seu servidor. Suas aplicações.</h1>
-                  <p>
-                    Acompanhe a máquina e mantenha suas aplicações em movimento.
-                  </p>
-                </div>
+            <nav aria-label="Navegação do projeto">
+              <button
+                className="nav-item project-nav-back"
+                aria-label="Todas as aplicações"
+                title="Todas as aplicações"
+                onClick={() => navigate("projects")}
+              >
+                <ArrowLeft size={18} />
+                <span>Todas as aplicações</span>
+              </button>
+              {projectNavigation.map((item) => (
                 <button
-                  className="button primary"
-                  onClick={() => setAdding(true)}
+                  key={item.id}
+                  className={
+                    projectSection === item.id ? "nav-item active" : "nav-item"
+                  }
+                  aria-current={projectSection === item.id ? "page" : undefined}
+                  aria-label={item.label}
+                  title={item.label}
+                  onClick={() => setProjectSection(item.id)}
                 >
-                  <Plus size={17} />
-                  Adicionar projeto
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
                 </button>
-              </div>
-              <div className="overview-layout">
-                <section className="machine-panel">
-                  <div className="section-heading">
-                    <h2>Recursos da máquina</h2>
-                    <span className="muted small">Atualização a cada 5s</span>
-                  </div>
-                  <div className="machine-metrics">
-                    <Metric
-                      label="CPU da máquina"
-                      value={percent(state.system.cpu)}
-                      icon={<Cpu size={17} />}
-                    >
-                      <progress max="100" value={state.system.cpu ?? 0} />
-                      <span>
-                        {state.system.cores} núcleos · {state.system.threads}{" "}
-                        threads
-                      </span>
-                    </Metric>
-                    <Metric
-                      label="Memória da máquina"
-                      value={bytes(state.system.memory?.used)}
-                      icon={<MemoryStick size={17} />}
-                    >
-                      <progress
-                        max="100"
-                        value={state.system.memory?.usedPercent ?? 0}
-                      />
-                      <span>
-                        {bytes(state.system.memory?.total)} total ·{" "}
-                        {bytes(state.system.memory?.available)} disponível
-                      </span>
-                    </Metric>
-                    <Metric
-                      label="Armazenamento"
-                      value={bytes(state.system.disk?.used)}
-                      icon={<HardDrive size={17} />}
-                    >
-                      <progress
-                        max="100"
-                        value={state.system.disk?.usedPercent ?? 0}
-                      />
-                      <span>
-                        {bytes(state.system.disk?.free)} livre de{" "}
-                        {bytes(state.system.disk?.total)}
-                      </span>
-                    </Metric>
-                  </div>
-                  <MachineHistory state={state} />
-                  <div className="resource-breakdown">
-                    <span>
-                      Aplicações · RSS{" "}
-                      {completeMemory ? bytes(projectMemory) : "coletando"}
-                    </span>
-                    <span>
-                      Outros processos · estimativa{" "}
-                      {completeMemory && state.system.memory
-                        ? bytes(
-                            Math.max(
-                              0,
-                              state.system.memory.used - projectMemory,
-                            ),
-                          )
-                        : "—"}
-                    </span>
-                  </div>
-                  <div className="machine-footer">
-                    <span>
-                      <Server size={14} />
-                      {state.system.cpuModel ||
-                        "Modelo do processador indisponível"}
-                    </span>
-                    <span>Ligado há {duration(state.system.uptime)}</span>
-                  </div>
-                </section>
-                <section className="summary-panel">
-                  <div className="section-heading">
-                    <h2>Aplicações</h2>
-                    <Activity size={17} />
-                  </div>
-                  <div className="app-summary">
-                    <strong>
-                      {online}
-                      <span> / {state.projects.length}</span>
-                    </strong>
-                    <span>em execução</span>
-                  </div>
-                  <div className="summary-line">
-                    <span>
-                      <span className="status-dot" />
-                      Online
-                    </span>
-                    <strong>{online}</strong>
-                  </div>
-                  <div className="summary-line">
-                    <span className="muted">Paradas ou em transição</span>
-                    <strong>{state.projects.length - online}</strong>
-                  </div>
-                  <div className="summary-divider" />
-                  <div className="section-heading">
-                    <h3>Acesso remoto</h3>
-                    <Cloud size={17} />
-                  </div>
-                  <p className="muted small">
-                    {state.cloudflare.adminHost
-                      ? "Domínio administrativo configurado. Confira a conexão do túnel."
-                      : "Conecte seu domínio para controlar as aplicações de qualquer lugar."}
-                  </p>
-                  <button
-                    className="text-button"
-                    onClick={() => navigate("cloudflare")}
-                  >
-                    {state.cloudflare.adminHost || "Configurar Cloudflare"}
-                    <ArrowUpRight size={15} />
-                  </button>
-                </section>
-              </div>
-              <div className="section-heading projects-heading">
-                <h2>
-                  Suas aplicações{" "}
-                  <span className="muted">{state.projects.length}</span>
-                </h2>
-                {state.projects.length > 0 && (
-                  <button
-                    className="text-button"
-                    onClick={() => navigate("projects")}
-                  >
-                    Ver todos
-                    <ArrowRight size={15} />
-                  </button>
-                )}
-              </div>
-              <ProjectList
-                projects={state.projects.slice(0, 5)}
-                onSelect={openProject}
-                onAdd={() => setAdding(true)}
-              />
-            </>
-          ) : page === "projects" ? (
-            <>
-              <div className="page-heading">
-                <div>
-                  <h1>Aplicações</h1>
-                  <p>
-                    Aplicações reais, executadas nos seus próprios diretórios.
-                  </p>
-                </div>
-                <button
-                  className="button primary"
-                  onClick={() => setAdding(true)}
-                >
-                  <Plus size={17} />
-                  Adicionar projeto
-                </button>
-              </div>
-              <ProjectList
-                projects={state.projects}
-                onSelect={openProject}
-                onAdd={() => setAdding(true)}
-                onAction={async (id, action) => {
-                  await api("POST", `/api/projects/${id}/action`, { action });
-                  await refresh();
-                }}
-                search
-              />
-            </>
-          ) : page === "cloudflare" ? (
-            <CloudflarePage state={state} onChanged={refresh} />
+              ))}
+            </nav>
           ) : (
-            <SettingsPage state={state} onChanged={refresh} />
+            <nav aria-label="Navegação principal">
+              {(
+                [
+                  { id: "overview", label: "Visão geral", icon: OverviewIcon },
+                  { id: "projects", label: "Aplicações", icon: ProjectsIcon },
+                  {
+                    id: "cloudflare",
+                    label: "Cloudflare",
+                    icon: CloudflareIcon,
+                  },
+                  { id: "settings", label: "Configurações", icon: Settings2 },
+                ] as const
+              ).map((item) => (
+                <button
+                  key={item.id}
+                  className={page === item.id ? "nav-item active" : "nav-item"}
+                  aria-current={page === item.id ? "page" : undefined}
+                  aria-label={item.label}
+                  title={item.label}
+                  onClick={() => navigate(item.id)}
+                >
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                  {item.id === "projects" && (
+                    <span className="nav-count">{state.projects.length}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
           )}
-        </main>
-        <footer className="workspace-footer">
-          <span>
-            <span className="node-light" />
-            Gerenciamento local · SQLite
-          </span>
-          <span>
-            {state.system.internet ? (
-              <>
-                <Wifi size={13} />
-                Conexão disponível
-              </>
-            ) : (
-              <>
-                <WifiOff size={13} />
-                Sem resolução de internet
-              </>
+          <div className="sidebar-bottom">
+            <div className="service-note">
+              <ShieldCheck size={17} />
+              <div>
+                <strong>Core independente</strong>
+                <p>Suas aplicações continuam ativas ao fechar esta janela.</p>
+              </div>
+            </div>
+            <div className="sidebar-version">
+              <span>Cloudforge</span>
+              <span>v1.0.0</span>
+            </div>
+          </div>
+        </aside>
+        <div className="workspace">
+          <main className="main-content">
+            <ErrorMessage error={error} />
+            {page === "projects" && !project && removalNotice && (
+              <div className="notice" role="status">
+                {removalNotice}
+              </div>
             )}
-          </span>
-        </footer>
+            {project ? (
+              <ProjectPage
+                key={project.id}
+                project={project}
+                cloud={state.cloudflare}
+                section={projectSection}
+                onSectionChange={setProjectSection}
+                onChanged={refresh}
+                onRemoved={(warning) => {
+                  setState((data) =>
+                    data
+                      ? {
+                          ...data,
+                          projects: data.projects.filter(
+                            (item) => item.id !== project.id,
+                          ),
+                        }
+                      : data,
+                  );
+                  setSelected(null);
+                  setPage("projects");
+                  setRemovalNotice(
+                    `${project.name} foi excluído do Cloudforge.${warning ? ` ${warning}` : ""}`,
+                  );
+                  void refresh();
+                }}
+              />
+            ) : page === "overview" ? (
+              <>
+                <div className="page-heading">
+                  <div>
+                    <h1>Seu servidor. Suas aplicações.</h1>
+                    <p>
+                      Acompanhe a máquina e mantenha suas aplicações em
+                      movimento.
+                    </p>
+                  </div>
+                  <button
+                    className="button primary"
+                    onClick={() => setAdding(true)}
+                  >
+                    <Plus size={17} />
+                    Adicionar projeto
+                  </button>
+                </div>
+                <div className="overview-layout">
+                  <section className="machine-panel">
+                    <div className="section-heading">
+                      <h2>Recursos da máquina</h2>
+                      <span className="muted small">Atualização a cada 5s</span>
+                    </div>
+                    <div className="machine-metrics">
+                      <Metric
+                        label="CPU da máquina"
+                        value={percent(state.system.cpu)}
+                        icon={<Cpu size={17} />}
+                      >
+                        <progress max="100" value={state.system.cpu ?? 0} />
+                        <span>
+                          {state.system.cores} núcleos · {state.system.threads}{" "}
+                          threads
+                        </span>
+                      </Metric>
+                      <Metric
+                        label="Memória da máquina"
+                        value={bytes(state.system.memory?.used)}
+                        icon={<MemoryStick size={17} />}
+                      >
+                        <progress
+                          max="100"
+                          value={state.system.memory?.usedPercent ?? 0}
+                        />
+                        <span>
+                          {bytes(state.system.memory?.total)} total ·{" "}
+                          {bytes(state.system.memory?.available)} disponível
+                        </span>
+                      </Metric>
+                      <Metric
+                        label="Armazenamento"
+                        value={bytes(state.system.disk?.used)}
+                        icon={<HardDrive size={17} />}
+                      >
+                        <progress
+                          max="100"
+                          value={state.system.disk?.usedPercent ?? 0}
+                        />
+                        <span>
+                          {bytes(state.system.disk?.free)} livre de{" "}
+                          {bytes(state.system.disk?.total)}
+                        </span>
+                      </Metric>
+                    </div>
+                    <MachineHistory state={state} />
+                    <div className="resource-breakdown">
+                      <span>
+                        Aplicações · RSS{" "}
+                        {completeMemory ? bytes(projectMemory) : "coletando"}
+                      </span>
+                      <span>
+                        Outros processos · estimativa{" "}
+                        {completeMemory && state.system.memory
+                          ? bytes(
+                              Math.max(
+                                0,
+                                state.system.memory.used - projectMemory,
+                              ),
+                            )
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="machine-footer">
+                      <span>
+                        <Server size={14} />
+                        {state.system.cpuModel ||
+                          "Modelo do processador indisponível"}
+                      </span>
+                      <span>Ligado há {duration(state.system.uptime)}</span>
+                    </div>
+                  </section>
+                  <section className="summary-panel">
+                    <div className="section-heading">
+                      <h2>Aplicações</h2>
+                      <Activity size={17} />
+                    </div>
+                    <div className="app-summary">
+                      <strong>
+                        {online}
+                        <span> / {state.projects.length}</span>
+                      </strong>
+                      <span>em execução</span>
+                    </div>
+                    <div className="summary-line">
+                      <span>
+                        <span className="status-dot" />
+                        Online
+                      </span>
+                      <strong>{online}</strong>
+                    </div>
+                    <div className="summary-line">
+                      <span className="muted">Paradas ou em transição</span>
+                      <strong>{state.projects.length - online}</strong>
+                    </div>
+                    <div className="summary-divider" />
+                    <div className="section-heading">
+                      <h3>Acesso remoto</h3>
+                      <Cloud size={17} />
+                    </div>
+                    <p className="muted small">
+                      {state.cloudflare.adminHost
+                        ? "Domínio administrativo configurado. Confira a conexão do túnel."
+                        : "Conecte seu domínio para controlar as aplicações de qualquer lugar."}
+                    </p>
+                    <button
+                      className="text-button"
+                      onClick={() => navigate("cloudflare")}
+                    >
+                      {state.cloudflare.adminHost || "Configurar Cloudflare"}
+                      <ArrowUpRight size={15} />
+                    </button>
+                  </section>
+                </div>
+                <div className="section-heading projects-heading">
+                  <h2>
+                    Suas aplicações{" "}
+                    <span className="muted">{state.projects.length}</span>
+                  </h2>
+                  {state.projects.length > 0 && (
+                    <button
+                      className="text-button"
+                      onClick={() => navigate("projects")}
+                    >
+                      Ver todos
+                      <ArrowRight size={15} />
+                    </button>
+                  )}
+                </div>
+                <ProjectList
+                  projects={state.projects.slice(0, 5)}
+                  onSelect={openProject}
+                  onAdd={() => setAdding(true)}
+                />
+              </>
+            ) : page === "projects" ? (
+              <>
+                <div className="page-heading">
+                  <div>
+                    <h1>Aplicações</h1>
+                    <p>
+                      Aplicações reais, executadas nos seus próprios diretórios.
+                    </p>
+                  </div>
+                  <button
+                    className="button primary"
+                    onClick={() => setAdding(true)}
+                  >
+                    <Plus size={17} />
+                    Adicionar projeto
+                  </button>
+                </div>
+                <ProjectList
+                  projects={state.projects}
+                  onSelect={openProject}
+                  onAdd={() => setAdding(true)}
+                  onAction={async (id, action) => {
+                    await api("POST", `/api/projects/${id}/action`, { action });
+                    await refresh();
+                  }}
+                  search
+                />
+              </>
+            ) : page === "cloudflare" ? (
+              <CloudflarePage state={state} onChanged={refresh} />
+            ) : (
+              <SettingsPage state={state} onChanged={refresh} />
+            )}
+          </main>
+          <footer className="workspace-footer">
+            <span>
+              <span className="node-light" />
+              Gerenciamento local · SQLite
+            </span>
+            <span>
+              {state.system.internet ? (
+                <>
+                  <Wifi size={13} />
+                  Conexão disponível
+                </>
+              ) : (
+                <>
+                  <WifiOff size={13} />
+                  Sem resolução de internet
+                </>
+              )}
+            </span>
+          </footer>
+        </div>
+        {adding && (
+          <AddProject
+            onClose={() => setAdding(false)}
+            onCreated={() => {
+              setAdding(false);
+              setPage("projects");
+              void refresh();
+            }}
+          />
+        )}
       </div>
-      {adding && (
-        <AddProject
-          onClose={() => setAdding(false)}
-          onCreated={() => {
-            setAdding(false);
-            setPage("projects");
-            void refresh();
-          }}
-        />
-      )}
-    </div>
+    </>
   );
 }
 function Metric({
@@ -797,10 +824,6 @@ function Setup({
   }
   return (
     <div className="setup-page">
-      <div className="setup-brand">
-        <Brand />
-        <span className="host-chip">Configuração inicial</span>
-      </div>
       <div className="setup-layout">
         <aside className="setup-sidebar">
           <h1>

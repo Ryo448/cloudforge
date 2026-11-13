@@ -172,8 +172,8 @@ As regras de interface estão em [packages/ui/styles.css](packages/ui/styles.css
 
 ## Layout
 
-- No desktop, a barra lateral fixa (224px) e a barra superior (65px) mantêm a orientação. Na visão geral, o conteúdo cresce ao lado de um resumo de 244px, com 20px entre os painéis. A lista de projetos usa linhas tabulares e rolagem no próprio contêiner quando necessário.
-- Até 1150px, a barra lateral passa a 200px, a visão geral vira uma coluna e o resumo é recolhido. Até 760px, a barra lateral passa a 68px exibindo apenas o símbolo da marca (`assets/icon/icon.png`) e os ícones de navegação, as métricas da máquina ficam em uma coluna e os recursos do projeto passam para duas. A partir de 1550px, a área principal ganha respiro e o gráfico aumenta de altura.
+- No desktop, uma barra única de 56px reúne a marca à esquerda, a página e o estado do Core ao centro e os controles da janela à direita. A barra lateral fixa (224px) começa abaixo dela. Na visão geral, o conteúdo cresce ao lado de um resumo de 244px, com 20px entre os painéis. A lista de projetos usa linhas tabulares e rolagem no próprio contêiner quando necessário.
+- Até 1150px, a barra lateral e a área da marca passam a 200px, a visão geral vira uma coluna e o resumo é recolhido. Até 760px, ambas passam a 68px; a barra mostra apenas o símbolo da marca (`assets/icon/icon.png`) e a lateral mostra os ícones de navegação. As métricas da máquina ficam em uma coluna e os recursos do projeto passam para duas. A partir de 1550px, a área principal ganha respiro e o gráfico aumenta de altura.
 - Na web, a área principal tem até 1120px de largura. Os cartões passam de duas colunas para uma até 760px. As três ações dividem a largura do cartão e têm pelo menos 44px de altura nessa faixa. O formulário de login usa uma coluna de até 420px.
 
 ## Elevation & Depth
@@ -188,7 +188,7 @@ Controles de formulário (6px), botões (7px) e elementos internos como o ícone
 
 ### Marca (`Brand`)
 
-Renderiza o ativo `assets/icon/icon.png` seguido pelo nome `Cloudforge` em Poppins Bold (700), com `Cloud` em `#ffffff` e `forge` em `#fc7800`. Na barra lateral estreita (até 760px), preserva apenas o símbolo gráfico centralizado.
+Renderiza o ativo `assets/icon/icon.png` seguido pelo nome `Cloudforge` em Poppins Bold (700), com `Cloud` em `#ffffff` e `forge` em `#fc7800`. Fica na barra superior única, sobre um brilho radial laranja discreto; a lateral abaixo usa fundo sólido. Até 760px, preserva apenas o símbolo gráfico centralizado.
 
 ### Ações de execução
 

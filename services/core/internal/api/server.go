@@ -68,6 +68,9 @@ func write(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 func fail(w http.ResponseWriter, status int, e error) {
+	if status == http.StatusForbidden {
+		e = errors.New("Acesso negado")
+	}
 	write(w, status, map[string]string{"error": e.Error()})
 }
 func decode(w http.ResponseWriter, r *http.Request, out any) error {

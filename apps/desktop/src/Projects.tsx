@@ -694,6 +694,8 @@ export function ProjectPage({
                 history={project.usageHistory}
                 online={online}
                 metric="cpu"
+                currentCpu={execution.cpu}
+                currentMemory={execution.memory}
               />
             </div>
             <div>
@@ -702,6 +704,8 @@ export function ProjectPage({
                 history={project.usageHistory}
                 online={online}
                 metric="memory"
+                currentCpu={execution.cpu}
+                currentMemory={execution.memory}
               />
             </div>
           </div>

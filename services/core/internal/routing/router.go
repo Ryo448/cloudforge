@@ -36,7 +36,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	routes, e := r.Store.Routes()
 	if e != nil {
-		http.Error(w, "Serviço temporariamente indisponível", 503)
+		r.showError(w, req, "service")
 		return
 	}
 	for _, route := range routes {
@@ -45,7 +45,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if !r.Supervisor.Online(route.ProjectID) {
 			w.Header().Set("Retry-After", "30")
-			http.Error(w, "Aplicação offline. O domínio continua configurado.", 503)
+			r.showError(w, req, "offline")
 			return
 		}
 		target, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", route.Port))
@@ -63,10 +63,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			q.Header.Set("X-Forwarded-Proto", "https")
 		}
 		proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, _ error) {
-			http.Error(w, "Aplicação indisponível na porta local configurada.", 503)
+			r.showError(w, req, "port")
 		}
 		proxy.ServeHTTP(w, req)
 		return
 	}
-	http.NotFound(w, req)
+	r.showError(w, req, "not-found")
 }
