@@ -13,6 +13,7 @@
   ],
   "win": {
     "target": "nsis",
+    "icon": "assets/icon/icon.ico",
     "extraResources": [
       {
         "from": "dist/cloudflared",
@@ -22,5 +23,10 @@
     ]
   },
   "linux": { "target": "AppImage", "category": "Development" },
-  "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerIcon": "assets/icon/icon.ico",
+    "uninstallerIcon": "assets/icon/icon.ico"
+  }
 }
