@@ -1,6 +1,6 @@
 import React, { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { LogOut, ShieldCheck, Wifi, WifiOff } from "lucide-react";
+import { Database, LogOut, ShieldCheck, Wifi, WifiOff } from "lucide-react";
 import "@fontsource/poppins/500.css";
 import "@fontsource/poppins/600.css";
 import "@fontsource/poppins/700.css";
@@ -17,6 +17,7 @@ import {
   Spinner,
 } from "../../../packages/ui";
 import { ProjectCard } from "../../../packages/ui/ProjectCard";
+import { Databases, DatabaseNavigation } from "../../../packages/ui/Databases";
 import type { RemoteProject } from "../../../packages/shared-types";
 import { mergeProjectUsage } from "../../../packages/shared-types/usage";
 import { ErrorScreen } from "./ErrorScreen";
@@ -34,6 +35,11 @@ function App() {
     [error, setError] = useState(""),
     [denied, setDenied] = useState(false),
     [busy, setBusy] = useState(""),
+    [page, setPage] = useState<"projects" | "databases">("projects"),
+    [databaseID, setDatabaseID] = useState<string | null>(null),
+    [databaseSection, setDatabaseSection] = useState<
+      "overview" | "general" | "connection" | "risk"
+    >("overview"),
     [connected, setConnected] = useState(false);
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -272,53 +278,105 @@ function App() {
           </button>
         </div>
       </header>
-      <main className="remote-main">
-        <div className="page-heading">
-          <div>
-            <h1>Suas aplicações</h1>
-            <p>Acompanhe o status e controle a execução dos seus projetos.</p>
-          </div>
-          <span className="connection-state">
-            {connected ? <Wifi size={15} /> : <WifiOff size={15} />}{" "}
-            {connected ? "Em tempo real" : "Reconectando"}
-          </span>
-        </div>
-        <ErrorMessage error={error} />
-        {projects === null ? (
-          <section className="project-list">
-            <div className="empty-state compact" role="status">
-              <Spinner />
-              <p>Carregando aplicações…</p>
-            </div>
-          </section>
-        ) : !projects.length ? (
-          <section className="project-list">
-            <div className="empty-state">
-              <ProjectsIcon size={34} />
-              <h2>Nenhum projeto cadastrado</h2>
-              <p>
-                Adicione seus projetos no aplicativo desktop. Eles aparecerão
-                aqui automaticamente.
+      <div className="db-remote-workspace">
+        <aside className="sidebar">
+          {page === "databases" && databaseID ? (
+            <DatabaseNavigation
+              list={() => setDatabaseID(null)}
+              section={databaseSection}
+              select={setDatabaseSection}
+            />
+          ) : (
+            <nav aria-label="Navegação principal">
+              <button
+                className={page === "projects" ? "nav-item active" : "nav-item"}
+                aria-label="Aplicações"
+                aria-current={page === "projects" ? "page" : undefined}
+                onClick={() => setPage("projects")}
+              >
+                <ProjectsIcon size={18} />
+                <span>Aplicações</span>
+              </button>
+              <button
+                className={
+                  page === "databases" ? "nav-item active" : "nav-item"
+                }
+                aria-label="Bancos de dados"
+                aria-current={page === "databases" ? "page" : undefined}
+                onClick={() => setPage("databases")}
+              >
+                <Database size={18} />
+                <span>Bancos de dados</span>
+              </button>
+            </nav>
+          )}
+        </aside>
+        <main className="remote-main">
+          {page === "databases" ? (
+            <Databases
+              request={request}
+              copy={(value) => navigator.clipboard.writeText(value)}
+              id={databaseID}
+              open={(id) => {
+                setDatabaseID(id);
+                setDatabaseSection("overview");
+              }}
+              section={databaseSection}
+              select={setDatabaseSection}
+            />
+          ) : (
+            <>
+              <div className="page-heading">
+                <div>
+                  <h1>Suas aplicações</h1>
+                  <p>
+                    Acompanhe o status e controle a execução dos seus projetos.
+                  </p>
+                </div>
+                <span className="connection-state">
+                  {connected ? <Wifi size={15} /> : <WifiOff size={15} />}{" "}
+                  {connected ? "Em tempo real" : "Reconectando"}
+                </span>
+              </div>
+              <ErrorMessage error={error} />
+              {projects === null ? (
+                <section className="project-list">
+                  <div className="empty-state compact" role="status">
+                    <Spinner />
+                    <p>Carregando aplicações…</p>
+                  </div>
+                </section>
+              ) : !projects.length ? (
+                <section className="project-list">
+                  <div className="empty-state">
+                    <ProjectsIcon size={34} />
+                    <h2>Nenhum projeto cadastrado</h2>
+                    <p>
+                      Adicione seus projetos no aplicativo desktop. Eles
+                      aparecerão aqui automaticamente.
+                    </p>
+                  </div>
+                </section>
+              ) : (
+                <div className="project-cards">
+                  {projects.map((project) => (
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      onAction={(name) => action(project.id, name)}
+                    />
+                  ))}
+                </div>
+              )}
+              <p className="remote-note">
+                <ShieldCheck size={15} />
+                Arquivos, credenciais e configurações avançadas ficam no
+                aplicativo desktop.
               </p>
-            </div>
-          </section>
-        ) : (
-          <div className="project-cards">
-            {projects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onAction={(name) => action(project.id, name)}
-              />
-            ))}
-          </div>
-        )}
-        <p className="remote-note">
-          <ShieldCheck size={15} />
-          Arquivos, credenciais e configurações avançadas ficam no aplicativo
-          desktop.
-        </p>
-      </main>
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

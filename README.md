@@ -128,6 +128,8 @@ O painel web exige login e oferece lista de projetos, estado, métricas e açõe
 
 ### Inicialização automática e remoção
 
+Para criar PostgreSQL, MySQL, MongoDB ou Redis, abra **Bancos de dados** no desktop ou no painel web. O Core usa Docker local em modo Linux e mantém os dados em volumes persistentes. Use **Conexão** para copiar o endereço local e a porta atribuída. Veja o [guia de bancos de dados](docs/databases.md).
+
 Em **Configurações → Inicialização e execução**, ative o Core na sessão do usuário. No Windows, isso usa a chave Run do usuário atual; no Linux, um serviço systemd de usuário. O Core recupera os projetos cujo estado desejado era executar. Inicialização antes de login e Linux com `linger` exigem configuração adicional.
 
 Para remover um cadastro, abra **Projeto → Área de risco → Excluir projeto** e confirme pelo nome. O Cloudforge encerra o processo e remove cadastro, logs e endereço público. **A pasta original e seus arquivos permanecem no computador**, inclusive dependências instaladas nela.

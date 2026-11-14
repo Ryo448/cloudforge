@@ -5,6 +5,7 @@ import (
 	"cloudforge/core/internal/auth"
 	"cloudforge/core/internal/autostart"
 	"cloudforge/core/internal/cloudflare"
+	"cloudforge/core/internal/databases"
 	"cloudforge/core/internal/logging"
 	"cloudforge/core/internal/persistence"
 	"cloudforge/core/internal/processes"
@@ -105,6 +106,7 @@ func run() error {
 	sup := supervisor.New(s, *data)
 	cf := cloudflare.New(s, *data, "http://"+*publicAddr, installation)
 	server := api.New(s, sup, cf, key, *data, *web, *development)
+	server.Databases = databases.New(s, key)
 	server.Autostart = func(enabled bool) error { return autostart.Configure(enabled, *data, *web) }
 	server.AutostartEnabled = autostart.Enabled
 	adminListener, e := net.Listen("tcp", *adminAddr)
@@ -125,6 +127,9 @@ func run() error {
 	cf.Start()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	dbDone := make(chan struct{})
+	go func() { defer close(dbDone); server.Databases.Run(ctx) }()
+	defer func() { cancel(); <-dbDone }()
 	go server.Monitor(ctx)
 	go func() {
 		repairCtx, stop := context.WithTimeout(ctx, 60*time.Second)

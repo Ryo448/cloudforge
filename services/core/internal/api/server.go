@@ -3,6 +3,7 @@ package api
 import (
 	"cloudforge/core/internal/auth"
 	"cloudforge/core/internal/cloudflare"
+	"cloudforge/core/internal/databases"
 	"cloudforge/core/internal/model"
 	"cloudforge/core/internal/monitoring"
 	"cloudforge/core/internal/persistence"
@@ -32,6 +33,7 @@ type Server struct {
 	Auth             *auth.Auth
 	Supervisor       *supervisor.Supervisor
 	Cloud            *cloudflare.Manager
+	Databases        *databases.Manager
 	Key              string
 	Development      bool
 	WebDir           string
@@ -161,8 +163,17 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := strings.Trim(r.URL.Path, "/")
+	if path == "api/databases" || strings.HasPrefix(path, "api/databases/") {
+		admin, err := s.Store.Admin()
+		if err != nil {
+			fail(w, 401, errors.New("configure o administrador local"))
+			return
+		}
+		s.databaseRoutes(w, r, admin.ID)
+		return
+	}
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.0.0", "apiVersion": 5})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.5.0", "apiVersion": 5})
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {
@@ -946,6 +957,14 @@ func (s *Server) Public(w http.ResponseWriter, r *http.Request) {
 	}
 	if path == "/api/projects" && r.Method == "GET" {
 		write(w, 200, s.remoteViews())
+		return
+	}
+	if path == "/api/databases" || strings.HasPrefix(path, "/api/databases/") {
+		if r.Method != "GET" && !s.limit.allow("database:"+session.UserID, 20, time.Minute) {
+			fail(w, 429, errors.New("aguarde para executar outra operação"))
+			return
+		}
+		s.databaseRoutes(w, r, session.UserID)
 		return
 	}
 	if path == "/api/events" && r.Method == "GET" {

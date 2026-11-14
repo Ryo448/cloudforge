@@ -12,6 +12,7 @@ import (
 type Tree struct{ cmd *exec.Cmd }
 
 func Configure(cmd *exec.Cmd)             { cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} }
+func ConfigureBackground(cmd *exec.Cmd)   {}
 func Attach(cmd *exec.Cmd) (*Tree, error) { return &Tree{cmd}, nil }
 func (t *Tree) Stop(done <-chan struct{}) {
 	_ = syscall.Kill(-t.cmd.Process.Pid, syscall.SIGTERM)

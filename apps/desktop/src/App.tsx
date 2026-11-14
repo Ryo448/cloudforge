@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Cloud,
   Cpu,
+  Database,
   Folder,
   Globe,
   HardDrive,
@@ -37,6 +38,7 @@ import {
   uptime,
 } from "../../../packages/ui";
 import { ProjectCard, RuntimeLogo } from "../../../packages/ui/ProjectCard";
+import { Databases, DatabaseNavigation } from "../../../packages/ui/Databases";
 import { api, message } from "./api";
 import { AddProject, ProjectPage, type ProjectSection } from "./Projects";
 import { CloudflarePage } from "./Cloudflare";
@@ -44,7 +46,7 @@ import { SettingsPage } from "./Settings";
 import WindowControls from "./WindowControls";
 import { EnvironmentIcon } from "./EnvironmentIcon";
 
-type Page = "overview" | "projects" | "cloudflare" | "settings";
+type Page = "overview" | "projects" | "databases" | "cloudflare" | "settings";
 
 const projectNavigation = [
   { id: "logs", label: "Logs", icon: Terminal },
@@ -91,6 +93,10 @@ function CloudflareIcon({ size = 24 }: { size?: number }) {
 export default function App() {
   const [state, setState] = useState<Snapshot | null>(null),
     [page, setPage] = useState<Page>("overview"),
+    [databaseID, setDatabaseID] = useState<string | null>(null),
+    [databaseSection, setDatabaseSection] = useState<
+      "overview" | "general" | "connection" | "risk"
+    >("overview"),
     [selected, setSelected] = useState<string | null>(null),
     [projectSection, setProjectSection] = useState<ProjectSection>("overview"),
     [filesDirty, setFilesDirty] = useState(false),
@@ -209,6 +215,7 @@ export default function App() {
     setFilesDirty(false);
     setPage(p);
     setSelected(null);
+    setDatabaseID(null);
   };
   const openProject = (project: Project) => {
     if (
@@ -254,6 +261,7 @@ export default function App() {
             {
               overview: "Visão geral",
               projects: "Aplicações",
+              databases: "Bancos de dados",
               cloudflare: "Cloudflare",
               settings: "Configurações",
             }[page]
@@ -287,7 +295,13 @@ export default function App() {
               <Server size={16} />
             </div>
           )}
-          {project ? (
+          {page === "databases" && databaseID ? (
+            <DatabaseNavigation
+              list={() => setDatabaseID(null)}
+              section={databaseSection}
+              select={setDatabaseSection}
+            />
+          ) : project ? (
             <nav aria-label="Navegação do projeto">
               <button
                 className="nav-item project-nav-back"
@@ -337,6 +351,7 @@ export default function App() {
                 [
                   { id: "overview", label: "Visão geral", icon: OverviewIcon },
                   { id: "projects", label: "Aplicações", icon: ProjectsIcon },
+                  { id: "databases", label: "Bancos de dados", icon: Database },
                   {
                     id: "cloudflare",
                     label: "Cloudflare",
@@ -372,7 +387,7 @@ export default function App() {
             </div>
             <div className="sidebar-version">
               <span>Cloudforge</span>
-              <span>v1.0.0</span>
+              <span>v1.5.0</span>
             </div>
           </div>
         </aside>
@@ -595,6 +610,18 @@ export default function App() {
                   search
                 />
               </>
+            ) : page === "databases" ? (
+              <Databases
+                request={api}
+                copy={window.cloudforge.copy}
+                id={databaseID}
+                open={(id) => {
+                  setDatabaseID(id);
+                  setDatabaseSection("overview");
+                }}
+                section={databaseSection}
+                select={setDatabaseSection}
+              />
             ) : page === "cloudflare" ? (
               <CloudflarePage state={state} onChanged={refresh} />
             ) : (

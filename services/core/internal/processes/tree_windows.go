@@ -18,6 +18,15 @@ type Tree struct {
 func Configure(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
 }
+
+func ConfigureBackground(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.HideWindow = true
+	cmd.SysProcAttr.CreationFlags |= windows.CREATE_NO_WINDOW
+}
+
 func Attach(cmd *exec.Cmd) (*Tree, error) {
 	job, e := windows.CreateJobObject(nil, nil)
 	if e != nil {
