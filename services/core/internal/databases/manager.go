@@ -26,6 +26,7 @@ type Manager struct {
 	docker        docker
 	dockerReady   bool
 	dockerChecked bool
+	dockerStatus  dockerStatus
 	keyMu         sync.Mutex
 	mu            sync.Mutex
 	active        map[string]bool
@@ -43,17 +44,18 @@ func New(store *persistence.Store, installationKey string) *Manager {
 }
 
 type View struct {
-	Databases   []Instance `json:"databases"`
-	Docker      bool       `json:"docker"`
-	MemoryLimit int        `json:"memoryLimit"`
-	CPU         float64    `json:"cpu"`
+	Databases    []Instance   `json:"databases"`
+	Docker       bool         `json:"docker"`
+	DockerStatus dockerStatus `json:"dockerStatus,omitempty"`
+	MemoryLimit  int          `json:"memoryLimit"`
+	CPU          float64      `json:"cpu"`
 }
 
 func (m *Manager) List(ctx context.Context, owner string) (View, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	records, err := m.records(owner)
-	view := View{Databases: []Instance{}, Docker: m.dockerReady, MemoryLimit: memoryLimit, CPU: cpuLimit}
+	view := View{Databases: []Instance{}, Docker: m.dockerReady, DockerStatus: m.dockerStatus, MemoryLimit: memoryLimit, CPU: cpuLimit}
 	for _, r := range records {
 		view.Databases = append(view.Databases, m.view(r))
 	}
@@ -247,9 +249,8 @@ func (m *Manager) Run(ctx context.Context) {
 	var lastID string
 	for {
 		m.mu.Lock()
-		available, checked := m.dockerReady, m.dockerChecked
-		m.mu.Unlock()
-		if !checked {
+		if !m.dockerChecked {
+			m.mu.Unlock()
 			select {
 			case <-ctx.Done():
 				return
@@ -257,7 +258,7 @@ func (m *Manager) Run(ctx context.Context) {
 				continue
 			}
 		}
-		m.mu.Lock()
+		available, starting := m.dockerReady, m.dockerStatus == dockerStarting
 		records, err := m.records("")
 		if err != nil {
 			log.Print("bancos: falha ao listar instâncias")
@@ -269,7 +270,7 @@ func (m *Manager) Run(ctx context.Context) {
 				continue
 			}
 			if !available {
-				if r.State != "error" || r.Issue != ErrUnavailable.Error() {
+				if !starting && (r.State != "error" || r.Issue != ErrUnavailable.Error()) {
 					r.State, r.Issue = "error", ErrUnavailable.Error()
 					_ = m.save(r)
 				}
@@ -321,25 +322,45 @@ func (m *Manager) Run(ctx context.Context) {
 func (m *Manager) monitorDocker(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	var attempted bool
+	var startupDeadline time.Time
 	for {
 		probe, cancel := context.WithTimeout(ctx, 2*time.Second)
-		available := m.docker.available(probe)
+		status := m.docker.status(probe)
 		cancel()
 		if ctx.Err() != nil {
 			return
 		}
-		m.mu.Lock()
-		changed := !m.dockerChecked || m.dockerReady != available
-		m.dockerReady, m.dockerChecked = available, true
-		m.mu.Unlock()
-		if changed {
-			m.notify()
+		if status != dockerUnavailable {
+			attempted = false
+			startupDeadline = time.Time{}
+		} else if !attempted {
+			attempted = true
+			m.setDockerStatus(dockerStarting)
+			if startLocalDocker(ctx) {
+				startupDeadline = time.Now().Add(90 * time.Second)
+			}
 		}
+		if status == dockerUnavailable && time.Now().Before(startupDeadline) {
+			status = dockerStarting
+		}
+		m.setDockerStatus(status)
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+func (m *Manager) setDockerStatus(status dockerStatus) {
+	m.mu.Lock()
+	changed := m.dockerStatus != status
+	m.dockerStatus = status
+	m.dockerReady, m.dockerChecked = status == dockerRunning, true
+	m.mu.Unlock()
+	if changed {
+		m.notify()
 	}
 }
 
@@ -411,6 +432,20 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 	if err = s.TLS.validate(*r); err != nil {
 		return err
 	}
+	if _, attached := runtime.Networks[containerName(*r)]; exists && r.Engine == "postgresql" && runtime.LocalConfigured && runtime.TLS && !attached {
+		// Docker can keep forwarding to the previous endpoint after a live
+		// network change. Stop before reattaching if the port is unreachable.
+		if runtime.Running && (!runtime.Local || m.docker.ready(ctx, *r, s.TLS, s.Password, runtime.LocalPort) != nil) {
+			if err = m.docker.lifecycle(ctx, *r, "stop", "--time", "15"); err != nil {
+				return err
+			}
+			runtime.Running = false
+			runtime.Local = true
+		}
+		if err = m.docker.reconnectManagedNetwork(ctx, *r); err != nil {
+			return err
+		}
+	}
 	if exists && (!runtime.Local || !runtime.TLS) {
 		if err = m.docker.stageLegacy(ctx, *r, runtime); err != nil {
 			return err
@@ -437,6 +472,10 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 	m.mu.Unlock()
 	if !ready {
 		if err = m.docker.configure(ctx, *r, s, s.TLS); err != nil {
+			return err
+		}
+	} else if r.Engine == "postgresql" {
+		if err = m.docker.reconcilePostgresHBA(ctx, *r, false); err != nil {
 			return err
 		}
 	}
@@ -477,7 +516,9 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 			if err == nil {
 				break
 			}
-			_ = m.docker.setPassword(deadline, *r, s, password)
+			if r.Engine != "postgresql" || errors.Is(err, errPasswordRejected) {
+				_ = m.docker.setPassword(deadline, *r, s, password)
+			}
 			select {
 			case <-deadline.Done():
 				return errors.New("não foi possível validar TLS e autenticação na porta local do banco")

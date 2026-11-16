@@ -1,17 +1,14 @@
 # Bancos de dados locais
 
-O Cloudforge gerencia PostgreSQL, MySQL, MongoDB e Redis no Docker da própria máquina. Use Docker Engine 28 ou superior em modo Linux. Cada instância tem um container, um volume e uma rede Docker próprios. Cada conta pode criar uma instância de cada tecnologia.
+O Cloudforge gerencia PostgreSQL, MySQL, MongoDB e Redis no Docker da própria máquina. Use Docker Engine 28 ou superior em modo Linux. Cada instância tem um container, um volume e uma rede Docker próprios. Você pode criar várias instâncias da mesma tecnologia e recuperar dados entre bancos compatíveis.
 
-## Preparar as imagens
+## Preparar o Docker
 
-As imagens precisam estar no Docker local antes da criação. Obtenha as imagens abaixo em uma máquina com acesso ao registro. Para uma instalação offline, exporte as imagens com `docker save` e importe-as na máquina do Cloudforge com `docker load`.
+No Windows, siga o [guia de instalação do Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/). Na primeira abertura, conclua a configuração do Docker Desktop e mantenha o modo de containers Linux. No Linux, siga o [guia de instalação do Docker Engine](https://docs.docker.com/engine/install/) para sua distribuição e configure o acesso ao Docker para o usuário que executa o Core.
 
-```powershell
-docker pull postgres:17.9-bookworm
-docker pull mysql:8.4.8
-docker pull mongo:8.0.20-noble
-docker pull redis:7.4.8-bookworm
-```
+O Core tenta iniciar o Docker Desktop no Windows ou o serviço Docker no Linux quando o Docker local instalado está indisponível. A tela **Bancos de dados** mostra o progresso e exibe os guias de instalação quando o Docker está ausente.
+
+O Cloudforge baixa do Docker Hub a imagem da tecnologia escolhida na primeira criação, caso ainda não esteja no Docker local. Em instalações offline, exporte as imagens `postgres:17.9-bookworm`, `mysql:8.4.8`, `mongo:8.0.20-noble` e `redis:7.4.8-bookworm` de outra máquina com `docker save` e importe-as com `docker load`.
 
 ## Criar e conectar
 
@@ -45,9 +42,11 @@ A porta atribuída permanece a mesma após parar, iniciar ou reiniciar o contain
 
 O Cloudforge emite automaticamente o par de cliente para bancos que já usam TLS, preservando o certificado do servidor e a CA. Bancos em execução ganham suporte a mTLS no próprio container; bancos parados recebem a configuração na próxima inicialização. Para instalações antigas sem TLS, continua valendo a migração original: o Core adequa o container, usando a imagem local, o volume, as redes e as credenciais existentes. Use a porta mostrada na aba **Conexão** e configure a CA no cliente antes de reconectar.
 
+Para configurar o Google Drive e operar backups, consulte [Snapshots dos bancos](snapshots.md).
+
 ## Teste com Docker
 
-Com as quatro imagens carregadas localmente, execute no diretório `services/core`.
+Com o Docker disponível, execute no diretório `services/core`. O teste baixa as imagens ausentes durante o provisionamento.
 
 ```powershell
 $env:CLOUDFORGE_TEST_DATABASES = "1"

@@ -16,6 +16,7 @@ O aplicativo desktop administra tudo localmente. Um Core independente mantém os
 - [Cadastre sua primeira aplicação](#cadastre-sua-primeira-aplicação)
 - [Acesso remoto com Cloudflare](#acesso-remoto-com-cloudflare)
 - [Operação diária](#operação-diária)
+- [Snapshots dos bancos de dados](docs/snapshots.md)
 - [Desenvolvimento e empacotamento](#desenvolvimento-e-empacotamento)
 - [Dados, segurança e limites](#dados-segurança-e-limites)
 - [Contribuição e licença](#contribuição-e-licença)

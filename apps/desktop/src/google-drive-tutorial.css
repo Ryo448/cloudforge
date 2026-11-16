@@ -1,0 +1,58 @@
+.google-drive-heading {
+  flex-wrap: wrap;
+}
+
+.google-drive-tutorial ol {
+  display: grid;
+  gap: 16px;
+  list-style: decimal;
+  margin: 16px 0;
+  padding-inline-start: 22px;
+}
+
+.google-drive-tutorial li {
+  padding-inline-start: 4px;
+}
+
+.google-drive-tutorial li::marker {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.google-drive-tutorial h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.google-drive-tutorial li p {
+  color: #b4bece;
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 0 0 6px;
+}
+
+.google-drive-tutorial code {
+  overflow-wrap: anywhere;
+}
+
+.google-drive-tutorial a {
+  align-items: center;
+  color: var(--accent);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 5px;
+  min-height: 28px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.google-drive-tutorial-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
+}
+
+.google-drive-tutorial-footer {
+  justify-content: flex-end;
+}

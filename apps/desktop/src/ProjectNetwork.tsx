@@ -1,7 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Check, Copy, Globe, Trash2 } from "lucide-react";
 import type { CloudConfig, Project } from "../../../packages/shared-types";
-import { ErrorMessage, Modal, Spinner } from "../../../packages/ui";
+import {
+  DeleteConfirmationModal,
+  ErrorMessage,
+  Modal,
+  Spinner,
+} from "../../../packages/ui";
 import { api, message } from "./api";
 
 type Props = { project: Project; onChanged: () => void };
@@ -14,10 +19,8 @@ export function ProjectRemoval({
   onRemoved: (warning: string) => void;
 }) {
   const [confirm, setConfirm] = useState(false);
-  const [projectName, setProjectName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const nameMatches = projectName === project.name;
 
   async function remove() {
     setBusy(true);
@@ -48,78 +51,36 @@ export function ProjectRemoval({
         className="button danger-quiet project-delete-trigger"
         onClick={() => {
           setError("");
-          setProjectName("");
           setConfirm(true);
         }}
       >
         <Trash2 size={16} /> Excluir projeto
       </button>
       {confirm && (
-        <Modal
+        <DeleteConfirmationModal
           title="Excluir projeto"
-          className="project-delete-modal"
-          onClose={() => {
-            if (!busy) {
-              setConfirm(false);
-              setProjectName("");
-            }
-          }}
-          closeDisabled={busy}
-        >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!busy && nameMatches) void remove();
-            }}
-          >
-            <p className="project-delete-summary">
+          name={project.name}
+          summary={
+            <>
               O processo de <strong>{project.name}</strong> será encerrado. O
               projeto, os logs e o endereço público serão removidos do
               Cloudforge. Esta ação não pode ser desfeita.
               {project.hostname &&
                 ` O endereço ${project.hostname} deixará de abrir o projeto.`}
-            </p>
-            <div className="project-delete-preserved">
-              <span>A pasta e os arquivos serão preservados</span>
-              <code>{project.path}</code>
-            </div>
-            <label className="project-delete-confirm-label">
-              <span>Digite o nome do projeto para confirmar</span>
-              <strong>{project.name}</strong>
-              <input
-                autoFocus
-                autoComplete="off"
-                spellCheck={false}
-                value={projectName}
-                onChange={(event) => setProjectName(event.target.value)}
-                aria-label={`Digite ${project.name} para confirmar a exclusão`}
-                disabled={busy}
-              />
-            </label>
-            <ErrorMessage error={error} />
-            <div className="form-footer">
-              <button
-                type="button"
-                className="button"
-                disabled={busy}
-                onClick={() => {
-                  setConfirm(false);
-                  setProjectName("");
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="button project-delete-button"
-                disabled={busy || !nameMatches}
-              >
-                {busy ? <Spinner /> : <Trash2 size={16} />}{" "}
-                {busy ? "Excluindo projeto…" : "Excluir projeto"}
-              </button>
-            </div>
-          </form>
-        </Modal>
+            </>
+          }
+          instruction="Digite o nome do projeto para confirmar"
+          pendingLabel="Excluindo projeto…"
+          busy={busy}
+          error={error}
+          onClose={() => setConfirm(false)}
+          onConfirm={() => void remove()}
+        >
+          <div className="project-delete-preserved">
+            <span>A pasta e os arquivos serão preservados</span>
+            <code>{project.path}</code>
+          </div>
+        </DeleteConfirmationModal>
       )}
     </section>
   );

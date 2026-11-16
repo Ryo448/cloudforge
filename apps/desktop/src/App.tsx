@@ -93,9 +93,10 @@ function CloudflareIcon({ size = 24 }: { size?: number }) {
 export default function App() {
   const [state, setState] = useState<Snapshot | null>(null),
     [page, setPage] = useState<Page>("overview"),
+    [focusGoogleDrive, setFocusGoogleDrive] = useState(false),
     [databaseID, setDatabaseID] = useState<string | null>(null),
     [databaseSection, setDatabaseSection] = useState<
-      "overview" | "general" | "connection" | "risk"
+      "overview" | "general" | "connection" | "risk" | "snapshots"
     >("overview"),
     [selected, setSelected] = useState<string | null>(null),
     [projectSection, setProjectSection] = useState<ProjectSection>("overview"),
@@ -206,7 +207,7 @@ export default function App() {
   const completeMemory = state.projects.every(
     (p) => p.execution.pid === 0 || p.execution.memory !== null,
   );
-  const navigate = (p: Page) => {
+  const navigate = (p: Page, focusDrive = false) => {
     if (
       filesDirty &&
       !window.confirm("Há alterações não salvas. Sair sem salvar?")
@@ -214,6 +215,7 @@ export default function App() {
       return;
     setFilesDirty(false);
     setPage(p);
+    setFocusGoogleDrive(focusDrive);
     setSelected(null);
     setDatabaseID(null);
   };
@@ -300,6 +302,7 @@ export default function App() {
               list={() => setDatabaseID(null)}
               section={databaseSection}
               select={setDatabaseSection}
+              snapshots
             />
           ) : project ? (
             <nav aria-label="Navegação do projeto">
@@ -387,7 +390,7 @@ export default function App() {
             </div>
             <div className="sidebar-version">
               <span>Cloudforge</span>
-              <span>v1.5.0</span>
+              <span>v2.0.0</span>
             </div>
           </div>
         </aside>
@@ -621,11 +624,18 @@ export default function App() {
                 }}
                 section={databaseSection}
                 select={setDatabaseSection}
+                snapshotDesktop={window.cloudforge}
+                onOpenDriveSettings={() => navigate("settings", true)}
+                onOpenExternal={window.cloudforge.openExternal}
               />
             ) : page === "cloudflare" ? (
               <CloudflarePage state={state} onChanged={refresh} />
             ) : (
-              <SettingsPage state={state} onChanged={refresh} />
+              <SettingsPage
+                state={state}
+                onChanged={refresh}
+                focusGoogleDrive={focusGoogleDrive}
+              />
             )}
           </main>
           <footer className="workspace-footer">

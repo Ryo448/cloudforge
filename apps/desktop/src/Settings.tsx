@@ -3,13 +3,16 @@ import { Check, KeyRound, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
 import type { Session, Snapshot } from "../../../packages/shared-types";
 import { bytes, ErrorMessage, Modal, Spinner } from "../../../packages/ui";
 import { api, message } from "./api";
+import { GoogleDriveSettings } from "./GoogleDriveSettings";
 
 export function SettingsPage({
   state,
   onChanged,
+  focusGoogleDrive,
 }: {
   state: Snapshot;
   onChanged: () => void;
+  focusGoogleDrive: boolean;
 }) {
   const [sessions, setSessions] = useState<Session[]>([]),
     [error, setError] = useState(""),
@@ -94,6 +97,7 @@ export function SettingsPage({
           <ShieldCheck size={21} />
         </div>
       </section>
+      <GoogleDriveSettings focusOnMount={focusGoogleDrive} />
       <section className="settings-section">
         <h2>Conta administrativa</h2>
         <p className="muted">

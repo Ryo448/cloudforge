@@ -137,3 +137,11 @@ export type RemoteProject = Pick<
     "actualState" | "startedAt" | "cpu" | "memory" | "lastError"
   >;
 };
+
+export type GoogleDriveState = {
+  configured: boolean;
+  managed: boolean;
+  pending: boolean;
+  account?: { id: string; email: string };
+  error?: string;
+};

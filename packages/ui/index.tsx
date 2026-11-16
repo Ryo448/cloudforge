@@ -1,5 +1,5 @@
-import { useEffect, useRef, type ReactNode } from "react";
-import { Play, Square, RotateCw, X, LoaderCircle } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Play, Square, RotateCw, X, LoaderCircle, Trash2 } from "lucide-react";
 import brandIcon from "../../assets/icon/icon.png";
 if (
   typeof document !== "undefined" &&
@@ -154,6 +154,85 @@ export function Modal({
       </div>
       {children}
     </dialog>
+  );
+}
+export function DeleteConfirmationModal({
+  title,
+  name,
+  summary,
+  instruction,
+  pendingLabel,
+  busy,
+  error,
+  onClose,
+  onConfirm,
+  children,
+}: {
+  title: string;
+  name: string;
+  summary: ReactNode;
+  instruction: string;
+  pendingLabel: string;
+  busy: boolean;
+  error: string;
+  onClose: () => void;
+  onConfirm: (confirmation: string) => void;
+  children?: ReactNode;
+}) {
+  const [confirmation, setConfirmation] = useState("");
+  const canConfirm = !busy && confirmation === name;
+
+  return (
+    <Modal
+      title={title}
+      className="delete-confirmation-modal"
+      onClose={onClose}
+      closeDisabled={busy}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (canConfirm) onConfirm(confirmation);
+        }}
+      >
+        <p className="delete-confirmation-summary">{summary}</p>
+        {children}
+        <label className="delete-confirmation-label">
+          <span>{instruction}</span>
+          <strong>{name}</strong>
+          <input
+            ref={(input) => {
+              if (input) input.autofocus = true;
+            }}
+            autoComplete="off"
+            spellCheck={false}
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            aria-label={`Digite ${name} para confirmar a exclusão`}
+            disabled={busy}
+          />
+        </label>
+        <ErrorMessage error={error} />
+        <div className="form-footer">
+          <button
+            type="button"
+            className="button"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="button delete-confirmation-button"
+            disabled={!canConfirm}
+          >
+            {busy ? <Spinner /> : <Trash2 size={16} />}
+            {busy ? pendingLabel : title}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 export function Actions({

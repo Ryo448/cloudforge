@@ -66,11 +66,11 @@ func TestConcurrentReservationAndOwnership(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if wins != 1 {
+	if wins != 8 {
 		t.Fatalf("número de reservas: %d", wins)
 	}
 	list, err := m.List(ctx, "owner")
-	if err != nil || len(list.Databases) != 1 {
+	if err != nil || len(list.Databases) != 8 {
 		t.Fatalf("listagem: %v %v", list, err)
 	}
 	first := list.Databases[0]

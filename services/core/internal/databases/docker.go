@@ -27,6 +27,16 @@ type docker struct{}
 func (docker) command(ctx context.Context, input io.Reader, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
+	var output bytes.Buffer
+	err := dockerCommand(ctx, input, &output, args...)
+	return output.Bytes(), err
+}
+
+func dockerCommand(ctx context.Context, input io.Reader, output io.Writer, args ...string) error {
+	executable, err := dockerExecutable()
+	if err != nil {
+		return err
+	}
 	socket := "unix:///var/run/docker.sock"
 	if runtime.GOOS == "windows" {
 		socket = "npipe:////./pipe/docker_engine"
@@ -35,7 +45,7 @@ func (docker) command(ctx context.Context, input io.Reader, args ...string) ([]b
 			socket = "unix://" + dir + "/docker.sock"
 		}
 	}
-	cmd := exec.CommandContext(ctx, "docker", append([]string{"--host", socket}, args...)...)
+	cmd := exec.CommandContext(ctx, executable, append([]string{"--host", socket}, args...)...)
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
 		switch strings.ToUpper(key) {
@@ -46,8 +56,7 @@ func (docker) command(ctx context.Context, input io.Reader, args ...string) ([]b
 	}
 	processes.ConfigureBackground(cmd)
 	cmd.Stdin = input
-	var output bytes.Buffer
-	cmd.Stdout = &output
+	cmd.Stdout = output
 	// Driver output can include connection strings or SQL with credentials.
 	var diagnostic bytes.Buffer
 	if args[0] == "start" {
@@ -55,32 +64,45 @@ func (docker) command(ctx context.Context, input io.Reader, args ...string) ([]b
 	} else {
 		cmd.Stderr = io.Discard
 	}
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
 		message := strings.ToLower(diagnostic.String())
 		if strings.Contains(message, "address already in use") || strings.Contains(message, "port is already allocated") || strings.Contains(message, "ports are not available") {
-			return nil, errPortInUse
+			return errPortInUse
 		}
-		return nil, commandError{args[0]}
+		return commandError{args[0]}
 	}
-	return output.Bytes(), nil
+	return nil
 }
 
 func containerName(r record) string { return "cloudforge-db-" + r.ID }
 
 func (d docker) available(ctx context.Context) bool {
+	return d.status(ctx) == dockerRunning
+}
+
+func (d docker) status(ctx context.Context) dockerStatus {
 	out, err := d.command(ctx, nil, "version", "--format", "{{.Server.Os}} {{.Server.Version}}")
+	if errors.Is(err, exec.ErrNotFound) {
+		return dockerMissing
+	}
+	if err != nil {
+		return dockerUnavailable
+	}
 	fields := strings.Fields(string(out))
-	if err != nil || len(fields) != 2 || fields[0] != "linux" {
-		return false
+	if len(fields) != 2 || fields[0] != "linux" {
+		return dockerIncompatible
 	}
 	major, _, _ := strings.Cut(fields[1], ".")
 	version, err := strconv.Atoi(major)
 	// Older engines allowed peers on the same L2 network to reach loopback ports.
-	return err == nil && version >= 28
+	if err != nil || version < 28 {
+		return dockerIncompatible
+	}
+	return dockerRunning
 }
 
 type portBinding struct{ HostIP, HostPort string }
@@ -91,13 +113,14 @@ type attachedNetwork struct {
 }
 
 type containerState struct {
-	Running   bool
-	StartedAt time.Time
-	LocalPort int
-	Local     bool
-	TLS       bool
-	Image     string
-	Networks  map[string]attachedNetwork
+	Running         bool
+	StartedAt       time.Time
+	LocalPort       int
+	LocalConfigured bool
+	Local           bool
+	TLS             bool
+	Image           string
+	Networks        map[string]attachedNetwork
 }
 
 func (d docker) inspect(ctx context.Context, r record) (containerState, bool, error) {
@@ -133,8 +156,8 @@ func (d docker) inspectNamed(ctx context.Context, r record, name string) (contai
 	key := fmt.Sprintf("%d/tcp", engines[r.Engine].Port)
 	state.LocalPort = loopbackPort(active, key)
 	configuredPort := loopbackPort(configured, key)
-	state.Local = labels["cloudforge.database.local"] == "1" && mode != "host" && configuredPort != 0 &&
-		(!state.Running || state.LocalPort == configuredPort)
+	state.LocalConfigured = labels["cloudforge.database.local"] == "1" && mode != "host" && configuredPort != 0
+	state.Local = state.LocalConfigured && (!state.Running || state.LocalPort == configuredPort)
 	state.TLS = labels["cloudforge.database.tls"] == "1"
 	return state, true, nil
 }
@@ -162,11 +185,20 @@ while [ ! -f /run/cloudforge/ready ]; do sleep 1; done
 
 `
 
+const postgresHBAPath = "/run/cloudforge/pg_hba.conf"
+
+const postgresHBARules = `local all cfadmin scram-sha-256
+hostssl all cfadmin 127.0.0.1/32 scram-sha-256
+hostssl all cfadmin ::1/128 scram-sha-256
+hostssl postgres,template0,template1 cloudforge all reject
+hostssl all cloudforge all scram-sha-256
+`
+
 func boot(engine string) []string {
 	switch engine {
 	case "postgresql":
 		return []string{"POSTGRES_USER=cfadmin", "POSTGRES_PASSWORD_FILE=/run/cloudforge/admin", "POSTGRES_DB=cloudforge", "POSTGRES_HOST_AUTH_METHOD=scram-sha-256",
-			waitForConfig + "exec docker-entrypoint.sh postgres -c hba_file=/run/cloudforge/pg_hba.conf -c ssl=on -c ssl_cert_file=/run/cloudforge/server.pem -c ssl_key_file=/run/cloudforge/server.key -c ssl_ca_file=/run/cloudforge/ca.crt"}
+			waitForConfig + "exec docker-entrypoint.sh postgres -c hba_file=" + postgresHBAPath + " -c ssl=on -c ssl_cert_file=/run/cloudforge/server.pem -c ssl_key_file=/run/cloudforge/server.key -c ssl_ca_file=/run/cloudforge/ca.crt"}
 	case "mysql":
 		return []string{"MYSQL_ROOT_PASSWORD_FILE=/run/cloudforge/admin", "MYSQL_ROOT_HOST=localhost", "MYSQL_DATABASE=cloudforge",
 			waitForConfig + "exec docker-entrypoint.sh mysqld --mysqlx=OFF --require-secure-transport=ON --ssl-ca=/run/cloudforge/ca.crt --ssl-cert=/run/cloudforge/server.pem --ssl-key=/run/cloudforge/server.key"}
@@ -178,7 +210,35 @@ func boot(engine string) []string {
 	}
 }
 
+func (d docker) reconcilePostgresHBA(ctx context.Context, r record, reload bool) error {
+	const script = `umask 077
+hba=$1
+reload=$2
+tmp=$(mktemp "$hba.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+cat > "$tmp"
+if ! cmp -s "$tmp" "$hba"; then
+	chown postgres:postgres "$tmp"
+	mv -f "$tmp" "$hba"
+	reload=true
+fi
+# PID 1 waits for the complete configuration before starting postgres.
+if [ "$reload" = true ] && [ "$(cat /proc/1/comm)" = postgres ]; then
+	kill -HUP 1
+fi`
+	_, err := d.run(ctx, r, "/bin/sh", strings.NewReader(postgresHBARules), "-ec", script, "configure-hba", postgresHBAPath, strconv.FormatBool(reload))
+	if err != nil {
+		return errors.New("não foi possível aplicar as regras de autenticação do PostgreSQL")
+	}
+	return nil
+}
+
 func (d docker) configure(ctx context.Context, r record, s secret, material *serverTLS) error {
+	if r.Engine == "postgresql" {
+		if err := d.reconcilePostgresHBA(ctx, r, true); err != nil {
+			return err
+		}
+	}
 	const configure = `umask 077
 
 cd /run/cloudforge
@@ -211,21 +271,7 @@ else
 
 	case "$1" in
 
-	postgresql)
-
-		cat > pg_hba.conf <<'HBA'
-
-local all cfadmin scram-sha-256
-
-hostssl all cfadmin 127.0.0.1/32 scram-sha-256
-
-hostssl all cfadmin ::1/128 scram-sha-256
-
-hostssl cloudforge cloudforge all scram-sha-256
-
-HBA
-
-		chown postgres:postgres admin pg_hba.conf server.key ;;
+	postgresql) chown postgres:postgres admin server.key ;;
 
 	mysql) chown mysql:mysql admin server.key ;;
 
@@ -257,6 +303,43 @@ user cloudforge on #%x ~* &* +@all -@admin -@dangerous
 	return err
 }
 
+func (d docker) ensureResource(ctx context.Context, r record, kind string, allowCreate bool) error {
+	name := containerName(r)
+	out, err := d.command(ctx, nil, kind, "ls", "--filter", "name=^"+name+"$", "--format", "{{.Name}}")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(string(out)) == "" {
+		if !allowCreate {
+			return errors.New("volume original do banco indisponível")
+		}
+		_, _ = d.command(ctx, nil, kind, "create", "--label", "cloudforge.database="+r.ID, name)
+	}
+	out, err = d.command(ctx, nil, kind, "inspect", name, "--format", `{{ index .Labels "cloudforge.database" }}`)
+	if err != nil || strings.TrimSpace(string(out)) != r.ID {
+		return errors.New("recurso Docker encontrado sem identificação válida: " + kind)
+	}
+	return nil
+}
+
+func prepareDockerImage(ctx context.Context, image string, original bool, run func(context.Context, io.Reader, io.Writer, ...string) error) error {
+	inspectCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	err := run(inspectCtx, nil, io.Discard, "image", "inspect", "--format", "{{.Id}}", image)
+	cancel()
+	if err == nil {
+		return nil
+	}
+	if original {
+		return fmt.Errorf("imagem original do banco indisponível localmente: %s", image)
+	}
+	pullCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	if err = run(pullCtx, nil, io.Discard, "pull", image); err != nil {
+		return fmt.Errorf("não foi possível baixar a imagem Docker %s. Verifique o acesso ao Docker Hub e tente novamente", image)
+	}
+	return nil
+}
+
 func (d docker) create(ctx context.Context, r record) error {
 	e := engines[r.Engine]
 	name := containerName(r)
@@ -268,23 +351,12 @@ func (d docker) create(ctx context.Context, r record) error {
 	if hasLegacy {
 		image = legacy.Image
 	}
-	if _, err = d.command(ctx, nil, "image", "inspect", "--format", "{{.Id}}", image); err != nil {
-		return fmt.Errorf("imagem Docker indisponível localmente: %s", image)
+	if err = prepareDockerImage(ctx, image, hasLegacy, dockerCommand); err != nil {
+		return err
 	}
 	for _, kind := range []string{"volume", "network"} {
-		out, err := d.command(ctx, nil, kind, "ls", "--filter", "name=^"+name+"$", "--format", "{{.Name}}")
-		if err != nil {
+		if err = d.ensureResource(ctx, r, kind, !hasLegacy || kind == "network"); err != nil {
 			return err
-		}
-		if strings.TrimSpace(string(out)) == "" {
-			if hasLegacy && kind == "volume" {
-				return errors.New("volume original do banco indisponível")
-			}
-			_, _ = d.command(ctx, nil, kind, "create", "--label", "cloudforge.database="+r.ID, name)
-		}
-		out, err = d.command(ctx, nil, kind, "inspect", name, "--format", `{{ index .Labels "cloudforge.database" }}`)
-		if err != nil || strings.TrimSpace(string(out)) != r.ID {
-			return errors.New("recurso Docker encontrado sem identificação válida: " + kind)
 		}
 	}
 	args := []string{"create", "--pull", "never", "--name", name, "--label", "cloudforge.database=" + r.ID,
@@ -307,6 +379,15 @@ func (d docker) create(ctx context.Context, r record) error {
 	}
 	args = append(args, "--entrypoint", "/bin/sh", image, "-ec", envAndScript[len(envAndScript)-1])
 	_, err = d.command(ctx, nil, args...)
+	return err
+}
+
+func (d docker) reconnectManagedNetwork(ctx context.Context, r record) error {
+	if err := d.ensureResource(ctx, r, "network", true); err != nil {
+		return err
+	}
+	name := containerName(r)
+	_, err := d.command(ctx, nil, "network", "connect", name, name)
 	return err
 }
 

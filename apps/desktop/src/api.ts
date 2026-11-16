@@ -1,5 +1,6 @@
 import type { Snapshot } from "../../../packages/shared-types";
-interface Bridge {
+import type { SnapshotDesktop } from "../../../packages/ui/DatabaseSnapshots";
+interface Bridge extends SnapshotDesktop {
   request: <T = unknown>(
     method: string,
     path: string,

@@ -1509,28 +1509,29 @@ form small {
 .project-delete-trigger {
   flex-shrink: 0;
 }
-.project-delete-button {
+.delete-confirmation-button {
   background: #bd3038;
   border-color: #bd3038;
   color: #ffffff;
+  margin-inline-start: auto;
 }
-.project-delete-button:hover:not(:disabled) {
+.delete-confirmation-button:hover:not(:disabled) {
   background: #d43b43;
   border-color: #d43b43;
 }
-.project-delete-modal {
+.delete-confirmation-modal {
   width: min(520px, calc(100% - 36px));
 }
-.project-delete-modal form {
+.delete-confirmation-modal form {
   margin-top: 0;
 }
-.project-delete-summary {
+.delete-confirmation-summary {
   color: #c9d1df;
   font-size: 13px;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
-.project-delete-summary strong {
+.delete-confirmation-summary strong {
   color: var(--text);
 }
 .project-delete-preserved {
@@ -1555,14 +1556,14 @@ form small {
     monospace;
   overflow-wrap: anywhere;
 }
-.project-delete-confirm-label {
+.delete-confirmation-label {
   color: #d2d9e4;
   display: grid;
   font-size: 12px;
   gap: 9px;
   margin: 24px 0 0;
 }
-.project-delete-confirm-label strong {
+.delete-confirmation-label strong {
   background: #252b36;
   border: 1px solid #394252;
   border-radius: 5px;
@@ -1576,11 +1577,12 @@ form small {
   overflow-wrap: anywhere;
   padding: 5px 8px;
 }
-.project-delete-confirm-label input {
+.delete-confirmation-label input {
   background: #080a0d;
   margin-top: 2px;
 }
-.project-delete-modal .form-footer {
+.delete-confirmation-modal .form-footer {
+  flex-wrap: wrap;
   margin-top: 24px;
 }
 .settings-subsection {

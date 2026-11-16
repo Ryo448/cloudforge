@@ -8,6 +8,7 @@ import {
   Database,
   Download,
   HardDrive,
+  History,
   KeyRound,
   MemoryStick,
   Network,
@@ -21,6 +22,7 @@ import {
 import {
   Actions,
   bytes,
+  DeleteConfirmationModal,
   ErrorMessage,
   Modal,
   OverviewIcon,
@@ -34,6 +36,7 @@ import redisLogo from "./icons/redis-icon.svg";
 import postgresqlLogo from "./icons/postgresql.svg";
 import mysqlLogo from "./icons/mysql-icon.svg";
 import "./databases.css";
+import { DatabaseSnapshots, type SnapshotDesktop } from "./DatabaseSnapshots";
 
 const engines = {
   mongodb: {
@@ -83,17 +86,30 @@ type Instance = {
 type Catalog = {
   databases: Instance[];
   docker: boolean;
+  dockerStatus?:
+    | "starting"
+    | "missing"
+    | "unavailable"
+    | "incompatible"
+    | "running";
   memoryLimit: number;
   cpu: number;
 };
 type Detail = { database: Instance; metrics: Metric[] };
 type Credentials = { password: string; url: string };
-type Section = "overview" | "general" | "connection" | "risk";
+export type DatabaseSection =
+  "overview" | "general" | "connection" | "risk" | "snapshots";
+type Section = DatabaseSection;
 type Request = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 const base = "/api/databases";
+const dockerInstallGuides = [
+  ["Windows", "https://docs.docker.com/desktop/setup/install/windows-install/"],
+  ["Linux", "https://docs.docker.com/engine/install/"],
+] as const;
 const pageSize = 3;
 const navigation = [
   ["overview", "Visão geral", OverviewIcon],
+  ["snapshots", "Snapshots", History],
   ["general", "Geral", Settings2],
   ["connection", "Conexão", KeyRound],
   ["risk", "Área de risco", TriangleAlert],
@@ -247,10 +263,12 @@ export function DatabaseNavigation({
   list,
   section,
   select,
+  snapshots,
 }: {
   list: () => void;
   section: Section;
   select: (section: Section) => void;
+  snapshots?: boolean;
 }) {
   return (
     <nav aria-label="Navegação do banco de dados">
@@ -262,25 +280,27 @@ export function DatabaseNavigation({
         <ArrowLeft size={18} />
         <span>Todos os bancos</span>
       </button>
-      {navigation.map(([id, label, Icon]) => (
-        <div key={id}>
-          {id === "general" && (
-            <>
-              <div className="project-nav-divider" />
-              <span className="project-nav-heading">Configurações</span>
-            </>
-          )}
-          <button
-            className={section === id ? "nav-item active" : "nav-item"}
-            aria-current={section === id ? "page" : undefined}
-            title={label}
-            onClick={() => select(id)}
-          >
-            <Icon size={18} />
-            <span>{label}</span>
-          </button>
-        </div>
-      ))}
+      {navigation
+        .filter(([id]) => id !== "snapshots" || snapshots)
+        .map(([id, label, Icon]) => (
+          <div key={id}>
+            {id === "general" && (
+              <>
+                <div className="project-nav-divider" />
+                <span className="project-nav-heading">Configurações</span>
+              </>
+            )}
+            <button
+              className={section === id ? "nav-item active" : "nav-item"}
+              aria-current={section === id ? "page" : undefined}
+              title={label}
+              onClick={() => select(id)}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
+            </button>
+          </div>
+        ))}
     </nav>
   );
 }
@@ -292,6 +312,9 @@ export function Databases({
   open,
   section,
   select,
+  snapshotDesktop,
+  onOpenDriveSettings,
+  onOpenExternal,
 }: {
   request: Request;
   copy: (value: string) => Promise<unknown>;
@@ -299,6 +322,9 @@ export function Databases({
   open: (id: string | null) => void;
   section: Section;
   select: (section: Section) => void;
+  snapshotDesktop?: SnapshotDesktop;
+  onOpenDriveSettings?: () => void;
+  onOpenExternal?: (url: string) => Promise<void>;
 }) {
   const [catalog, setCatalog] = useState<Catalog>();
   const [detail, setDetail] = useState<Detail>();
@@ -314,7 +340,6 @@ export function Databases({
   const [confirm, setConfirm] = useState<
     "password" | "certificate" | "delete"
   >();
-  const [confirmation, setConfirmation] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState(false);
   const [engine, setEngine] = useState("");
@@ -536,8 +561,41 @@ export function Databases({
       <ErrorMessage error={error} />
       {needsDocker && (
         <div className="notice" role="status">
-          Abra o Docker local em modo Linux para criar bancos. Use o Docker
-          Engine 28 ou superior.
+          {catalog.dockerStatus === "starting" &&
+            "O Cloudforge está iniciando o Docker. Aguarde para criar o banco."}
+          {catalog.dockerStatus === "missing" && (
+            <>
+              Instale o Docker na máquina que executa o Core. Use o Docker
+              Desktop no Windows ou o Docker Engine 28 ou superior no Linux.
+              Depois, abra o Docker Desktop com containers Linux ou inicie o
+              serviço do Docker no Linux.
+              <div className="db-docker-guides">
+                {dockerInstallGuides.map(([system, url]) => (
+                  <a
+                    key={system}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(event) => {
+                      if (onOpenExternal) {
+                        event.preventDefault();
+                        void onOpenExternal(url).catch((e) =>
+                          setError(displayError(e)),
+                        );
+                      }
+                    }}
+                  >
+                    Guia para {system}
+                  </a>
+                ))}
+              </div>
+            </>
+          )}
+          {catalog.dockerStatus === "unavailable" &&
+            "O Core não conseguiu acessar o Docker. Abra o Docker Desktop no Windows ou verifique se o serviço está ativo e acessível ao usuário do Core no Linux."}
+          {catalog.dockerStatus === "incompatible" &&
+            "Use Docker Engine 28 ou superior com containers Linux. No Docker Desktop, selecione o modo Linux."}
+          {!catalog.dockerStatus && "Verificando o Docker local…"}
         </div>
       )}
       {notice && (
@@ -755,6 +813,18 @@ export function Databases({
               </button>
             </div>
           )}
+          {section === "snapshots" &&
+            snapshotDesktop &&
+            onOpenDriveSettings && (
+              <DatabaseSnapshots
+                key={database.id}
+                database={database}
+                engineName={engines[database.engine].name}
+                request={request}
+                desktop={snapshotDesktop}
+                onOpenDriveSettings={onOpenDriveSettings}
+              />
+            )}
           {section === "overview" && (
             <>
               <div className="project-card db-overview">
@@ -1022,7 +1092,7 @@ export function Databases({
                     )
                   }
                   onClick={() => {
-                    setConfirmation("");
+                    setError("");
                     setConfirm("delete");
                   }}
                 >
@@ -1031,34 +1101,42 @@ export function Databases({
               </div>
             </>
           )}
-          {confirm && (
+          {confirm === "delete" && (
+            <DeleteConfirmationModal
+              title="Excluir banco de dados"
+              name={database.name}
+              summary={
+                <>
+                  O banco <strong>{database.name}</strong>, seu volume e todos
+                  os dados armazenados serão excluídos permanentemente. Esta
+                  ação é irreversível.
+                </>
+              }
+              instruction="Digite o nome do banco para confirmar"
+              pendingLabel="Excluindo banco de dados…"
+              busy={!!busy}
+              error={error}
+              onClose={() => setConfirm(undefined)}
+              onConfirm={(confirmation) =>
+                void mutate("delete", { confirmation })
+              }
+            />
+          )}
+          {confirm && confirm !== "delete" && (
             <Modal
               title={
-                confirm === "delete"
-                  ? "Excluir banco de dados"
-                  : confirm === "certificate"
-                    ? "Redefinir certificado"
-                    : "Redefinir senha"
+                confirm === "certificate"
+                  ? "Redefinir certificado"
+                  : "Redefinir senha"
               }
               onClose={() => setConfirm(undefined)}
               closeDisabled={!!busy}
             >
               <p className="muted">
-                {confirm === "delete"
-                  ? `Digite ${database.name} para confirmar a exclusão permanente dos dados.`
-                  : confirm === "certificate"
-                    ? "O banco será reiniciado. Certificados e chaves anteriores poderão deixar de funcionar. Baixe os novos arquivos após a redefinição. Os dados e a senha serão preservados."
-                    : "A senha atual deixará de funcionar. Atualize a configuração das suas aplicações com a nova senha."}
+                {confirm === "certificate"
+                  ? "O banco será reiniciado. Certificados e chaves anteriores poderão deixar de funcionar. Baixe os novos arquivos após a redefinição. Os dados e a senha serão preservados."
+                  : "A senha atual deixará de funcionar. Atualize a configuração das suas aplicações com a nova senha."}
               </p>
-              {confirm === "delete" && (
-                <label>
-                  Nome do banco
-                  <input
-                    value={confirmation}
-                    onChange={(e) => setConfirmation(e.target.value)}
-                  />
-                </label>
-              )}
               <ErrorMessage error={error} />
               <div className="modal-actions">
                 <button
@@ -1069,14 +1147,9 @@ export function Databases({
                   Cancelar
                 </button>
                 <button
-                  className={
-                    confirm === "delete" ? "button danger" : "button primary"
-                  }
-                  disabled={
-                    !!busy ||
-                    (confirm === "delete" && confirmation !== database.name)
-                  }
-                  onClick={() => void mutate(confirm, { confirmation })}
+                  className="button primary"
+                  disabled={!!busy}
+                  onClick={() => void mutate(confirm)}
                 >
                   {busy ? <Spinner /> : null}Confirmar
                 </button>
@@ -1087,7 +1160,6 @@ export function Databases({
       )}
       {create && catalog && (
         <CreateDatabase
-          catalog={catalog}
           request={request}
           onClose={() => setCreate(false)}
           onCreated={(db) => {
@@ -1242,28 +1314,22 @@ function EditField({
 }
 
 function CreateDatabase({
-  catalog,
   request,
   onClose,
   onCreated,
 }: {
-  catalog: Catalog;
   request: Request;
   onClose: () => void;
   onCreated: (db: Instance) => void;
 }) {
-  const used = new Set(catalog.databases.map((db) => db.engine));
-  const available = (Object.keys(engines) as Engine[]).filter(
-    (key) => !used.has(key),
-  );
-  const [engine, setEngine] = useState<Engine | undefined>(available[0]);
+  const engineOptions = Object.keys(engines) as Engine[];
+  const [engine, setEngine] = useState<Engine>(engineOptions[0]);
   const [name, setName] = useState("");
   const [memoryMb, setMemoryMb] = useState("1024");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function create(e: FormEvent) {
     e.preventDefault();
-    if (!engine || used.has(engine)) return;
     setBusy(true);
     setError("");
     try {
@@ -1328,30 +1394,21 @@ function CreateDatabase({
           <fieldset>
             <legend>Banco de dados</legend>
             <div className="db-engine-options">
-              {(Object.keys(engines) as Engine[]).map((key) => (
+              {engineOptions.map((key) => (
                 <label className="db-engine-option" key={key}>
                   <input
                     type="radio"
                     name="engine"
                     value={key}
                     checked={engine === key}
-                    disabled={used.has(key)}
                     onChange={() => setEngine(key)}
                   />
                   <EngineIcon engine={key} />
-                  <span>
-                    {engines[key].name}
-                    {used.has(key) && <small>Já criado</small>}
-                  </span>
+                  <span>{engines[key].name}</span>
                 </label>
               ))}
             </div>
           </fieldset>
-          {!available.length && (
-            <p className="muted">
-              Você já tem uma instância de cada tecnologia.
-            </p>
-          )}
           <ErrorMessage error={error} />
           <div className="modal-actions">
             <button
@@ -1362,10 +1419,7 @@ function CreateDatabase({
             >
               Cancelar
             </button>
-            <button
-              className="button primary"
-              disabled={busy || !engine || used.has(engine)}
-            >
+            <button className="button primary" disabled={busy}>
               {busy && <Spinner />}Criar banco de dados
             </button>
           </div>

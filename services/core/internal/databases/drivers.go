@@ -4,12 +4,16 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 var errPasswordRejected = errors.New("o banco recusou a autenticação")
@@ -20,7 +24,6 @@ set +e
 result=$(
 exec 2>&1
 case "$1" in
-postgresql) export PGPASSWORD="$password" PGSSLMODE=verify-full PGSSLROOTCERT=/run/cloudforge/ca.crt; exec psql -X -w -h "$2" -p "$3" -U "$4" -d "$5" -tA -v ON_ERROR_STOP=1 -c 'SELECT 1';;
 mysql) export MYSQL_PWD="$password"; exec mysql --connect-timeout=5 --protocol=TCP --ssl-mode=VERIFY_IDENTITY --ssl-ca=/run/cloudforge/ca.crt -h "$2" -P "$3" -u "$4" --batch --skip-column-names "$5" -e 'SELECT 1';;
 mongodb) exec mongosh --quiet --tls --tlsCAFile /run/cloudforge/ca.crt --host "$2" --port "$3" --username "$4" --password "$password" --authenticationDatabase "$5" --eval 'if (!db.adminCommand({ping:1}).ok) quit(1); print("1")';;
 esac
@@ -28,7 +31,7 @@ esac
 status=$?
 if [ "$status" = 0 ]; then printf '%s\n' "$result"; exit 0; fi
 case "$result" in
-  *"password authentication failed"*|*"Access denied for user"*|*"Authentication failed"*)
+  *"Access denied for user"*|*"Authentication failed"*)
     printf '%s\n' REJECTED ;;
 esac`
 
@@ -111,7 +114,40 @@ func passwordHash(password string) [32]byte {
 	return sha256.Sum256([]byte(password))
 }
 
+func queryPostgres(ctx context.Context, config *tls.Config, port int, user, password, database, query string, dest ...any) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	// The registration lasts only for this query and is unique to its TLS config.
+	key := fmt.Sprintf("pqgo-cloudforge-%p", config)
+	if err := pq.RegisterTLSConfig(key, config); err != nil {
+		return err
+	}
+	defer pq.RegisterTLSConfig(key, nil)
+	connector, err := pq.NewConnectorConfig(pq.Config{
+		Host: localHost, Port: uint16(port), User: user, Password: password, Database: database,
+		SSLMode: pq.SSLMode(key), ConnectTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	db := sql.OpenDB(connector)
+	defer db.Close()
+	return db.QueryRowContext(ctx, query).Scan(dest...)
+}
+
 func (d docker) ready(ctx context.Context, r record, material *serverTLS, password string, localPort int) error {
+	if r.Engine == "postgresql" {
+		var authenticated int
+		err := queryPostgres(ctx, material.probeTLSConfig(), localPort, Username, password, DatabaseName, "SELECT 1", &authenticated)
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && pgErr.Code == "28P01" {
+			return errPasswordRejected
+		}
+		if err != nil || authenticated != 1 {
+			return errors.New("autenticação TLS do PostgreSQL indisponível na porta publicada")
+		}
+		return nil
+	}
 	conn, err := dialTLS(ctx, r, material, localPort)
 	if err != nil {
 		return err

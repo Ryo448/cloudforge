@@ -8,6 +8,7 @@ import (
 	"cloudforge/core/internal/monitoring"
 	"cloudforge/core/internal/persistence"
 	"cloudforge/core/internal/projects"
+	"cloudforge/core/internal/snapshots"
 	"cloudforge/core/internal/supervisor"
 	"context"
 	"crypto/subtle"
@@ -34,6 +35,7 @@ type Server struct {
 	Supervisor       *supervisor.Supervisor
 	Cloud            *cloudflare.Manager
 	Databases        *databases.Manager
+	Snapshots        *snapshots.Service
 	Key              string
 	Development      bool
 	WebDir           string
@@ -163,6 +165,16 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := strings.Trim(r.URL.Path, "/")
+	if path == "api/snapshots/drive" || strings.HasPrefix(path, "api/snapshots/drive/") ||
+		(strings.HasPrefix(path, "api/databases/") && (strings.HasSuffix(path, "/snapshots") || strings.Contains(path, "/snapshots/"))) {
+		admin, err := s.Store.Admin()
+		if err != nil {
+			fail(w, 401, errors.New("configure o administrador local"))
+			return
+		}
+		s.snapshotRoutes(w, r, admin.ID, strings.Split(path, "/"))
+		return
+	}
 	if path == "api/databases" || strings.HasPrefix(path, "api/databases/") {
 		admin, err := s.Store.Admin()
 		if err != nil {
@@ -173,7 +185,7 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "1.5.0", "apiVersion": 5})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "2.0.0", "apiVersion": 7})
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {

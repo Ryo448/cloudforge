@@ -17,7 +17,11 @@ import {
   Spinner,
 } from "../../../packages/ui";
 import { ProjectCard } from "../../../packages/ui/ProjectCard";
-import { Databases, DatabaseNavigation } from "../../../packages/ui/Databases";
+import {
+  Databases,
+  DatabaseNavigation,
+  type DatabaseSection,
+} from "../../../packages/ui/Databases";
 import type { RemoteProject } from "../../../packages/shared-types";
 import { mergeProjectUsage } from "../../../packages/shared-types/usage";
 import { ErrorScreen } from "./ErrorScreen";
@@ -37,9 +41,8 @@ function App() {
     [busy, setBusy] = useState(""),
     [page, setPage] = useState<"projects" | "databases">("projects"),
     [databaseID, setDatabaseID] = useState<string | null>(null),
-    [databaseSection, setDatabaseSection] = useState<
-      "overview" | "general" | "connection" | "risk"
-    >("overview"),
+    [databaseSection, setDatabaseSection] =
+      useState<DatabaseSection>("overview"),
     [connected, setConnected] = useState(false);
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });

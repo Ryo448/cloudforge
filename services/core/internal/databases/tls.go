@@ -264,18 +264,7 @@ func dialDatabaseTLS(ctx context.Context, r record, s *serverTLS, port int, clie
 		conn.Close()
 		return nil, err
 	}
-	roots := x509.NewCertPool()
-	roots.AppendCertsFromPEM(s.CA)
-	expected, _ := pem.Decode(s.PEM)
-	config := &tls.Config{
-		MinVersion: tls.VersionTLS12, ServerName: localHost, RootCAs: roots,
-		VerifyConnection: func(cs tls.ConnectionState) error {
-			if expected == nil || !bytes.Equal(cs.PeerCertificates[0].Raw, expected.Bytes) {
-				return errors.New("o banco apresentou um certificado TLS diferente do esperado")
-			}
-			return nil
-		},
-	}
+	config := s.probeTLSConfig()
 	requested := false
 	if client != nil {
 		// TLS 1.2 completes only after the server has verified the client
@@ -296,6 +285,21 @@ func dialDatabaseTLS(ctx context.Context, r record, s *serverTLS, port int, clie
 		return nil, errClientTLSNotRequested
 	}
 	return secure, nil
+}
+
+func (s *serverTLS) probeTLSConfig() *tls.Config {
+	roots := x509.NewCertPool()
+	roots.AppendCertsFromPEM(s.CA)
+	expected, _ := pem.Decode(s.PEM)
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12, ServerName: localHost, RootCAs: roots,
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			if expected == nil || len(cs.PeerCertificates) == 0 || !bytes.Equal(cs.PeerCertificates[0].Raw, expected.Bytes) {
+				return errors.New("o banco apresentou um certificado TLS diferente do esperado")
+			}
+			return nil
+		},
+	}
 }
 
 var errClientTLSNotRequested = errors.New("o banco não solicitou o certificado TLS de cliente")

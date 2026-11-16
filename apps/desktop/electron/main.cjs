@@ -7,6 +7,7 @@ const {
   clipboard,
 } = require("electron");
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 const fs = require("node:fs/promises");
 const { spawn } = require("node:child_process");
 const { StringDecoder } = require("node:string_decoder");
@@ -24,8 +25,9 @@ const profileDir = path.join(dataDir, "electron");
 require("node:fs").mkdirSync(profileDir, { recursive: true });
 app.setPath("userData", profileDir);
 const address = "http://127.0.0.1:28931";
-const coreAPIVersion = 5;
+const coreAPIVersion = 7;
 const terminalSessions = new Map();
+let pickedSnapshot;
 let window,
   key,
   socket,
@@ -61,6 +63,7 @@ async function request(method, route, body) {
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(route.includes("/install") ? 250000 : 120000),
   });
+  if (response.status === 204) return undefined;
   const responseText = await response.text();
   let result;
   try {
@@ -321,6 +324,15 @@ ipcMain.handle("window:action", (event, action) => {
   else throw new Error("Ação de janela inválida");
 });
 const routes = [
+  [
+    "GET",
+    /^\/api\/databases\/[a-f0-9]{32}\/snapshots(?:\/(?:status|recoverable))?$/,
+  ],
+  ["POST", /^\/api\/databases\/[a-f0-9]{32}\/snapshots(?:\/restore)?$/],
+  ["PUT", /^\/api\/databases\/[a-f0-9]{32}\/snapshots\/schedule$/],
+  ["POST", /^\/api\/snapshots\/drive\/(?:connect|disconnect)$/],
+  ["GET", /^\/api\/snapshots\/drive$/],
+  ["PUT", /^\/api\/snapshots\/drive$/],
   ["GET", /^\/api\/databases(?:\/[a-f0-9]{32}(?:\?period=(?:10m|1h|24h))?)?$/],
   ["GET", /^\/api\/databases\/[a-f0-9]{32}\/certificates\/(?:pem|crt|key)$/],
   ["POST", /^\/api\/databases(?:\/[a-f0-9]{32}\/credentials)?$/],
@@ -366,6 +378,83 @@ ipcMain.handle("core:request", async (event, method, route, body) => {
   if (body !== undefined && JSON.stringify(body).length > maxBody)
     throw new Error("Dados excedem o limite");
   return request(method, route, body);
+});
+const snapshotFormats = {
+  postgresql: ["dump", "sql"],
+  mysql: ["sql", "sql.gz"],
+  mongodb: ["archive.gz"],
+  redis: ["rdb"],
+};
+const snapshotDatabaseID = /^[a-f0-9]{32}$/;
+ipcMain.handle("snapshot:pick", async (event, id, engine) => {
+  checkSender(event);
+  if (!snapshotDatabaseID.test(id) || !Object.hasOwn(snapshotFormats, engine))
+    throw new Error("Banco de destino inválido");
+  pickedSnapshot = undefined;
+  const extensions = [
+    ...new Set(
+      snapshotFormats[engine].map((format) => format.split(".").at(-1)),
+    ),
+  ];
+  const selected = await dialog.showOpenDialog(window, {
+    title: "Importar backup",
+    properties: ["openFile"],
+    filters: [{ name: "Arquivos de backup", extensions }],
+  });
+  if (selected.canceled || !selected.filePaths.length) return null;
+  const file = selected.filePaths[0];
+  const name = path.basename(file);
+  if (
+    !snapshotFormats[engine].some((format) =>
+      name.toLowerCase().endsWith("." + format),
+    )
+  )
+    throw new Error("A extensão do arquivo é incompatível com o banco");
+  const token = randomUUID();
+  pickedSnapshot = { token, id, file };
+  return { token, name };
+});
+ipcMain.handle("snapshot:import", async (event, id, token) => {
+  checkSender(event);
+  if (
+    !snapshotDatabaseID.test(id) ||
+    pickedSnapshot?.id !== id ||
+    pickedSnapshot.token !== token
+  )
+    throw new Error("Selecione novamente o arquivo de backup");
+  const { file } = pickedSnapshot;
+  const result = await request(
+    "POST",
+    "/api/databases/" + id + "/snapshots/import",
+    {
+      path: file,
+      confirm: true,
+    },
+  );
+  if (pickedSnapshot?.token === token) pickedSnapshot = undefined;
+  return result;
+});
+ipcMain.handle("snapshot:download", async (event, id, driveId, name) => {
+  checkSender(event);
+  if (
+    !snapshotDatabaseID.test(id) ||
+    typeof driveId !== "string" ||
+    !/^[A-Za-z0-9_-]{1,150}$/.test(driveId) ||
+    typeof name !== "string" ||
+    !/^snapshot_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.(?:dump|sql\.gz|archive\.gz|rdb)$/.test(
+      name,
+    )
+  )
+    throw new Error("Snapshot inválido");
+  const selected = await dialog.showSaveDialog(window, {
+    title: "Baixar snapshot",
+    defaultPath: path.join(app.getPath("downloads"), name),
+  });
+  if (selected.canceled || !selected.filePath) return null;
+  return request("POST", "/api/databases/" + id + "/snapshots/download", {
+    driveId,
+    path: selected.filePath,
+  });
 });
 ipcMain.handle("core:media", async (event, id, filePath) => {
   checkSender(event);

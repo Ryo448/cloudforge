@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/gofrs/flock v0.12.1
 	github.com/gorilla/websocket v1.5.3
+	github.com/lib/pq v1.12.3
 	github.com/shirou/gopsutil/v4 v4.25.1
 	github.com/zalando/go-keyring v0.2.6
 	golang.org/x/crypto v0.36.0

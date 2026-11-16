@@ -20,6 +20,11 @@ contextBridge.exposeInMainWorld("cloudforge", {
   openProject: (id) => ipcRenderer.invoke("project:open", id),
   openTerminal: (id) => ipcRenderer.invoke("project:terminal", id),
   openExternal: (url) => ipcRenderer.invoke("external:open", url),
+  pickSnapshot: (id, engine) => ipcRenderer.invoke("snapshot:pick", id, engine),
+  importSnapshot: (id, token) =>
+    ipcRenderer.invoke("snapshot:import", id, token),
+  downloadSnapshot: (id, driveId, name) =>
+    ipcRenderer.invoke("snapshot:download", id, driveId, name),
   copy: (text) => ipcRenderer.invoke("clipboard:copy", text),
   watchProject: (id) => ipcRenderer.invoke("core:watch", id),
   onState: (callback) => {

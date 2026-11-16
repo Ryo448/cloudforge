@@ -10,6 +10,7 @@ import (
 	"cloudforge/core/internal/persistence"
 	"cloudforge/core/internal/processes"
 	"cloudforge/core/internal/routing"
+	"cloudforge/core/internal/snapshots"
 	"cloudforge/core/internal/supervisor"
 	"context"
 	"errors"
@@ -130,6 +131,13 @@ func run() error {
 	dbDone := make(chan struct{})
 	go func() { defer close(dbDone); server.Databases.Run(ctx) }()
 	defer func() { cancel(); <-dbDone }()
+	snapshotService, snapshotErr := snapshots.New(ctx, s, server.Databases, installation, *data)
+	if snapshotErr != nil {
+		log.Printf("snapshots: serviço indisponível: %v", snapshotErr)
+	} else {
+		server.Snapshots = snapshotService
+		defer snapshotService.Close()
+	}
 	go server.Monitor(ctx)
 	go func() {
 		repairCtx, stop := context.WithTimeout(ctx, 60*time.Second)
