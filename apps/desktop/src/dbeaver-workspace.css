@@ -1,0 +1,51 @@
+.dbeaver-workspace {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.dbeaver-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.dbeaver-heading h1,
+.dbeaver-heading p {
+  margin: 0;
+}
+
+.dbeaver-heading p {
+  margin-top: 4px;
+}
+
+.dbeaver-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: max(420px, calc(100dvh - 226px));
+  border: 1px solid var(--border, #232834);
+  border-radius: 10px;
+  background: var(--surface, #13171e);
+}
+
+.dbeaver-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 52ch;
+  padding: 24px;
+  text-align: center;
+}
+
+.dbeaver-state p {
+  margin: 0;
+}
+
+.dbeaver-state [role="status"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

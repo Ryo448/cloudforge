@@ -18,6 +18,14 @@ O Cloudforge baixa do Docker Hub a imagem da tecnologia escolhida na primeira cr
 
 O usuário é `cloudforge`. Use o banco `cloudforge` no PostgreSQL, MySQL e MongoDB. No MongoDB, use também `cloudforge` como banco de autenticação. No Redis, use o índice `0` e o usuário ACL `cloudforge`. As quatro engines exigem TLS nas conexões TCP; não é necessário certificado de cliente.
 
+### DBeaver integrado
+
+No Cloudforge Desktop, abra uma instância PostgreSQL ou MySQL e selecione **DBeaver**, logo abaixo de **Visão geral**. Com o banco online e o TLS validado, a aba conecta automaticamente e disponibiliza o navegador de objetos, o editor SQL e a grade de dados. Exporte scripts e resultados que queira guardar antes de sair da aba. A sessão do editor é temporária.
+
+O instalador x64 carrega o motor do DBeaver e a interface CloudBeaver Community a partir do pacote local no Docker já usado pelas instâncias. O pacote inclui o runtime Java e os drivers JDBC. A conexão verifica a CA e a identidade TLS do banco. Os drivers de MongoDB e Redis do DBeaver pertencem à edição comercial. Para usar essas instâncias com outro cliente, use os dados da seção **Conexão**.
+
+Para preparar o recurso no ambiente de desenvolvimento, execute `npm run bundle:dbeaver`. O comando de empacotamento já inclui essa etapa. A preparação do instalador pode buscar a imagem oficial pela revisão fixada se ela estiver ausente do Docker local. [Fontes, licenças e atribuições](../third_party/dbeaver/README.md).
+
 | Banco | Configuração no cliente |
 | --- | --- |
 | PostgreSQL | Use `sslmode=verify-full` e informe o arquivo `.crt` em `sslrootcert`. |

@@ -1,6 +1,12 @@
 import type { Snapshot } from "../../../packages/shared-types";
 import type { SnapshotDesktop } from "../../../packages/ui/DatabaseSnapshots";
 interface Bridge extends SnapshotDesktop {
+  openDBeaver: (session: string, database: string) => Promise<void>;
+  layoutDBeaver: (
+    session: string,
+    bounds: { x: number; y: number; width: number; height: number },
+  ) => void;
+  closeDBeaver: (session: string) => void;
   request: <T = unknown>(
     method: string,
     path: string,

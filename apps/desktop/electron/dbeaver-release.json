@@ -1,0 +1,9 @@
+{
+  "version": "26.2.5",
+  "image": "dbeaver/cloudbeaver:26.2.5",
+  "id": "sha256:5de1c6aa18da9e369966f88a1b25fe017b70ce3fdac7d879616aa931e44b013f",
+  "manifestId": "sha256:6ed5509d207317ca3f0be1516eed88676907597c82629ee67b1b102042ed76aa",
+  "configId": "sha256:180959c2a6f3d13b85eba6138dabb1e62e0be064f75eb0c49f0e260ede0fb6b9",
+  "dbeaverRevision": "7a9cceb4b5c05698158306eec580b93db58cdfc5",
+  "cloudbeaverRevision": "2e549d604809f058d1c23029ec939ca7f7f8775d"
+}

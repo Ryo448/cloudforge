@@ -38,13 +38,18 @@ import {
   uptime,
 } from "../../../packages/ui";
 import { ProjectCard, RuntimeLogo } from "../../../packages/ui/ProjectCard";
-import { Databases, DatabaseNavigation } from "../../../packages/ui/Databases";
+import {
+  Databases,
+  DatabaseNavigation,
+  type DatabaseSection,
+} from "../../../packages/ui/Databases";
 import { api, message } from "./api";
 import { AddProject, ProjectPage, type ProjectSection } from "./Projects";
 import { CloudflarePage } from "./Cloudflare";
 import { SettingsPage } from "./Settings";
 import WindowControls from "./WindowControls";
 import { EnvironmentIcon } from "./EnvironmentIcon";
+import { DBeaverWorkspace } from "./DBeaverWorkspace";
 
 type Page = "overview" | "projects" | "databases" | "cloudflare" | "settings";
 
@@ -95,9 +100,8 @@ export default function App() {
     [page, setPage] = useState<Page>("overview"),
     [focusGoogleDrive, setFocusGoogleDrive] = useState(false),
     [databaseID, setDatabaseID] = useState<string | null>(null),
-    [databaseSection, setDatabaseSection] = useState<
-      "overview" | "general" | "connection" | "risk" | "snapshots"
-    >("overview"),
+    [databaseSection, setDatabaseSection] =
+      useState<DatabaseSection>("overview"),
     [selected, setSelected] = useState<string | null>(null),
     [projectSection, setProjectSection] = useState<ProjectSection>("overview"),
     [filesDirty, setFilesDirty] = useState(false),
@@ -303,6 +307,7 @@ export default function App() {
               section={databaseSection}
               select={setDatabaseSection}
               snapshots
+              dbeaver
             />
           ) : project ? (
             <nav aria-label="Navegação do projeto">
@@ -390,7 +395,7 @@ export default function App() {
             </div>
             <div className="sidebar-version">
               <span>Cloudforge</span>
-              <span>v2.0.0</span>
+              <span>v2.1.0</span>
             </div>
           </div>
         </aside>
@@ -627,6 +632,9 @@ export default function App() {
                 snapshotDesktop={window.cloudforge}
                 onOpenDriveSettings={() => navigate("settings", true)}
                 onOpenExternal={window.cloudforge.openExternal}
+                renderDBeaver={(database) => (
+                  <DBeaverWorkspace key={database.id} database={database} />
+                )}
               />
             ) : page === "cloudflare" ? (
               <CloudflarePage state={state} onChanged={refresh} />

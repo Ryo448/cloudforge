@@ -1,6 +1,6 @@
 {
   "name": "cloudforge",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -13,11 +13,12 @@
     "build": "npm run licenses && npm run build --workspace @cloudforge/desktop && npm run build --workspace @cloudforge/web && node scripts/build-core.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/test.mjs",
-    "package": "npm run build && node scripts/bundle-cloudflared.mjs && electron-builder --config apps/desktop/electron-builder.json",
+    "package": "npm run build && node scripts/bundle-cloudflared.mjs && npm run bundle:dbeaver && electron-builder --config apps/desktop/electron-builder.json",
     "start": "node scripts/start.mjs",
     "format": "prettier --write apps packages scripts package.json tsconfig.json",
     "lint": "prettier --check apps packages scripts package.json tsconfig.json",
-    "package:dir": "npm run build && node scripts/bundle-cloudflared.mjs && electron-builder --config apps/desktop/electron-builder.json --dir",
+    "package:dir": "npm run build && node scripts/bundle-cloudflared.mjs && npm run bundle:dbeaver && electron-builder --config apps/desktop/electron-builder.json --dir",
+    "bundle:dbeaver": "node scripts/bundle-dbeaver.mjs",
     "postinstall": "install-electron",
     "licenses": "node scripts/licenses.mjs"
   },

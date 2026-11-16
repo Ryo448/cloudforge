@@ -181,11 +181,26 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 			fail(w, 401, errors.New("configure o administrador local"))
 			return
 		}
+		parts := strings.Split(path, "/")
+		if len(parts) == 4 && parts[3] == "dbeaver" && r.Method == "POST" {
+			if s.Databases == nil {
+				databaseError(w, databases.ErrUnavailable)
+				return
+			}
+			connection, err := s.Databases.DBeaverConnection(admin.ID, parts[2])
+			if err != nil {
+				databaseError(w, err)
+				return
+			}
+			w.Header().Set("Cache-Control", "no-store")
+			write(w, 200, connection)
+			return
+		}
 		s.databaseRoutes(w, r, admin.ID)
 		return
 	}
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "2.0.0", "apiVersion": 7})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "2.1.0", "apiVersion": 8})
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {

@@ -13,6 +13,12 @@ const { spawn } = require("node:child_process");
 const { StringDecoder } = require("node:string_decoder");
 const WebSocket = require("ws");
 const { pathToFileURL } = require("node:url");
+const {
+  openDBeaver,
+  layoutDBeaver,
+  closeDBeaver,
+  hasDBeaver,
+} = require("./dbeaver-view.cjs");
 app.setName("Cloudforge");
 const root = path.resolve(__dirname, "../../..");
 const iconPath = app.isPackaged
@@ -25,7 +31,7 @@ const profileDir = path.join(dataDir, "electron");
 require("node:fs").mkdirSync(profileDir, { recursive: true });
 app.setPath("userData", profileDir);
 const address = "http://127.0.0.1:28931";
-const coreAPIVersion = 7;
+const coreAPIVersion = 8;
 const terminalSessions = new Map();
 let pickedSnapshot;
 let window,
@@ -285,6 +291,14 @@ function createWindow() {
   window.webContents.session.setPermissionRequestHandler(
     (_wc, _permission, callback) => callback(false),
   );
+  window.on("close", (event) => {
+    if (!hasDBeaver()) return;
+    event.preventDefault();
+    const target = window;
+    void closeDBeaver().finally(() => {
+      if (!target.isDestroyed()) target.close();
+    });
+  });
   window.on("closed", () => {
     window = undefined;
   });
@@ -378,6 +392,57 @@ ipcMain.handle("core:request", async (event, method, route, body) => {
   if (body !== undefined && JSON.stringify(body).length > maxBody)
     throw new Error("Dados excedem o limite");
   return request(method, route, body);
+});
+const dbeaverFonts = [
+  ["IBM Plex Sans", "ibm-plex-sans", 400],
+  ["IBM Plex Sans", "ibm-plex-sans", 500],
+  ["IBM Plex Sans", "ibm-plex-sans", 600],
+  ["IBM Plex Mono", "ibm-plex-mono", 400],
+].map(([family, slug, weight]) => ({
+  family,
+  weight,
+  file: path.join(
+    app.isPackaged
+      ? path.join(process.resourcesPath, "dbeaver/fonts")
+      : path.join(root, `node_modules/@fontsource/${slug}/files`),
+    `${slug}-latin-${weight}-normal.woff2`,
+  ),
+}));
+ipcMain.handle("dbeaver:open", (event, session, id) => {
+  checkSender(event);
+  if (
+    typeof session !== "string" ||
+    !/^[a-f0-9-]{36}$/.test(session) ||
+    typeof id !== "string" ||
+    !/^[a-f0-9]{32}$/.test(id)
+  )
+    throw new Error("Sessão do DBeaver inválida.");
+  const bundle = app.isPackaged
+    ? path.join(process.resourcesPath, "dbeaver/runtime.tar.gz")
+    : path.join(root, "dist/dbeaver/runtime.tar.gz");
+  return openDBeaver(
+    window,
+    session,
+    () => request("POST", `/api/databases/${id}/dbeaver`),
+    bundle,
+    dbeaverFonts,
+  );
+});
+ipcMain.on("dbeaver:layout", (event, session, bounds) => {
+  try {
+    checkSender(event);
+  } catch {
+    return;
+  }
+  layoutDBeaver(session, bounds);
+});
+ipcMain.on("dbeaver:close", (event, session) => {
+  try {
+    checkSender(event);
+  } catch {
+    return;
+  }
+  if (typeof session === "string" && session) void closeDBeaver(session);
 });
 const snapshotFormats = {
   postgresql: ["dump", "sql"],
@@ -677,7 +742,11 @@ function connectEvents() {
   });
 }
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (hasDBeaver()) {
+    event.preventDefault();
+    void closeDBeaver().finally(() => app.quit());
+  }
   closing = true;
   clearTimeout(retry);
   socket?.close();

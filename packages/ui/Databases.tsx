@@ -6,6 +6,7 @@ import {
   Copy,
   Cpu,
   Database,
+  DatabaseZap,
   Download,
   HardDrive,
   History,
@@ -87,18 +88,18 @@ type Catalog = {
   databases: Instance[];
   docker: boolean;
   dockerStatus?:
-    | "starting"
-    | "missing"
-    | "unavailable"
-    | "incompatible"
-    | "running";
+    "starting" | "missing" | "unavailable" | "incompatible" | "running";
   memoryLimit: number;
   cpu: number;
 };
 type Detail = { database: Instance; metrics: Metric[] };
 type Credentials = { password: string; url: string };
 export type DatabaseSection =
-  "overview" | "general" | "connection" | "risk" | "snapshots";
+  "overview" | "dbeaver" | "general" | "connection" | "risk" | "snapshots";
+export type DBeaverDatabase = Pick<
+  Instance,
+  "id" | "name" | "engine" | "state" | "tlsValidated"
+>;
 type Section = DatabaseSection;
 type Request = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 const base = "/api/databases";
@@ -109,6 +110,7 @@ const dockerInstallGuides = [
 const pageSize = 3;
 const navigation = [
   ["overview", "Visão geral", OverviewIcon],
+  ["dbeaver", "DBeaver", DatabaseZap],
   ["snapshots", "Snapshots", History],
   ["general", "Geral", Settings2],
   ["connection", "Conexão", KeyRound],
@@ -264,14 +266,19 @@ export function DatabaseNavigation({
   section,
   select,
   snapshots,
+  dbeaver,
 }: {
   list: () => void;
   section: Section;
   select: (section: Section) => void;
   snapshots?: boolean;
+  dbeaver?: boolean;
 }) {
   return (
-    <nav aria-label="Navegação do banco de dados">
+    <nav
+      className="database-navigation"
+      aria-label="Navegação do banco de dados"
+    >
       <button
         className="nav-item project-nav-back"
         onClick={list}
@@ -282,6 +289,7 @@ export function DatabaseNavigation({
       </button>
       {navigation
         .filter(([id]) => id !== "snapshots" || snapshots)
+        .filter(([id]) => id !== "dbeaver" || dbeaver)
         .map(([id, label, Icon]) => (
           <div key={id}>
             {id === "general" && (
@@ -315,6 +323,7 @@ export function Databases({
   snapshotDesktop,
   onOpenDriveSettings,
   onOpenExternal,
+  renderDBeaver,
 }: {
   request: Request;
   copy: (value: string) => Promise<unknown>;
@@ -325,6 +334,7 @@ export function Databases({
   snapshotDesktop?: SnapshotDesktop;
   onOpenDriveSettings?: () => void;
   onOpenExternal?: (url: string) => Promise<void>;
+  renderDBeaver?: (database: DBeaverDatabase) => React.ReactNode;
 }) {
   const [catalog, setCatalog] = useState<Catalog>();
   const [detail, setDetail] = useState<Detail>();
@@ -554,6 +564,10 @@ export function Databases({
         )}
       </div>
     );
+  }
+
+  if (section === "dbeaver" && database && renderDBeaver) {
+    return renderDBeaver(database);
   }
 
   return (

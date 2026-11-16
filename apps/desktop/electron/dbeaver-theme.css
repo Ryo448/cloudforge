@@ -1,0 +1,73 @@
+/* Cloudforge theme overrides for CloudBeaver, Copyright (C) DBeaver Corp and others.
+ * Adapted by Cloudforge. CloudBeaver is licensed under Apache-2.0.
+ */
+
+:root,
+:root .theme-dark,
+:root .theme-light {
+  color-scheme: dark !important;
+  --theme-primary: #ff7a1a !important;
+  --theme-on-primary: #140800 !important;
+  --theme-secondary: #0e1116 !important;
+  --theme-on-secondary: #f1f3f7 !important;
+  --theme-surface: #13171e !important;
+  --theme-on-surface: #f1f3f7 !important;
+  --theme-background: #0b0d11 !important;
+  --theme-sub-secondary: #1a1f29 !important;
+  --theme-on-sub-secondary: #c2cad8 !important;
+  --theme-link-color: #ff9138 !important;
+  --theme-link-color-focus: #ffac6b !important;
+  --theme-error: #f87a74 !important;
+  --theme-positive: #ff8524 !important;
+  --theme-on-positive: #140800 !important;
+  --theme-negative: #f87a74 !important;
+  --theme-status: #f7b955 !important;
+  --theme-form-element-radius: 6px !important;
+  --theme-group-element-radius: 8px !important;
+  --theme-menu-bar-small-action-radius: 7px !important;
+  --theme-font-family: "IBM Plex Sans", sans-serif !important;
+  --theme-font-family-mono: "IBM Plex Mono", monospace !important;
+  --editor-meta: #f7b955 !important;
+  --editor-keyword: #ff9138 !important;
+  --editor-comment: #949eae !important;
+  --editor-string: #f7b955 !important;
+  --editor-bool: #68a8e8 !important;
+  --editor-cursor: #ff9138 !important;
+}
+
+html,
+body {
+  background: #0b0d11 !important;
+  color: #f1f3f7 !important;
+  scrollbar-color: #454d5b #13171e !important;
+}
+
+header[data-dialog-persistent-element] {
+  --theme-on-primary: #f1f3f7 !important;
+  background: #0e1116 !important;
+  border-bottom: 1px solid #232834 !important;
+}
+
+header[data-dialog-persistent-element] :is(button, [role="button"]):hover {
+  background-color: #2c1b12 !important;
+}
+
+.dbv-kit-icon-button {
+  --dbv-kit-color-primary-500: #ff9138 !important;
+  --dbv-kit-icon-btn-primary-foreground: #ff9138 !important;
+  --dbv-kit-icon-btn-primary-foreground-hover: #ffac6b !important;
+  --dbv-kit-icon-btn-primary-foreground-active: #ff7a1a !important;
+}
+
+:focus-visible {
+  outline-color: #ff9138 !important;
+}
+
+.cm-editor {
+  background: #080a0d !important;
+}
+
+::selection {
+  background: #63371d !important;
+  color: #fff !important;
+}

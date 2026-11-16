@@ -418,8 +418,7 @@
 .db-remote-workspace {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
-  max-width: 1440px;
-  margin: auto;
+  width: 100%;
 }
 .db-remote-workspace > aside.sidebar {
   position: static;
@@ -432,6 +431,9 @@
 }
 .db-remote-workspace .nav-item > span {
   display: inline;
+}
+.database-navigation > div > .nav-item {
+  width: 100%;
 }
 .db-remote-workspace > aside nav button {
   width: 100%;

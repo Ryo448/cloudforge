@@ -9,6 +9,22 @@
     { "from": "dist/core", "to": ".", "filter": ["cloudforge-core*"] },
     { "from": "apps/web/dist", "to": "web" },
     { "from": "assets/icon/icon.png", "to": "icon.png" },
+    { "from": "dist/dbeaver", "to": "dbeaver", "filter": ["runtime.tar.gz"] },
+    { "from": "third_party/dbeaver", "to": "dbeaver/source" },
+    {
+      "from": "node_modules/@fontsource/ibm-plex-sans/files",
+      "to": "dbeaver/fonts",
+      "filter": [
+        "ibm-plex-sans-latin-400-normal.woff2",
+        "ibm-plex-sans-latin-500-normal.woff2",
+        "ibm-plex-sans-latin-600-normal.woff2"
+      ]
+    },
+    {
+      "from": "node_modules/@fontsource/ibm-plex-mono/files",
+      "to": "dbeaver/fonts",
+      "filter": ["ibm-plex-mono-latin-400-normal.woff2"]
+    },
     { "from": "LICENSE", "to": "LICENSE" }
   ],
   "win": {

@@ -9,6 +9,11 @@ contextBridge.exposeInMainWorld("windowControls", {
   },
 });
 contextBridge.exposeInMainWorld("cloudforge", {
+  openDBeaver: (session, database) =>
+    ipcRenderer.invoke("dbeaver:open", session, database),
+  layoutDBeaver: (session, bounds) =>
+    ipcRenderer.send("dbeaver:layout", session, bounds),
+  closeDBeaver: (session) => ipcRenderer.send("dbeaver:close", session),
   request: (method, path, body) =>
     ipcRenderer.invoke("core:request", method, path, body),
   readMedia: (id, path) => ipcRenderer.invoke("core:media", id, path),
