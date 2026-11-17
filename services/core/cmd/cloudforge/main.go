@@ -13,10 +13,12 @@ import (
 	"cloudforge/core/internal/snapshots"
 	"cloudforge/core/internal/supervisor"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"flag"
 	"fmt"
 	"github.com/gofrs/flock"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -107,6 +109,24 @@ func run() error {
 	sup := supervisor.New(s, *data)
 	cf := cloudflare.New(s, *data, "http://"+*publicAddr, installation)
 	server := api.New(s, sup, cf, key, *data, *web, *development)
+	binary, e := os.Executable()
+	if e != nil {
+		return e
+	}
+	file, e := os.Open(binary)
+	if e != nil {
+		return e
+	}
+	hash := sha256.New()
+	_, e = io.Copy(hash, file)
+	file.Close()
+	if e != nil {
+		return e
+	}
+	server.BinarySHA256 = fmt.Sprintf("%x", hash.Sum(nil))
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	server.Shutdown = cancel
 	server.Databases = databases.New(s, key)
 	server.Autostart = func(enabled bool) error { return autostart.Configure(enabled, *data, *web) }
 	server.AutostartEnabled = autostart.Enabled
@@ -126,8 +146,6 @@ func run() error {
 	defer sup.Shutdown()
 	defer cf.Stop()
 	cf.Start()
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 	dbDone := make(chan struct{})
 	go func() { defer close(dbDone); server.Databases.Run(ctx) }()
 	defer func() { cancel(); <-dbDone }()

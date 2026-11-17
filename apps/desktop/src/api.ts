@@ -1,6 +1,21 @@
 import type { Snapshot } from "../../../packages/shared-types";
 import type { SnapshotDesktop } from "../../../packages/ui/DatabaseSnapshots";
+export interface UpdateState {
+  status:
+    "idle" | "checking" | "available" | "downloading" | "installing" | "error";
+  currentVersion: string;
+  version?: string;
+  releaseNotes?: string;
+  error?: string;
+  percent?: number;
+  transferred?: number;
+  total?: number;
+  bytesPerSecond?: number;
+}
 interface Bridge extends SnapshotDesktop {
+  updateState: () => Promise<UpdateState>;
+  installUpdate: () => Promise<UpdateState>;
+  onUpdateState: (callback: (state: UpdateState) => void) => () => void;
   openDBeaver: (
     session: string,
     database: string,

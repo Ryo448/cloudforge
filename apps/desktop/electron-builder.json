@@ -2,9 +2,14 @@
   "appId": "app.cloudforge.desktop",
   "productName": "Cloudforge",
   "npmRebuild": false,
-  "publish": null,
+  "publish": { "provider": "github", "owner": "Ryo448", "repo": "cloudforge" },
   "directories": { "app": "apps/desktop", "output": "release" },
-  "files": ["dist/**/*", "electron/**/*", "package.json"],
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "!electron/**/*.test.cjs",
+    "package.json"
+  ],
   "extraResources": [
     { "from": "dist/core", "to": ".", "filter": ["cloudforge-core*"] },
     { "from": "apps/web/dist", "to": "web" },
@@ -40,6 +45,7 @@
   },
   "linux": { "target": "AppImage", "category": "Development" },
   "nsis": {
+    "artifactName": "Cloudforge-Setup-${version}.${ext}",
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "installerIcon": "assets/icon/icon.ico",

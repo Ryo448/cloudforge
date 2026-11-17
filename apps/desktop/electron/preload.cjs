@@ -9,6 +9,13 @@ contextBridge.exposeInMainWorld("windowControls", {
   },
 });
 contextBridge.exposeInMainWorld("cloudforge", {
+  updateState: () => ipcRenderer.invoke("update:state"),
+  installUpdate: () => ipcRenderer.invoke("update:install"),
+  onUpdateState: (callback) => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on("update:state", listener);
+    return () => ipcRenderer.removeListener("update:state", listener);
+  },
   openDBeaver: (session, database) =>
     ipcRenderer.invoke("dbeaver:open", session, database),
   detachDBeaver: (session, name) =>

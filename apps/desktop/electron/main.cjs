@@ -13,6 +13,9 @@ const { spawn } = require("node:child_process");
 const { StringDecoder } = require("node:string_decoder");
 const WebSocket = require("ws");
 const { pathToFileURL } = require("node:url");
+const { createCoreManager } = require("./core-lifecycle.cjs");
+const { createUpdater } = require("./updater.cjs");
+const { autoUpdater } = require("electron-updater");
 const {
   openDBeaver,
   layoutDBeaver,
@@ -34,9 +37,51 @@ require("node:fs").mkdirSync(profileDir, { recursive: true });
 app.setPath("userData", profileDir);
 const address = "http://127.0.0.1:28931";
 const coreAPIVersion = 8;
+const appVersion = require("../package.json").version;
+const coreManager = createCoreManager({
+  binary: path.join(
+    app.isPackaged ? process.resourcesPath : path.join(root, "dist/core"),
+    process.platform === "win32" ? "cloudforge-core.exe" : "cloudforge-core",
+  ),
+  web: app.isPackaged
+    ? path.join(process.resourcesPath, "web")
+    : path.join(root, "apps/web/dist"),
+  dataDir,
+  version: appVersion,
+  apiVersion: coreAPIVersion,
+  request,
+  resetKey: () => {
+    key = undefined;
+  },
+});
+const updates = createUpdater({
+  updater: autoUpdater,
+  currentVersion: appVersion,
+  enabled:
+    app.isPackaged &&
+    (process.platform === "win32" ||
+      (process.platform === "linux" && !!process.env.APPIMAGE)),
+  publish: (state) => {
+    if (window && !window.isDestroyed())
+      window.webContents.send("update:state", state);
+  },
+  prepareInstall: async () => {
+    await closeDBeaver();
+    closing = true;
+    clearTimeout(retry);
+    socket?.close();
+    await coreManager.stop();
+  },
+  recover: async () => {
+    closing = false;
+    await ensureCore();
+    connectEvents();
+  },
+});
 const terminalSessions = new Map();
 let pickedSnapshot;
 let window,
+  coreStartupError,
   key,
   socket,
   retry,
@@ -57,9 +102,10 @@ if (!app.requestSingleInstanceLock()) {
     }
     createWindow();
     connectEvents();
+    updates.start();
   });
 }
-async function request(method, route, body) {
+async function request(method, route, body, timeout) {
   if (!key)
     key = (await fs.readFile(path.join(dataDir, "admin.key"), "utf8")).trim();
   const response = await fetch(address + route, {
@@ -69,7 +115,9 @@ async function request(method, route, body) {
       "Content-Type": "application/json",
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(route.includes("/install") ? 250000 : 120000),
+    signal: AbortSignal.timeout(
+      timeout ?? (route.includes("/install") ? 250000 : 120000),
+    ),
   });
   if (response.status === 204) return undefined;
   const responseText = await response.text();
@@ -200,58 +248,13 @@ function terminalSession(event) {
   return session;
 }
 async function ensureCore() {
-  let health;
   try {
-    health = await request("GET", "/api/health");
-  } catch {}
-  if (health?.service === "cloudforge") {
-    if (health.apiVersion === coreAPIVersion) return;
-    throw new Error(
-      "O Core em execução está desatualizado. Reinicie o Windows e abra o Cloudforge novamente para carregar o Core atualizado.",
-    );
+    await coreManager.ensure();
+    coreStartupError = undefined;
+  } catch (error) {
+    coreStartupError = error;
+    throw error;
   }
-  const binary = app.isPackaged
-    ? path.join(
-        process.resourcesPath,
-        process.platform === "win32"
-          ? "cloudforge-core.exe"
-          : "cloudforge-core",
-      )
-    : path.join(
-        root,
-        "dist/core",
-        process.platform === "win32"
-          ? "cloudforge-core.exe"
-          : "cloudforge-core",
-      );
-  const web = app.isPackaged
-    ? path.join(process.resourcesPath, "web")
-    : path.join(root, "apps/web/dist");
-  await fs.access(binary);
-  const child = spawn(binary, ["--data", dataDir, "--web-dir", web], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  child.on("error", (error) =>
-    console.error("Não foi possível iniciar o Core:", error.message),
-  );
-  child.unref();
-  for (let attempt = 0; attempt < 80; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    try {
-      key = undefined;
-      const health = await request("GET", "/api/health");
-      if (
-        health.service === "cloudforge" &&
-        health.apiVersion === coreAPIVersion
-      )
-        return;
-    } catch {}
-  }
-  throw new Error(
-    "O Core não respondeu. Confira as portas 28931 e 28932 e os logs do serviço.",
-  );
 }
 function createWindow() {
   window = new BrowserWindow({
@@ -329,6 +332,14 @@ function controlledWindow(event) {
   if (detached) return detached;
   return terminalSession(event).terminal;
 }
+ipcMain.handle("update:state", (event) => {
+  checkSender(event);
+  return updates.state();
+});
+ipcMain.handle("update:install", (event) => {
+  checkSender(event);
+  return updates.install();
+});
 ipcMain.handle("window:is-maximized", (event) =>
   controlledWindow(event).isMaximized(),
 );
@@ -382,6 +393,7 @@ const routes = [
 ];
 ipcMain.handle("core:request", async (event, method, route, body) => {
   checkSender(event);
+  if (coreStartupError) throw coreStartupError;
   if (
     typeof method !== "string" ||
     typeof route !== "string" ||
@@ -753,6 +765,7 @@ ipcMain.handle("core:watch", async (event, id) => {
   connectEvents();
 });
 function connectEvents() {
+  if (coreStartupError) return;
   if (closing || !window || !key) return;
   clearTimeout(retry);
   if (socket) {

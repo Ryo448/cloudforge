@@ -56,7 +56,9 @@ O Cloudflare é **opcional** para a operação local. Para acesso remoto, você 
 
 ### Instalação para uso diário
 
-No Windows, abra o instalador `Cloudforge Setup ...exe` gerado ou distribuído pelo projeto. A pasta `win-unpacked` também contém uma versão executável sem instalação. No Linux, o empacotamento gera um AppImage; a execução nesse sistema ainda precisa ser validada no ambiente de destino. Os artefatos de `release/` são gerados localmente e não fazem parte do código-fonte.
+No Windows, abra o instalador `Cloudforge-Setup-<versão>.exe` gerado ou distribuído pelo projeto. A pasta `win-unpacked` também contém uma versão executável sem instalação. No Linux, o empacotamento gera um AppImage; a execução nesse sistema ainda precisa ser validada no ambiente de destino. Os artefatos de `release/` são gerados localmente e não fazem parte do código-fonte.
+
+O aplicativo instalado verifica atualizações no GitHub ao abrir e a cada duas horas. Quando houver uma versão nova, use **Nova atualização** na barra superior para confirmar, acompanhar o download e instalar. O Core é conferido a cada abertura e substituído automaticamente quando pertence a outra versão ou compilação. Veja [atualizações e publicação de releases](docs/updates.md).
 
 Você só precisa instalar o runtime usado pelas **suas** aplicações: Python para projetos Python; Node.js e o gerenciador correspondente para projetos Node.js. O Cloudforge não instala esses runtimes globais silenciosamente.
 

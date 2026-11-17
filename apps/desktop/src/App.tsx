@@ -149,6 +149,7 @@ export default function App() {
     return (
       <>
         <WindowControls
+          updates
           heading={error ? "Core indisponível" : "Conectando ao Core"}
         />
         <div className="connection-page">
@@ -186,7 +187,7 @@ export default function App() {
   if (wizard)
     return (
       <>
-        <WindowControls heading="Configuração inicial" />
+        <WindowControls updates heading="Configuração inicial" />
         <Setup
           state={state}
           onComplete={() => {
@@ -251,6 +252,8 @@ export default function App() {
   return (
     <>
       <WindowControls
+        updates
+        filesDirty={filesDirty}
         heading={
           project ? (
             <>
@@ -395,7 +398,7 @@ export default function App() {
             </div>
             <div className="sidebar-version">
               <span>Cloudforge</span>
-              <span>v2.1.2</span>
+              <span>v2.1.3</span>
             </div>
           </div>
         </aside>

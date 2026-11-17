@@ -29,7 +29,12 @@ import (
 	"time"
 )
 
+// AppVersion is injected from the desktop package when the core is built.
+var AppVersion = "development"
+
 type Server struct {
+	BinarySHA256     string
+	Shutdown         func()
 	Store            persistence.Repository
 	Auth             *auth.Auth
 	Supervisor       *supervisor.Supervisor
@@ -200,7 +205,12 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "2.1.2", "apiVersion": 8})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": AppVersion, "apiVersion": 8, "binarySHA256": s.BinarySHA256, "pid": os.Getpid(), "lifecycle": s.Shutdown != nil})
+		return
+	}
+	if path == "api/shutdown" && r.Method == "POST" && s.Shutdown != nil {
+		write(w, http.StatusAccepted, map[string]bool{"ok": true})
+		s.Shutdown()
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {

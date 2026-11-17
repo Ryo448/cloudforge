@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Minus, Square, X } from "lucide-react";
 import { Brand } from "../../../packages/ui";
+import { AppUpdate } from "./AppUpdate";
 
 type WindowAction = "minimize" | "maximize" | "close";
 
@@ -17,9 +18,13 @@ declare global {
 export default function WindowControls({
   heading,
   details,
+  updates = false,
+  filesDirty = false,
 }: {
   heading: ReactNode;
   details?: ReactNode;
+  updates?: boolean;
+  filesDirty?: boolean;
 }) {
   const [maximized, setMaximized] = useState(false);
 
@@ -44,6 +49,7 @@ export default function WindowControls({
         <Brand />
       </div>
       <div className="window-titlebar-heading">{heading}</div>
+      {updates && <AppUpdate filesDirty={filesDirty} />}
       {details && <div className="window-titlebar-details">{details}</div>}
       {window.windowControls && (
         <div className="window-titlebar-actions">

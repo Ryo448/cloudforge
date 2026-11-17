@@ -31,6 +31,39 @@ func fixture(t *testing.T) *Server {
 	t.Cleanup(func() { sup.Shutdown(); store.Close() })
 	return s
 }
+func TestLocalCoreLifecycle(t *testing.T) {
+	s := fixture(t)
+	s.BinarySHA256 = "test-binary-sha256"
+	stopped := false
+	s.Shutdown = func() { stopped = true }
+	health := invoke(s, true, "GET", "/api/health", "", "", "", nil)
+	var identity struct {
+		Version      string `json:"version"`
+		BinarySHA256 string `json:"binarySHA256"`
+		PID          int    `json:"pid"`
+		Lifecycle    bool   `json:"lifecycle"`
+	}
+	if err := json.Unmarshal(health.Body.Bytes(), &identity); err != nil {
+		t.Fatal(err)
+	}
+	if identity.Version != AppVersion || identity.BinarySHA256 != s.BinarySHA256 || identity.PID != os.Getpid() || !identity.Lifecycle {
+		t.Fatalf("wrong identity: %+v", identity)
+	}
+	unauthorized := httptest.NewRequest("POST", "http://127.0.0.1/api/shutdown", nil)
+	w := httptest.NewRecorder()
+	s.Local(w, unauthorized)
+	if w.Code == http.StatusAccepted || stopped {
+		t.Fatal("unauthenticated shutdown was allowed")
+	}
+	public := invoke(s, false, "POST", "/api/shutdown", "", "", "", nil)
+	if public.Code == http.StatusAccepted || stopped {
+		t.Fatal("public shutdown was allowed")
+	}
+	response := invoke(s, true, "POST", "/api/shutdown", "", "", "", nil)
+	if response.Code != http.StatusAccepted || !stopped {
+		t.Fatalf("local shutdown: %d %s", response.Code, response.Body.String())
+	}
+}
 func invoke(s *Server, local bool, method, path, body, origin, csrf string, cookies []*http.Cookie) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "http://127.0.0.1"+path, strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
