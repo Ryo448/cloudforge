@@ -348,6 +348,7 @@ const routes = [
   ],
   ["POST", /^\/api\/databases\/[a-f0-9]{32}\/snapshots(?:\/restore)?$/],
   ["PUT", /^\/api\/databases\/[a-f0-9]{32}\/snapshots\/schedule$/],
+  ["PUT", /^\/api\/databases\/[a-f0-9]{32}\/snapshots\/automatic$/],
   ["POST", /^\/api\/snapshots\/drive\/(?:connect|disconnect)$/],
   ["GET", /^\/api\/snapshots\/drive$/],
   ["PUT", /^\/api\/snapshots\/drive$/],
@@ -478,7 +479,7 @@ ipcMain.on("dbeaver:close", (event, session) => {
   if (typeof session === "string" && session) void closeDBeaver(session);
 });
 const snapshotFormats = {
-  postgresql: ["dump", "sql"],
+  postgresql: ["dump", "sql", "zip"],
   mysql: ["sql", "sql.gz"],
   mongodb: ["archive.gz"],
   redis: ["rdb"],
@@ -512,26 +513,30 @@ ipcMain.handle("snapshot:pick", async (event, id, engine) => {
   pickedSnapshot = { token, id, file };
   return { token, name };
 });
-ipcMain.handle("snapshot:import", async (event, id, token) => {
-  checkSender(event);
-  if (
-    !snapshotDatabaseID.test(id) ||
-    pickedSnapshot?.id !== id ||
-    pickedSnapshot.token !== token
-  )
-    throw new Error("Selecione novamente o arquivo de backup");
-  const { file } = pickedSnapshot;
-  const result = await request(
-    "POST",
-    "/api/databases/" + id + "/snapshots/import",
-    {
-      path: file,
-      confirm: true,
-    },
-  );
-  if (pickedSnapshot?.token === token) pickedSnapshot = undefined;
-  return result;
-});
+ipcMain.handle(
+  "snapshot:import",
+  async (event, id, token, postgresDatabase) => {
+    checkSender(event);
+    if (
+      !snapshotDatabaseID.test(id) ||
+      pickedSnapshot?.id !== id ||
+      pickedSnapshot.token !== token
+    )
+      throw new Error("Selecione novamente o arquivo de backup");
+    const { file } = pickedSnapshot;
+    const result = await request(
+      "POST",
+      "/api/databases/" + id + "/snapshots/import",
+      {
+        path: file,
+        postgresDatabase,
+        confirm: true,
+      },
+    );
+    if (pickedSnapshot?.token === token) pickedSnapshot = undefined;
+    return result;
+  },
+);
 ipcMain.handle("snapshot:download", async (event, id, driveId, name) => {
   checkSender(event);
   if (
@@ -539,7 +544,7 @@ ipcMain.handle("snapshot:download", async (event, id, driveId, name) => {
     typeof driveId !== "string" ||
     !/^[A-Za-z0-9_-]{1,150}$/.test(driveId) ||
     typeof name !== "string" ||
-    !/^snapshot_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.(?:dump|sql\.gz|archive\.gz|rdb)$/.test(
+    !/^snapshot_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.(?:zip|dump|sql\.gz|archive\.gz|rdb)$/.test(
       name,
     )
   )

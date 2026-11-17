@@ -1041,6 +1041,28 @@ tbody tr:hover {
   font-size: 12px;
   color: #b4bece;
 }
+.database-rotation-modal {
+  width: min(520px, calc(100% - 36px));
+}
+.database-rotation-modal .modal-head {
+  margin-bottom: 14px;
+}
+.database-rotation-modal > p {
+  line-height: 1.7;
+  max-width: 58ch;
+}
+.database-rotation-modal .modal-actions {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 18px;
+}
+.database-rotation-modal .modal-actions .button {
+  min-width: 98px;
+}
 .modal form {
   margin-top: 22px;
 }
@@ -1979,6 +2001,8 @@ form small {
   color: var(--muted);
 }
 .remote-shell {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background:
     linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
@@ -2009,6 +2033,9 @@ form small {
   display: flex;
   align-items: center;
   gap: 18px;
+}
+.remote-shell > .db-remote-workspace {
+  flex: 1;
 }
 .remote-main {
   max-width: 1120px;

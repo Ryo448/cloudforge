@@ -149,6 +149,9 @@ function dataSource(connection) {
       database: connection.database,
       url: `jdbc:${provider}://${connection.host}:${connection.port}/${connection.database}`,
       configurationType: "MANUAL",
+      ...(postgres && {
+        "provider-properties": { "@dbeaver-show-non-default-db@": "true" },
+      }),
       properties,
       "auth-model": "native",
       "auth-properties": {

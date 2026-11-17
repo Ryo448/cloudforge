@@ -36,7 +36,7 @@ type driveFile struct {
 }
 
 var driveID = regexp.MustCompile("^[A-Za-z0-9_-]{1,150}$")
-var snapshotName = regexp.MustCompile("^snapshot_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}\\.(dump|sql\\.gz|archive\\.gz|rdb)$")
+var snapshotName = regexp.MustCompile("^snapshot_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}\\.(zip|dump|sql\\.gz|archive\\.gz|rdb)$")
 
 func (d *drive) request(ctx context.Context, id, method, address string, body []byte, headers map[string]string) (*http.Response, error) {
 	var rejected string

@@ -13,20 +13,21 @@ import (
 )
 
 type Snapshot struct {
-	ID           string    `json:"id"`
-	DriveID      string    `json:"driveId"`
-	DatabaseID   string    `json:"databaseId"`
-	Engine       string    `json:"engine"`
-	Created      time.Time `json:"created"`
-	Mode         string    `json:"mode"`
-	Size         int64     `json:"size"`
-	Name         string    `json:"name"`
-	Format       string    `json:"format"`
-	Version      string    `json:"version"`
-	Folder       string    `json:"folder"`
-	Installation string    `json:"installation"`
-	Machine      string    `json:"machine"`
-	Checksum     string    `json:"checksum"`
+	ID               string    `json:"id"`
+	DriveID          string    `json:"driveId"`
+	DatabaseID       string    `json:"databaseId"`
+	Engine           string    `json:"engine"`
+	Created          time.Time `json:"created"`
+	Mode             string    `json:"mode"`
+	Size             int64     `json:"size"`
+	Name             string    `json:"name"`
+	Format           string    `json:"format"`
+	Version          string    `json:"version"`
+	PostgresDatabase string    `json:"postgresDatabase,omitempty"`
+	Folder           string    `json:"folder"`
+	Installation     string    `json:"installation"`
+	Machine          string    `json:"machine"`
+	Checksum         string    `json:"checksum"`
 }
 
 func taggedFolder(item driveFile, kind string) bool {
@@ -120,14 +121,14 @@ func fileSnapshot(item, folder driveFile, machine string) (Snapshot, bool) {
 	if !driveID.MatchString(item.ID) || !driveID.MatchString(p["snapshot"]) || item.Created.IsZero() ||
 		!matchesParent(item, folder.ID) || p["cfKind"] != "snapshot" ||
 		p["installation"] != folder.Props["installation"] || p["database"] != folder.Props["database"] ||
-		p["engine"] != engine || p["format"] != databases.SnapshotFormat(engine) || p["version"] == "" ||
+		p["engine"] != engine || !databases.StoredSnapshotFormat(engine, p["format"]) || p["version"] == "" ||
 		(p["mode"] != "manual" && p["mode"] != "automatic") || !snapshotName.MatchString(item.Name) ||
 		!strings.HasSuffix(item.Name, "."+p["format"]) || !item.verified() {
 		return Snapshot{}, false
 	}
 	return Snapshot{ID: p["snapshot"], DriveID: item.ID, DatabaseID: p["database"], Engine: engine, Created: item.Created,
 		Mode: p["mode"], Size: item.Size, Name: item.Name, Format: p["format"], Version: p["version"], Folder: folder.ID,
-		Installation: p["installation"], Machine: machine, Checksum: p["sha256"]}, true
+		Installation: p["installation"], Machine: machine, Checksum: p["sha256"], PostgresDatabase: p["postgresDatabase"]}, true
 }
 
 func sortDriveFiles(items []driveFile) {

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -109,6 +110,9 @@ func TestSnapshotSchedulePersistsAndRequiresConfirmation(t *testing.T) {
 	if _, err := s.store.DB.Exec("UPDATE snapshot_settings SET last_slot=?", id); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SetAutomatic("owner", "db1", false); err != nil {
+		t.Fatal(err)
+	}
 	s.Close()
 	restarted, err := New(t.Context(), s.store, s.databases, s.installation, filepath.Dir(s.workDir))
 	if err != nil {
@@ -117,11 +121,57 @@ func TestSnapshotSchedulePersistsAndRequiresConfirmation(t *testing.T) {
 	defer restarted.Close()
 	saved, err := restarted.schedule("db1", time.Now())
 	if err != nil || saved.Limit != 12 || len(saved.Times) != 3 || saved.Times[0] != "06:00" ||
-		saved.Frequency != "weekly" || saved.Last == nil || saved.Last.Unix() != id {
+		saved.Frequency != "weekly" || len(saved.Days) != 2 || saved.Days[0] != 1 || saved.Days[1] != 3 ||
+		saved.Last == nil || saved.Last.Unix() != id || !saved.Paused || saved.Next != nil {
 		t.Fatalf("schedule after restart: %+v (%v)", saved, err)
 	}
-	if _, err := restarted.StartRestore("owner", "db1", "snapshot", "", false); err == nil {
+	beforeResume := time.Now()
+	if err := restarted.SetAutomatic("owner", "db1", true); err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := restarted.schedule("db1", time.Now())
+	if err != nil || resumed.Paused || resumed.Next == nil || resumed.Limit != saved.Limit ||
+		resumed.Frequency != saved.Frequency || resumed.Last == nil || !resumed.Last.Equal(*saved.Last) ||
+		!slices.Equal(resumed.Days, saved.Days) || !slices.Equal(resumed.Times, saved.Times) {
+		t.Fatalf("resumed schedule: %+v (%v)", resumed, err)
+	}
+	var activeFrom int64
+	if err := s.store.DB.QueryRow("SELECT active_from FROM snapshot_settings WHERE database_id='db1'").Scan(&activeFrom); err != nil || activeFrom < beforeResume.UnixNano() {
+		t.Fatalf("schedule must skip slots before resuming: %d (%v)", activeFrom, err)
+	}
+	if _, err := restarted.StartRestore("owner", "db1", "snapshot", "", "", false); err == nil {
 		t.Fatal("unconfirmed restore was accepted")
+	}
+}
+
+func TestSnapshotStatusExpiresOperationNotices(t *testing.T) {
+	s := testService(t)
+	insertSnapshotDB(t, s, "db1", "postgresql")
+	const key = "notice"
+	for _, tc := range []struct {
+		status  string
+		age     time.Duration
+		visible bool
+	}{
+		{"success", 0, true},
+		{"success", time.Hour, false},
+		{"warning", time.Hour, false},
+		{"error", 0, true},
+		{"error", time.Hour, false},
+		{"running", time.Hour, true},
+	} {
+		raw, err := json.Marshal(Job{ID: key, Status: tc.status, Detail: "Test notice"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = s.store.DB.Exec("INSERT OR REPLACE INTO snapshot_jobs VALUES(?,?,?,?,?)", key, "db1", tc.status, string(raw), time.Now().Add(-tc.age).UnixNano())
+		if err != nil {
+			t.Fatal(err)
+		}
+		state, err := s.State(t.Context(), "owner", "db1", false)
+		if err != nil || (state.Job != nil) != tc.visible || (state.Job != nil && state.Job.Status != tc.status) {
+			t.Fatalf("status %s (%s): got %+v (%v)", tc.status, tc.age, state.Job, err)
+		}
 	}
 }
 

@@ -19,6 +19,8 @@ Os arquivos usam a cota do Google Drive da conta. Os dumps são enviados por HTT
 
 ## Agendamento e retenção
 
+Em **Configurações**, use **Desativar automáticos** para pausar o agendamento sem alterar frequência, dias, horários ou limite de versões. **Reativar automáticos** retoma o agendamento nos próximos horários salvos, sem executar os que passaram durante a pausa.
+
 O Core faz os backups com a janela fechada enquanto estiver ativo, com Docker disponível e o banco online. Se um banco ficar indisponível durante vários horários, ao voltar o Core tenta o horário programado mais recente que ainda não foi registrado. Horários inexistentes na mudança de horário de verão são pulados. Um horário repetido é executado uma vez.
 
 Backups manuais e automáticos compartilham o limite de 1 a 50 versões por banco. Depois de verificar tamanho e checksum do novo arquivo, o Core remove os excedentes mais antigos da mesma pasta. A redução do limite exige confirmação. Se a manutenção falhar, ela fica pendente para nova tentativa. Excluir um cadastro local ou desconectar o Drive mantém os backups remotos.
@@ -32,12 +34,16 @@ Backups manuais e automáticos compartilham o limite de 1 a 50 versões por banc
 
 | SGBD | Escopo e formato | Efeito no destino |
 | --- | --- | --- |
-| PostgreSQL | Banco cloudforge inteiro, em formato customizado de pg_dump. Importação também aceita SQL simples. | O dump customizado restaura em uma transação e recria os objetos do archive. Usa o usuário do destino e mantém as permissões e papéis globais fora do backup. |
+| PostgreSQL | Um ZIP com todos os bancos de aplicação da instância, inclusive os vazios. Cada banco é exportado com `pg_dump`. | Os bancos do ZIP são recriados com os nomes originais. Todos são preparados antes de substituir os bancos de mesmo nome. Encerre as conexões com esses bancos para restaurar. |
 | MySQL | Banco cloudforge, em SQL compactado; também aceita SQL simples. O dump inclui rotinas, triggers e eventos. A leitura transacional garante consistência para tabelas transacionais, como InnoDB. | Executa o SQL com a conta do banco. Uma falha pode deixar alterações parciais, pois operações DDL podem efetivar alterações independentemente da transação. |
 | MongoDB | Banco cloudforge, em archive gzip do mongodump. Nas instâncias standalone, gravações concorrentes podem produzir diferenças de ponto no tempo entre coleções. | Recria as coleções presentes no archive. Para uma cópia consistente entre coleções, suspenda as gravações durante o backup. |
 | Redis | RDB nativo dos bancos lógicos do contêiner. | Valida e abre a cópia em uma instância temporária, depois transfere chaves e vencimentos para os bancos lógicos correspondentes. Chaves homônimas são substituídas. Uma falha pode deixar alterações parciais. |
 
 Para recuperar um banco inteiro com o menor risco, crie um destino vazio da mesma tecnologia e versão. Objetos ausentes do backup podem permanecer em um destino preenchido.
+
+O ZIP PostgreSQL cobre schemas e dados dos bancos de aplicação. O banco administrativo `postgres`, os bancos-template, as contas, os certificados e as configurações do servidor ficam a cargo da instância. Cada dump reflete uma transação de leitura do respectivo banco. Pause gravações durante o backup se os aplicativos precisarem de consistência entre bancos.
+
+A importação também aceita backups antigos do Cloudforge em `.dump` e arquivos `.sql` de um único banco. Informe o banco de destino para esses formatos. Para exportar um banco individual de outro PostgreSQL, use `pg_dump -Fc -d NOME_DO_BANCO -f backup.dump` ou `pg_dump --no-owner --no-privileges -d NOME_DO_BANCO -f backup.sql`.
 
 ## Validar
 
@@ -46,5 +52,5 @@ A suíte Go exercita PKCE, renovação e revogação OAuth, interrupções de up
 ~~~powershell
 cd services/core
 $env:CLOUDFORGE_SNAPSHOT_DOCKER_TEST = "1"
-go test -v -timeout 14m ./internal/databases ./internal/snapshots -run 'TestSnapshotDockerRoundTrip|TestScheduledAndManualSnapshotsDocker'
+go test -v -timeout 14m ./internal/databases ./internal/snapshots -run 'TestPostgresSnapshotInstanceDocker|TestSnapshotDockerRoundTrip|TestScheduledAndManualSnapshotsDocker'
 ~~~

@@ -34,8 +34,8 @@ contextBridge.exposeInMainWorld("cloudforge", {
   openTerminal: (id) => ipcRenderer.invoke("project:terminal", id),
   openExternal: (url) => ipcRenderer.invoke("external:open", url),
   pickSnapshot: (id, engine) => ipcRenderer.invoke("snapshot:pick", id, engine),
-  importSnapshot: (id, token) =>
-    ipcRenderer.invoke("snapshot:import", id, token),
+  importSnapshot: (id, token, postgresDatabase) =>
+    ipcRenderer.invoke("snapshot:import", id, token, postgresDatabase),
   downloadSnapshot: (id, driveId, name) =>
     ipcRenderer.invoke("snapshot:download", id, driveId, name),
   copy: (text) => ipcRenderer.invoke("clipboard:copy", text),

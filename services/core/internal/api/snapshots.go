@@ -81,25 +81,39 @@ func (s *Server) snapshotRoutes(w http.ResponseWriter, r *http.Request, owner st
 			err = v.SaveSchedule(owner, id, in.Schedule, in.Confirm)
 		}
 		status = http.StatusNoContent
+	case r.Method == "PUT" && action == "automatic":
+		var in struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if err = decode(w, r, &in); err == nil {
+			if in.Enabled == nil {
+				err = errors.New("informe se os snapshots automáticos estão ativados")
+			} else {
+				err = v.SetAutomatic(owner, id, *in.Enabled)
+			}
+		}
+		status = http.StatusNoContent
 	case r.Method == "POST" && action == "":
 		value, err = v.StartBackup(owner, id)
 		status = http.StatusAccepted
 	case r.Method == "POST" && action == "restore":
 		var in struct {
-			DriveID string `json:"driveId"`
-			Confirm bool   `json:"confirm"`
+			DriveID          string `json:"driveId"`
+			PostgresDatabase string `json:"postgresDatabase"`
+			Confirm          bool   `json:"confirm"`
 		}
 		if err = decode(w, r, &in); err == nil {
-			value, err = v.StartRestore(owner, id, in.DriveID, "", in.Confirm)
+			value, err = v.StartRestore(owner, id, in.DriveID, "", in.PostgresDatabase, in.Confirm)
 		}
 		status = http.StatusAccepted
 	case r.Method == "POST" && action == "import":
 		var in struct {
-			Path    string `json:"path"`
-			Confirm bool   `json:"confirm"`
+			Path             string `json:"path"`
+			PostgresDatabase string `json:"postgresDatabase"`
+			Confirm          bool   `json:"confirm"`
 		}
 		if err = decode(w, r, &in); err == nil {
-			value, err = v.StartRestore(owner, id, "", in.Path, in.Confirm)
+			value, err = v.StartRestore(owner, id, "", in.Path, in.PostgresDatabase, in.Confirm)
 		}
 		status = http.StatusAccepted
 	case r.Method == "POST" && action == "download":

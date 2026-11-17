@@ -46,6 +46,15 @@ func TestScheduledAndManualSnapshotsDocker(t *testing.T) {
 	}
 	id = db.ID
 	waitFor(t, 90*time.Second, func() bool { return m.SnapshotReady(owner, id) })
+	fixture := filepath.Join(t.TempDir(), "sample.sql")
+	if err := os.WriteFile(fixture, []byte("CREATE TABLE snapshot_sample(value text); INSERT INTO snapshot_sample VALUES ('snapshot');\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	seed, err := s.StartRestore(owner, id, "", fixture, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForJob(t, s, id, seed.ID)
 	now := s.localNow()
 	due := now.Add(-time.Minute)
 	next := now.Add(20 * time.Minute)
@@ -56,10 +65,13 @@ func TestScheduledAndManualSnapshotsDocker(t *testing.T) {
 	if _, err := s.store.DB.Exec("UPDATE snapshot_settings SET active_from=? WHERE database_id=?", due.Add(-time.Minute).UnixNano(), id); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.scheduled(now); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, 90*time.Second, func() bool { j, _ := s.jobStatus(id); return j != nil && j.Status != "running" })
+	waitFor(t, 90*time.Second, func() bool {
+		if err := s.scheduled(now); err != nil {
+			t.Fatal(err)
+		}
+		j, _ := s.jobStatus(id)
+		return j != nil && j.ID != seed.ID && j.Status != "running"
+	})
 	automatic, _ := s.jobStatus(id)
 	if automatic.Status != "success" {
 		t.Fatalf("scheduled snapshot: %+v", automatic)
@@ -71,6 +83,15 @@ func TestScheduledAndManualSnapshotsDocker(t *testing.T) {
 		t.Fatalf("repeated scheduling slot: %+v %v", j, err)
 	}
 
+	if err := s.SetAutomatic(owner, id, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.scheduled(next); err != nil {
+		t.Fatal(err)
+	}
+	if j, err := s.jobStatus(id); err != nil || j == nil || j.ID != automatic.ID {
+		t.Fatalf("paused schedule started a new job: %+v (%v)", j, err)
+	}
 	j, err := s.StartBackup(owner, id)
 	if err != nil {
 		t.Fatal(err)
@@ -80,13 +101,18 @@ func TestScheduledAndManualSnapshotsDocker(t *testing.T) {
 	if err != nil || state.ListError != "" || len(state.Snapshots) != 2 || state.Snapshots[0].Mode != "manual" || state.Snapshots[1].Mode != "automatic" {
 		t.Fatalf("timeline: %+v (%v)", state, err)
 	}
+	for _, snapshot := range state.Snapshots {
+		if snapshot.Format != "zip" {
+			t.Fatalf("snapshot format: %q", snapshot.Format)
+		}
+	}
 	path := filepath.Join(t.TempDir(), state.Snapshots[0].Name)
 	j, err = s.StartDownload(owner, id, state.Snapshots[0].DriveID, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitForJob(t, s, id, j.ID)
-	j, err = s.StartRestore(owner, id, "", path, true)
+	j, err = s.StartRestore(owner, id, "", path, "", true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -46,7 +46,7 @@ func New(parent context.Context, store *persistence.Store, manager *databases.Ma
 	if err := sweep(workDir); err != nil {
 		return nil, err
 	}
-	if _, err := store.DB.Exec("UPDATE snapshot_jobs SET status='error',detail='Operação interrompida pelo encerramento do Core' WHERE status='running'"); err != nil {
+	if _, err := store.DB.Exec("UPDATE snapshot_jobs SET status='error',detail='Operação interrompida pelo encerramento do Core',updated_at=? WHERE status='running'", time.Now().UnixNano()); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -206,19 +206,25 @@ func (s *Service) startLocked(owner, id, stage string, prepare func(*sql.Tx) err
 	return initial, nil
 }
 
+const jobNoticeDuration = 20 * time.Second
+
 func (s *Service) jobStatus(id string) (*Job, error) {
-	var status, raw string
-	err := s.store.DB.QueryRow("SELECT status,detail FROM snapshot_jobs WHERE database_id=? ORDER BY updated_at DESC LIMIT 1", id).Scan(&status, &raw)
+	var key, status, raw string
+	var updated int64
+	err := s.store.DB.QueryRow("SELECT id,status,detail,updated_at FROM snapshot_jobs WHERE database_id=? ORDER BY updated_at DESC LIMIT 1", id).Scan(&key, &status, &raw, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if status != "running" && time.Since(time.Unix(0, updated)) >= jobNoticeDuration {
+		return nil, nil
+	}
 	var j Job
 	if json.Unmarshal([]byte(raw), &j) != nil {
 		if status == "error" {
-			return &Job{Status: status, Detail: raw}, nil
+			return &Job{ID: key, Status: status, Detail: raw}, nil
 		}
 		return nil, errors.New("estado de operação inválido")
 	}
@@ -360,6 +366,25 @@ func (s *Service) SaveSchedule(owner, id string, cfg Schedule, confirm bool) err
 	return err
 }
 
+func (s *Service) SetAutomatic(owner, id string, enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.databases.SnapshotDatabase(owner, id); err != nil {
+		return err
+	}
+	cfg, err := s.schedule(id, s.localNow())
+	if err != nil || cfg.Frequency == "manual" || cfg.Paused == !enabled {
+		return err
+	}
+	if enabled {
+		// Do not catch up on slots that elapsed while the schedule was paused.
+		_, err = s.store.DB.Exec("UPDATE snapshot_settings SET paused=0,active_from=? WHERE database_id=?", time.Now().UnixNano(), id)
+	} else {
+		_, err = s.store.DB.Exec("UPDATE snapshot_settings SET paused=1 WHERE database_id=?", id)
+	}
+	return err
+}
+
 func (s *Service) StartBackup(owner, id string) (Job, error) {
 	accountID, err := s.connected()
 	if err != nil {
@@ -388,6 +413,10 @@ func (s *Service) backup(j *job, owner, id, mode, accountID string) error {
 	}
 	defer os.Remove(file.Name())
 	defer file.Close()
+	cfg, err := s.schedule(id, s.localNow())
+	if err != nil {
+		return err
+	}
 	version, err := db.Version()
 	if err == nil {
 		err = db.Dump(file, j.stage)
@@ -403,11 +432,6 @@ func (s *Service) backup(j *job, owner, id, mode, accountID string) error {
 	if err != nil || sum.Size == 0 {
 		return errors.New("o dump gerado está vazio ou não pôde ser verificado")
 	}
-	cfg, err := s.schedule(id, s.localNow())
-	if err != nil {
-		return err
-	}
-
 	folder, err := s.folder(ctx, accountID, db.Instance, true)
 	if err != nil {
 		return err
@@ -448,11 +472,15 @@ func (s *Service) backup(j *job, owner, id, mode, accountID string) error {
 	return nil
 }
 
-func (s *Service) StartRestore(owner, id, driveID, localFile string, confirm bool) (Job, error) {
+func (s *Service) StartRestore(owner, id, driveID, localFile, database string, confirm bool) (Job, error) {
 	if !confirm {
 		return Job{}, errors.New("confirme a restauração dos dados no banco de destino")
 	}
 	db, err := s.databases.SnapshotDatabase(owner, id)
+	if err != nil {
+		return Job{}, err
+	}
+	database, err = databases.SnapshotDatabaseName(db.Engine, database)
 	if err != nil {
 		return Job{}, err
 	}
@@ -471,11 +499,11 @@ func (s *Service) StartRestore(owner, id, driveID, localFile string, confirm boo
 		return Job{}, err
 	}
 	return s.start(owner, id, "Preparando restauração", nil, func(j *job) error {
-		return s.restore(j, owner, db, accountID, driveID, localFile, format)
+		return s.restore(j, owner, db, accountID, driveID, localFile, format, database)
 	})
 }
 
-func (s *Service) restore(j *job, owner string, db databases.Instance, accountID, driveID, localFile, format string) error {
+func (s *Service) restore(j *job, owner string, db databases.Instance, accountID, driveID, localFile, format, database string) error {
 	dest, release, err := s.reserve(j.ctx, owner, db.ID)
 	if err != nil {
 		return err
@@ -511,7 +539,10 @@ func (s *Service) restore(j *job, owner string, db databases.Instance, accountID
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	if err = dest.Restore(file, format, version, driveID != "", j.stage); err != nil {
+	if err = dest.Restore(file, format, version, driveID != "", database, j.stage); err != nil {
+		if errors.Is(err, databases.ErrSnapshotCleanup) {
+			return jobWarning(err.Error())
+		}
 		return fmt.Errorf("restauração no %s: %w", databases.SnapshotEngineName(db.Engine), err)
 	}
 	j.stage("Snapshot restaurado com sucesso")

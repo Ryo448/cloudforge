@@ -23,6 +23,7 @@ type Schedule struct {
 	Days      []int      `json:"days"`
 	Times     []string   `json:"times"`
 	Limit     int        `json:"limit"`
+	Paused    bool       `json:"paused"`
 	Last      *time.Time `json:"last,omitempty"`
 	Next      *time.Time `json:"next,omitempty"`
 }
@@ -35,7 +36,7 @@ func normalizeSchedule(v Schedule) (Schedule, error) {
 	if v.Limit < 1 || v.Limit > 50 {
 		return v, errors.New("informe um limite de 1 a 50 snapshots")
 	}
-	v.Last, v.Next = nil, nil
+	v.Last, v.Next, v.Paused = nil, nil, false
 	switch v.Frequency {
 	case "manual":
 		v.Days, v.Times = []int{}, []string{}
@@ -72,7 +73,8 @@ func (s *Service) schedule(id string, now time.Time) (Schedule, error) {
 	v := defaultSchedule()
 	var raw string
 	var last sql.NullInt64
-	err := s.store.DB.QueryRow("SELECT settings,last_slot FROM snapshot_settings WHERE database_id=?", id).Scan(&raw, &last)
+	var paused bool
+	err := s.store.DB.QueryRow("SELECT settings,last_slot,paused FROM snapshot_settings WHERE database_id=?", id).Scan(&raw, &last, &paused)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, nil
 	}
@@ -82,6 +84,7 @@ func (s *Service) schedule(id string, now time.Time) (Schedule, error) {
 	if err := json.Unmarshal([]byte(raw), &v); err != nil {
 		return v, err
 	}
+	v.Paused = paused
 	if last.Valid {
 		t := time.Unix(last.Int64, 0)
 		v.Last = &t
@@ -94,7 +97,7 @@ func (s *Service) schedule(id string, now time.Time) (Schedule, error) {
 
 // slot walks civil dates. A nonexistent clock time is skipped and a repeated one occurs once.
 func (v Schedule) slot(now time.Time, future bool) (time.Time, bool) {
-	if v.Frequency == "manual" || len(v.Times) == 0 {
+	if v.Paused || v.Frequency == "manual" || len(v.Times) == 0 {
 		return time.Time{}, false
 	}
 	var closest time.Time
@@ -146,7 +149,7 @@ func (s *Service) scheduled(now time.Time) error {
 	if state.Account == nil || !state.Configured || state.Error == errRevoked.Error() {
 		return nil
 	}
-	rows, err := s.store.DB.Query("SELECT h.id,h.owner,s.settings,s.active_from,s.last_slot FROM snapshot_settings s JOIN hosted_databases h ON h.id=s.database_id")
+	rows, err := s.store.DB.Query("SELECT h.id,h.owner,s.settings,s.active_from,s.last_slot FROM snapshot_settings s JOIN hosted_databases h ON h.id=s.database_id WHERE s.paused=0")
 	if err != nil {
 		return err
 	}
@@ -182,7 +185,7 @@ func (s *Service) scheduled(now time.Time) error {
 			continue
 		}
 		_, err := s.start(item.owner, item.id, "Preparando snapshot automático", func(tx *sql.Tx) error {
-			change, err := tx.Exec("UPDATE snapshot_settings SET last_slot=? WHERE database_id=? AND active_from=? AND (last_slot IS NULL OR last_slot < ?)", item.slot, item.id, item.active, item.slot)
+			change, err := tx.Exec("UPDATE snapshot_settings SET last_slot=? WHERE database_id=? AND paused=0 AND active_from=? AND (last_slot IS NULL OR last_slot < ?)", item.slot, item.id, item.active, item.slot)
 			if err != nil {
 				return err
 			}

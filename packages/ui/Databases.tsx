@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -7,7 +8,6 @@ import {
   Cpu,
   Database,
   DatabaseZap,
-  Download,
   HardDrive,
   History,
   KeyRound,
@@ -128,23 +128,81 @@ function CertificateDownload({
   database: Instance;
   request: Request;
 }) {
-  const [loading, setLoading] = useState(false);
+  const [loadingFormat, setLoadingFormat] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [selectedFormat, setSelectedFormat] = useState("pem");
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
-  async function download(format: string) {
+  const formats = [
+    { value: "pem", label: "PEM (.pem)", Icon: PemIcon },
+    { value: "crt", label: "Certificate CA (.crt)", Icon: CaIcon },
+    { value: "key", label: "Private Key (.key)", Icon: PrivateKeyIcon },
+  ];
+
+  useEffect(() => {
+    if (!open) return;
+    function dismissMenu(event: PointerEvent) {
+      const target = event.target as Node;
+      if (
+        !menuRef.current?.contains(target) &&
+        !popupRef.current?.contains(target)
+      )
+        setOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    function closeOnLayoutChange() {
+      setOpen(false);
+    }
+    document.addEventListener("pointerdown", dismissMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("scroll", closeOnLayoutChange, true);
+    window.addEventListener("resize", closeOnLayoutChange);
+    return () => {
+      document.removeEventListener("pointerdown", dismissMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("scroll", closeOnLayoutChange, true);
+      window.removeEventListener("resize", closeOnLayoutChange);
+    };
+  }, [open]);
+
+  async function getFile(format: string) {
     if (
       !database.tlsValidated ||
-      loading ||
+      loadingFormat ||
       !["pem", "crt", "key"].includes(format)
     )
-      return;
-    setLoading(true);
+      return null;
+    setLoadingFormat(format);
     setError("");
+    setCopied(false);
     try {
-      const file = await request<{ filename: string; content: string }>(
+      return await request<{ filename: string; content: string }>(
         "GET",
         `${base}/${database.id}/certificates/${format}`,
       );
+    } catch (e) {
+      setError(displayError(e));
+      return null;
+    } finally {
+      setLoadingFormat(null);
+    }
+  }
+
+  async function download(format: string) {
+    const file = await getFile(format);
+    if (!file) return;
+    try {
       const url = URL.createObjectURL(
         new Blob([file.content], { type: "application/x-pem-file" }),
       );
@@ -155,34 +213,202 @@ function CertificateDownload({
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setOpen(false);
     } catch (e) {
       setError(displayError(e));
-    } finally {
-      setLoading(false);
+    }
+  }
+
+  async function copy(format: string) {
+    const file = await getFile(format);
+    if (!file) return;
+    try {
+      await navigator.clipboard.writeText(file.content);
+      setCopied(true);
+      setOpen(false);
+    } catch (e) {
+      setError(displayError(e));
     }
   }
 
   return (
-    <div className="db-certificate-download">
+    <div className="db-certificate-download" ref={menuRef}>
       <div className="db-certificate-select">
-        <select
-          className="button"
-          aria-label="Baixar certificado"
-          disabled={loading || !database.tlsValidated}
-          value=""
-          onChange={(e) => void download(e.target.value)}
+        <button
+          ref={triggerRef}
+          className="button db-certificate-trigger"
+          type="button"
+          aria-label="Selecionar certificado"
+          aria-haspopup="true"
+          aria-expanded={open}
+          disabled={!!loadingFormat || !database.tlsValidated}
+          onClick={() => {
+            if (open) {
+              setOpen(false);
+              return;
+            }
+            const bounds = triggerRef.current?.getBoundingClientRect();
+            if (!bounds) return;
+            const menuHeight = 125;
+            const openAbove =
+              window.innerHeight - bounds.bottom < menuHeight &&
+              bounds.top > menuHeight;
+            const menuWidth = Math.min(264, window.innerWidth - 24);
+            const left = Math.max(
+              12,
+              Math.min(bounds.right - 252, window.innerWidth - menuWidth - 12),
+            );
+            const top = openAbove
+              ? Math.max(8, bounds.top - menuHeight - 5)
+              : Math.min(
+                  window.innerHeight - menuHeight - 8,
+                  bounds.bottom + 5,
+                );
+            const host = menuRef.current?.closest("dialog, .modal");
+            setPortalTarget(host instanceof HTMLElement ? host : document.body);
+            setMenuPosition({ top, left });
+            setOpen(true);
+          }}
         >
-          <option value="" disabled>
-            {loading ? "Baixando certificado…" : "Baixar certificado"}
-          </option>
-          <option value="pem">PEM (.pem)</option>
-          <option value="crt">Certificate CA (.crt)</option>
-          <option value="key">Private Key (.key)</option>
-        </select>
-        <Download size={16} aria-hidden="true" />
+          <DownloadIcon className="db-certificate-trigger-icon" />
+          {loadingFormat ? "Carregando certificado…" : "Baixar certificado"}
+          <ChevronRight
+            size={15}
+            className={
+              open ? "db-certificate-chevron is-open" : "db-certificate-chevron"
+            }
+            aria-hidden="true"
+          />
+        </button>
+        {open &&
+          portalTarget &&
+          createPortal(
+            <div
+              ref={popupRef}
+              className="db-certificate-menu"
+              style={menuPosition}
+              role="menu"
+              aria-label="Certificados disponíveis"
+            >
+              {formats.map(({ value, label, Icon }) => (
+                <div
+                  className={
+                    selectedFormat === value
+                      ? "db-certificate-option is-selected"
+                      : "db-certificate-option"
+                  }
+                  key={value}
+                >
+                  <button
+                    className="db-certificate-label"
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selectedFormat === value}
+                    disabled={!!loadingFormat}
+                    onClick={() => {
+                      setSelectedFormat(value);
+                      setError("");
+                      setCopied(false);
+                    }}
+                  >
+                    <Icon className="db-certificate-type-icon" />
+                    <span>{label}</span>
+                  </button>
+                  <button
+                    className="db-certificate-icon-button"
+                    type="button"
+                    aria-label={`Baixar ${label}`}
+                    title={`Baixar ${label}`}
+                    disabled={!!loadingFormat || !database.tlsValidated}
+                    onClick={() => void download(value)}
+                  >
+                    <DownloadIcon />
+                  </button>
+                  <button
+                    className="db-certificate-icon-button"
+                    type="button"
+                    aria-label={`Copiar ${label}`}
+                    title={`Copiar ${label}`}
+                    disabled={!!loadingFormat || !database.tlsValidated}
+                    onClick={() => void copy(value)}
+                  >
+                    <CopyIcon />
+                  </button>
+                </div>
+              ))}
+            </div>,
+            portalTarget,
+          )}
       </div>
-      <ErrorMessage error={error} />
+      <div className="db-certificate-feedback" aria-live="polite">
+        <ErrorMessage error={error} />
+        {copied && <span>Conteúdo copiado.</span>}
+      </div>
     </div>
+  );
+}
+
+function CertificateIcon({
+  path,
+  className,
+}: {
+  path: string;
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 256 256"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d={path} />
+    </svg>
+  );
+}
+
+function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <CertificateIcon
+      className={className}
+      path="M240,136v64a16,16,0,0,1-16,16H32a16,16,0,0,1-16-16V136a16,16,0,0,1,16-16H72a8,8,0,0,1,0,16H32v64H224V136H184a8,8,0,0,1,0-16h40A16,16,0,0,1,240,136Zm-117.66-2.34a8,8,0,0,0,11.32,0l48-48a8,8,0,0,0-11.32-11.32L136,108.69V24a8,8,0,0,0-16,0v84.69L85.66,74.34A8,8,0,0,0,74.34,85.66ZM200,168a12,12,0,1,0-12,12A12,12,0,0,0,200,168Z"
+    />
+  );
+}
+
+function CopyIcon({ className }: { className?: string }) {
+  return (
+    <CertificateIcon
+      className={className}
+      path="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"
+    />
+  );
+}
+
+function PemIcon({ className }: { className?: string }) {
+  return (
+    <CertificateIcon
+      className={className}
+      path="M248,128a87.34,87.34,0,0,1-17.6,52.81,8,8,0,1,1-12.8-9.62A71.34,71.34,0,0,0,232,128a72,72,0,0,0-144,0,8,8,0,0,1-16,0,88,88,0,0,1,3.29-23.88C74.2,104,73.1,104,72,104a48,48,0,0,0,0,96H96a8,8,0,0,1,0,16H72A64,64,0,1,1,81.29,88.68,88,88,0,0,1,248,128Zm-69.66,42.34L160,188.69V128a8,8,0,0,0-16,0v60.69l-18.34-18.35a8,8,0,0,0-11.32,11.32l32,32a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32Z"
+    />
+  );
+}
+
+function CaIcon({ className }: { className?: string }) {
+  return (
+    <CertificateIcon
+      className={className}
+      path="M128,136a8,8,0,0,1-8,8H72a8,8,0,0,1,0-16h48A8,8,0,0,1,128,136Zm-8-40H72a8,8,0,0,0,0,16h48a8,8,0,0,0,0-16Zm112,65.47V224A8,8,0,0,1,220,231l-24-13.74L172,231A8,8,0,0,1,160,224V200H40a16,16,0,0,1-16-16V56A16,16,0,0,1,40,40H216a16,16,0,0,1,16,16V86.53a51.88,51.88,0,0,1,0,74.94ZM160,184V161.47A52,52,0,0,1,216,76V56H40V184Zm56-12a51.88,51.88,0,0,1-40,0v38.22l16-9.16a8,8,0,0,1,7.94,0l16,9.16Zm16-48a36,36,0,1,0-36,36A36,36,0,0,0,232,124Z"
+    />
+  );
+}
+
+function PrivateKeyIcon({ className }: { className?: string }) {
+  return (
+    <CertificateIcon
+      className={className}
+      path="M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM224,98.1c-1.09,34.09-29.75,61.86-63.89,61.9H160a63.7,63.7,0,0,1-23.65-4.51,8,8,0,0,0-8.84,1.68L116.69,168H96a8,8,0,0,0-8,8v16H72a8,8,0,0,0-8,8v16H40V187.31l58.83-58.82a8,8,0,0,0,1.68-8.84A63.72,63.72,0,0,1,96,95.92c0-34.14,27.81-62.8,61.9-63.89A64,64,0,0,1,224,98.1ZM192,76a12,12,0,1,1-12-12,12,12,0,0,1,12,12Z"
+    />
   );
 }
 function networkBytes(value?: number) {
@@ -1145,6 +1371,7 @@ export function Databases({
               }
               onClose={() => setConfirm(undefined)}
               closeDisabled={!!busy}
+              className="database-rotation-modal"
             >
               <p className="muted">
                 {confirm === "certificate"

@@ -226,12 +226,37 @@
   justify-content: flex-end;
 }
 
+.snapshots-destination {
+  display: grid;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 6px;
+}
+
 .modal.snapshots-settings-modal {
   width: min(536px, calc(100% - 36px));
 }
 
 .snapshots-settings-modal .snapshots-settings {
   margin-top: 0;
+}
+
+.snapshots-automatic {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+}
+
+.snapshots-automatic > div {
+  flex: 1 1 220px;
+}
+
+.snapshots-automatic small {
+  display: block;
 }
 
 .snapshots-settings fieldset {

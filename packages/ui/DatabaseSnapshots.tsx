@@ -25,6 +25,7 @@ type Schedule = {
   days: number[];
   times: string[];
   limit: number;
+  paused: boolean;
   last?: string;
   next?: string;
 };
@@ -38,6 +39,7 @@ type DriveSnapshot = {
   size: number;
   name: string;
   version: string;
+  postgresDatabase?: string;
   machine: string;
 };
 type SnapshotState = {
@@ -54,7 +56,11 @@ type RestoreChoice =
 
 export type SnapshotDesktop = {
   pickSnapshot: (id: string, engine: string) => Promise<ChosenFile | null>;
-  importSnapshot: (id: string, token: string) => Promise<Job>;
+  importSnapshot: (
+    id: string,
+    token: string,
+    postgresDatabase?: string,
+  ) => Promise<Job>;
   downloadSnapshot: (
     id: string,
     driveId: string,
@@ -68,6 +74,7 @@ const dateTime = new Intl.DateTimeFormat("pt-BR", {
   timeStyle: "short",
 });
 const showDate = (value: string) => dateTime.format(new Date(value));
+const automaticAction = "Atualizando snapshots automáticos";
 const errorText = (err: unknown) =>
   err instanceof Error
     ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, "")
@@ -93,10 +100,12 @@ export function DatabaseSnapshots({
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState("");
+  const [statusError, setStatusError] = useState("");
   const [action, setAction] = useState("");
   const [settings, setSettings] = useState<Schedule>();
   const [recoverable, setRecoverable] = useState<DriveSnapshot[]>();
   const [choice, setChoice] = useState<RestoreChoice>();
+  const [restoreDatabase, setRestoreDatabase] = useState("");
   const [confirmLimit, setConfirmLimit] = useState(false);
   const running = summary?.job?.status === "running";
   const connected =
@@ -106,8 +115,20 @@ export function DatabaseSnapshots({
     !summary.drive.pending;
   const busy = !!action || running;
   const online = database.state === "running";
+  const postgres = database.engine === "postgresql";
+  const postgresInstance =
+    postgres &&
+    (choice?.file?.name || choice?.snapshot?.name)
+      ?.toLowerCase()
+      .endsWith(".zip");
+  const choosePostgresDatabase = postgres && !postgresInstance;
   const terminalJob = running ? "" : summary?.job?.id;
   const accountKey = summary?.drive.account?.id || "";
+  const configuredSchedule = summary?.schedule;
+  const automaticEnabled =
+    !!configuredSchedule &&
+    configuredSchedule.frequency !== "manual" &&
+    !configuredSchedule.paused;
 
   useEffect(() => {
     let active = true;
@@ -117,9 +138,12 @@ export function DatabaseSnapshots({
       querying = true;
       try {
         const data = await request<SnapshotState>("GET", route + "/status");
-        if (active) setSummary(data);
+        if (active) {
+          setSummary(data);
+          setStatusError("");
+        }
       } catch (err) {
-        if (active) setError(errorText(err));
+        if (active) setStatusError(errorText(err));
       } finally {
         querying = false;
       }
@@ -131,6 +155,10 @@ export function DatabaseSnapshots({
       window.clearInterval(timer);
     };
   }, [route, request]);
+
+  useEffect(() => {
+    if (terminalJob) setRefresh((value) => value + 1);
+  }, [terminalJob]);
 
   useEffect(() => {
     let active = true;
@@ -157,7 +185,7 @@ export function DatabaseSnapshots({
     return () => {
       active = false;
     };
-  }, [accountKey, refresh, route, request, terminalJob]);
+  }, [accountKey, refresh, route, request]);
 
   const run = useCallback(
     async (label: string, operation: () => Promise<void>) => {
@@ -196,14 +224,34 @@ export function DatabaseSnapshots({
     });
   }
 
+  function toggleAutomatic() {
+    const enabled = !automaticEnabled;
+    void run(automaticAction, async () => {
+      await request("PUT", route + "/automatic", { enabled });
+      setSummary(await request<SnapshotState>("GET", route + "/status"));
+    });
+  }
+
+  function chooseRestore(next: RestoreChoice) {
+    setRestoreDatabase(next.snapshot?.postgresDatabase || "cloudforge");
+    setChoice(next);
+  }
+
   function startRestore() {
     if (!choice) return;
     void run("Preparando restauração", async () => {
       showJob(
         choice.file
-          ? await desktop.importSnapshot(database.id, choice.file.token)
+          ? await desktop.importSnapshot(
+              database.id,
+              choice.file.token,
+              choosePostgresDatabase ? restoreDatabase : undefined,
+            )
           : await request<Job>("POST", route + "/restore", {
               driveId: choice.snapshot.driveId,
+              postgresDatabase: choosePostgresDatabase
+                ? restoreDatabase
+                : undefined,
               confirm: true,
             }),
       );
@@ -226,7 +274,10 @@ export function DatabaseSnapshots({
             type="button"
             className="button"
             disabled={!summary || busy}
-            onClick={() => setSettings(summary?.schedule)}
+            onClick={() => {
+              setError("");
+              setSettings(configuredSchedule);
+            }}
           >
             <Settings2 size={15} /> Configurações
           </button>
@@ -272,24 +323,34 @@ export function DatabaseSnapshots({
           <CalendarClock size={19} aria-hidden="true" />
           <div>
             <strong>
-              {summary?.schedule.frequency === "daily"
-                ? "Snapshots automáticos diários"
-                : summary?.schedule.frequency === "weekly"
-                  ? "Snapshots automáticos semanais"
-                  : "Snapshots automáticos desativados"}
+              {!configuredSchedule
+                ? "Verificando agendamento…"
+                : !automaticEnabled
+                  ? "Snapshots automáticos desativados"
+                  : configuredSchedule.frequency === "daily"
+                    ? "Snapshots automáticos diários"
+                    : "Snapshots automáticos semanais"}
             </strong>
             <p>
-              {summary && summary.schedule.frequency !== "manual" && !connected
-                ? "Aguardando uma conta Google Drive."
-                : summary?.schedule.next
-                  ? "Próxima execução " + showDate(summary.schedule.next)
-                  : "Os horários de execução seguem o fuso do computador."}
-              {summary?.schedule.last && (
+              {configuredSchedule &&
+                (!automaticEnabled
+                  ? "Você ainda pode realizar snapshots manuais."
+                  : !connected
+                    ? "Aguardando uma conta Google Drive."
+                    : configuredSchedule.next
+                      ? "Próxima execução " + showDate(configuredSchedule.next)
+                      : "Os horários de execução seguem o fuso do computador.")}
+              {configuredSchedule?.last && (
                 <span className="snapshots-last">
-                  Última execução programada {showDate(summary.schedule.last)}
+                  Última execução programada {showDate(configuredSchedule.last)}
                 </span>
               )}
             </p>
+            {postgres && summary && (
+              <p>
+                O snapshot inclui todos os bancos de aplicação da instância.
+              </p>
+            )}
           </div>
           <span className="snapshots-count">
             {connected && !loading && !listError
@@ -300,7 +361,7 @@ export function DatabaseSnapshots({
         </div>
       </div>
 
-      <ErrorMessage error={error} />
+      <ErrorMessage error={error || statusError} />
       {(summary?.job || action) && (
         <div
           className={"notice snapshots-job " + (summary?.job?.status || "")}
@@ -346,7 +407,7 @@ export function DatabaseSnapshots({
                   database.id,
                   database.engine,
                 );
-                if (file) setChoice({ file });
+                if (file) chooseRestore({ file });
               })
             }
           >
@@ -400,6 +461,9 @@ export function DatabaseSnapshots({
                   <span>{bytes(snapshot.size)}</span>
                   <span>
                     {engineName} {snapshot.version}
+                    {snapshot.postgresDatabase && (
+                      <> · {snapshot.postgresDatabase}</>
+                    )}
                   </span>
                 </div>
                 <code title={snapshot.id}>{snapshot.id}</code>
@@ -408,7 +472,7 @@ export function DatabaseSnapshots({
                 <button
                   className="button"
                   disabled={!online || busy}
-                  onClick={() => setChoice({ snapshot })}
+                  onClick={() => chooseRestore({ snapshot })}
                 >
                   <RotateCcw size={15} /> Restaurar
                 </button>
@@ -446,6 +510,13 @@ export function DatabaseSnapshots({
             value={settings}
             change={setSettings}
             onSubmit={saveSettings}
+            automaticEnabled={
+              configuredSchedule?.frequency !== "manual"
+                ? automaticEnabled
+                : undefined
+            }
+            onToggleAutomatic={toggleAutomatic}
+            toggling={action === automaticAction}
             cancel={() => setSettings(undefined)}
             busy={!!action}
             error={error}
@@ -506,6 +577,9 @@ export function DatabaseSnapshots({
                       </strong>
                       <p>
                         {snapshot.machine} · {engineName} {snapshot.version}
+                        {snapshot.postgresDatabase && (
+                          <> · {snapshot.postgresDatabase}</>
+                        )}
                       </p>
                       <code title={snapshot.databaseId}>
                         {snapshot.databaseId}
@@ -514,7 +588,7 @@ export function DatabaseSnapshots({
                     <button
                       className="button"
                       disabled={!online || busy}
-                      onClick={() => setChoice({ snapshot })}
+                      onClick={() => chooseRestore({ snapshot })}
                     >
                       Selecionar
                     </button>
@@ -545,14 +619,27 @@ export function DatabaseSnapshots({
                   </dd>
                 </>
               )}
-              <dt>Banco de destino</dt>
+              <dt>{postgres ? "Instância de destino" : "Banco de destino"}</dt>
               <dd>
                 {database.name} · {engineName}
               </dd>
             </dl>
+            {choosePostgresDatabase && (
+              <label className="snapshots-destination">
+                Banco PostgreSQL de destino
+                <input
+                  value={restoreDatabase}
+                  onChange={(event) => setRestoreDatabase(event.target.value)}
+                  maxLength={63}
+                  disabled={busy}
+                  required
+                />
+              </label>
+            )}
             <p className="snapshots-danger">
-              A restauração pode substituir objetos e dados existentes. Objetos
-              ausentes do backup podem permanecer no destino.
+              {postgresInstance
+                ? "Cada banco incluído no snapshot será recriado com seu nome original. Bancos de mesmo nome serão substituídos. Encerre as conexões com esses bancos antes de restaurar."
+                : "A restauração pode substituir objetos e dados existentes. Objetos ausentes do backup podem permanecer no destino."}
               {database.engine !== "postgresql" &&
                 " Se a operação falhar, algumas alterações podem permanecer."}
               {choice.file &&
@@ -569,7 +656,11 @@ export function DatabaseSnapshots({
               </button>
               <button
                 className="button danger"
-                disabled={busy || !online}
+                disabled={
+                  busy ||
+                  !online ||
+                  (choosePostgresDatabase && !restoreDatabase)
+                }
                 onClick={() => {
                   startRestore();
                   setRecoverable(undefined);
@@ -589,6 +680,9 @@ function ScheduleForm({
   value,
   change,
   onSubmit,
+  automaticEnabled,
+  onToggleAutomatic,
+  toggling,
   cancel,
   busy,
   error,
@@ -596,6 +690,9 @@ function ScheduleForm({
   value: Schedule;
   change: (next: Schedule) => void;
   onSubmit: (event: FormEvent) => void;
+  automaticEnabled?: boolean;
+  onToggleAutomatic: () => void;
+  toggling: boolean;
   cancel: () => void;
   busy: boolean;
   error: string;
@@ -615,6 +712,28 @@ function ScheduleForm({
 
   return (
     <form className="snapshots-settings" onSubmit={onSubmit}>
+      {automaticEnabled !== undefined && (
+        <div className="snapshots-automatic">
+          <div>
+            <strong>Snapshots automáticos</strong>
+            <small role="status">
+              {automaticEnabled ? "Ativados" : "Desativados"}. Seus horários
+              ficam salvos e os snapshots manuais continuam disponíveis.
+            </small>
+          </div>
+          <button
+            type="button"
+            className="button"
+            onClick={onToggleAutomatic}
+            disabled={busy}
+          >
+            {toggling && <Spinner />}
+            {automaticEnabled
+              ? "Desativar automáticos"
+              : "Reativar automáticos"}
+          </button>
+        </div>
+      )}
       <fieldset className="snapshots-settings-fields" disabled={busy}>
         <div className="snapshots-frequency">
           <label>
@@ -725,8 +844,10 @@ function ScheduleForm({
           Cancelar
         </button>
         <button type="submit" className="button primary" disabled={busy}>
-          {busy && <Spinner />}
-          {busy ? "Salvando configurações…" : "Salvar configurações"}
+          {busy && !toggling && <Spinner />}
+          {busy && !toggling
+            ? "Salvando configurações…"
+            : "Salvar configurações"}
         </button>
       </div>
     </form>

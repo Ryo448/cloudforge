@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 var snapshotEngineNames = map[string]string{
@@ -98,7 +99,29 @@ func (d *SnapshotDatabase) Version() (string, error) {
 }
 
 func SnapshotFormat(engine string) string {
-	return map[string]string{"postgresql": "dump", "mysql": "sql.gz", "mongodb": "archive.gz", "redis": "rdb"}[engine]
+	return map[string]string{"postgresql": "zip", "mysql": "sql.gz", "mongodb": "archive.gz", "redis": "rdb"}[engine]
+}
+
+func SnapshotDatabaseName(engine, name string) (string, error) {
+	if engine != "postgresql" {
+		if name != "" {
+			return "", errors.New("a seleção de banco se aplica somente ao PostgreSQL")
+		}
+		return "", nil
+	}
+	if name == "" {
+		return DatabaseName, nil
+	}
+	if len(name) > 63 || !utf8.ValidString(name) || strings.ContainsRune(name, 0) {
+		return "", errors.New("nome do banco PostgreSQL inválido")
+	}
+	return name, nil
+}
+
+func postgresSnapshotDSN(name string) string {
+	// libpq treats bare names containing '=' or starting with a URI prefix as
+	// connection strings. Quote the name as the value of a single parameter.
+	return "dbname='" + strings.NewReplacer(`\`, `\\`, "'", `\'`).Replace(name) + "'"
 }
 
 func (d *SnapshotDatabase) Dump(out io.Writer, progress func(string)) error {
@@ -106,8 +129,7 @@ func (d *SnapshotDatabase) Dump(out io.Writer, progress func(string)) error {
 	input := strings.NewReader(d.secret.Admin + "\n")
 	switch d.Engine {
 	case "postgresql":
-		return d.exec(input, out, "/bin/sh", "-ec", pgAdmin+
-			"exec pg_dump -w -U cfadmin -d cloudforge --format=custom")
+		return d.dumpPostgresInstance(out, progress)
 	case "mysql":
 		progress("Gerando e compactando backup")
 		compressed := gzip.NewWriter(out)
@@ -130,8 +152,49 @@ const mysqlAdmin = "IFS= read -r MYSQL_PWD; export MYSQL_PWD\n"
 const mongoAdmin = "IFS= read -r password\n"
 const redisAdmin = "IFS= read -r REDISCLI_AUTH; export REDISCLI_AUTH\n"
 
-func (d *SnapshotDatabase) Restore(file *os.File, format, sourceVersion string, remote bool, progress func(string)) error {
+var pgArchiveEntry = regexp.MustCompile(`^\d+; +\d+ +\d+ +(.+)$`)
+var pgDefaultSchema = regexp.MustCompile(`^\d+; +2615 +2200 +SCHEMA - public(?: |$)`)
+
+func hasPostgresSnapshotObjects(listing string) bool {
+	for _, line := range strings.Split(listing, "\n") {
+		match := pgArchiveEntry.FindStringSubmatch(line)
+		if match == nil || pgDefaultSchema.MatchString(line) {
+			continue
+		}
+		entry := match[1]
+		switch {
+		case strings.HasPrefix(entry, "DATABASE "),
+			strings.HasPrefix(entry, "DATABASE PROPERTIES "),
+			strings.HasPrefix(entry, "COMMENT - DATABASE "),
+			strings.HasPrefix(entry, "SECURITY LABEL - DATABASE "),
+			strings.HasPrefix(entry, "ACL "), strings.HasPrefix(entry, "DEFAULT ACL "):
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func (d *SnapshotDatabase) validatePostgresArchive(reader io.Reader, version string) error {
+	var listing bytes.Buffer
+	if err := d.exec(reader, &listing, "pg_restore", "--list"); err != nil {
+		return errors.New("arquivo PostgreSQL corrompido ou gerado por uma versão incompatível")
+	}
+	if !compatibleDumpHeader(d.Engine, listing.String(), version) {
+		return errors.New("o backup foi gerado por uma versão mais recente do PostgreSQL")
+	}
+	if !hasPostgresSnapshotObjects(listing.String()) {
+		return errors.New("o backup PostgreSQL não contém objetos restauráveis. Gere outro backup a partir do banco que contém os dados")
+	}
+	return nil
+}
+
+func (d *SnapshotDatabase) Restore(file *os.File, format, sourceVersion string, remote bool, database string, progress func(string)) error {
 	progress("Validando backup")
+	database, err := SnapshotDatabaseName(d.Engine, database)
+	if err != nil {
+		return err
+	}
 	version, err := d.Version()
 	if err != nil {
 		return err
@@ -141,6 +204,9 @@ func (d *SnapshotDatabase) Restore(file *os.File, format, sourceVersion string, 
 	}
 	if !supportsSnapshotFormat(d.Engine, format) {
 		return errors.New("formato incompatível com o banco de destino")
+	}
+	if d.Engine == "postgresql" && format == "zip" {
+		return d.restorePostgresInstance(file, progress)
 	}
 	var contents io.Reader = file
 	if strings.HasSuffix(format, ".gz") {
@@ -162,13 +228,8 @@ func (d *SnapshotDatabase) Restore(file *os.File, format, sourceVersion string, 
 			if !bytes.HasPrefix(head, []byte("PGDMP")) {
 				return errors.New("arquivo fora do formato customizado do PostgreSQL")
 			}
-			// Validate the archive header and TOC without applying SQL.
-			var listing bytes.Buffer
-			if err := d.exec(reader, &listing, "pg_restore", "--list"); err != nil {
-				return errors.New("arquivo PostgreSQL corrompido ou gerado por uma versão incompatível")
-			}
-			if !compatibleDumpHeader(d.Engine, listing.String(), version) {
-				return errors.New("o backup foi gerado por uma versão mais recente do PostgreSQL")
+			if err := d.validatePostgresArchive(reader, version); err != nil {
+				return err
 			}
 			if _, err := file.Seek(0, io.SeekStart); err != nil {
 				return err
@@ -214,8 +275,7 @@ func (d *SnapshotDatabase) Restore(file *os.File, format, sourceVersion string, 
 	switch d.Engine {
 	case "postgresql":
 		if format == "dump" {
-			return d.exec(passwordInput, io.Discard, "/bin/sh", "-ec", pgClient+
-				"exec pg_restore -w -h 127.0.0.1 -U cloudforge -d cloudforge --clean --if-exists --no-owner --no-privileges --single-transaction --exit-on-error")
+			return d.restorePostgresDump(reader, database, true)
 		}
 		safeSQL, err := restrictedSQL(reader)
 		if err != nil {
@@ -223,7 +283,8 @@ func (d *SnapshotDatabase) Restore(file *os.File, format, sourceVersion string, 
 		}
 		defer safeSQL.Close()
 		return d.exec(io.MultiReader(strings.NewReader(d.secret.Password+"\n"), safeSQL), io.Discard, "/bin/sh", "-ec", pgClient+
-			"exec psql -X -w -h 127.0.0.1 -U cloudforge -d cloudforge -v ON_ERROR_STOP=1 --single-transaction -f -")
+			"exec psql -X -w -h 127.0.0.1 -U cloudforge -d \"$1\" -v ON_ERROR_STOP=1 --single-transaction -f -",
+			"restore", postgresSnapshotDSN(database))
 	case "mysql":
 		// The app account can only change data in cloudforge.
 		return d.exec(passwordInput, io.Discard, "/bin/sh", "-ec", mysqlAdmin+
@@ -257,11 +318,15 @@ func (d *SnapshotDatabase) validateMongo(file *os.File) error {
 }
 
 func supportsSnapshotFormat(engine, format string) bool {
-	return SnapshotFormat(engine) == format || (format == "sql" && (engine == "mysql" || engine == "postgresql"))
+	return StoredSnapshotFormat(engine, format) || (format == "sql" && (engine == "mysql" || engine == "postgresql"))
+}
+
+func StoredSnapshotFormat(engine, format string) bool {
+	return format != "" && (SnapshotFormat(engine) == format || (engine == "postgresql" && format == "dump"))
 }
 
 func SnapshotImportFormat(engine, filename string) (string, error) {
-	for _, format := range []string{"dump", "sql", "sql.gz", "archive.gz", "rdb"} {
+	for _, format := range []string{"zip", "dump", "sql", "sql.gz", "archive.gz", "rdb"} {
 		if strings.HasSuffix(strings.ToLower(filename), "."+format) && supportsSnapshotFormat(engine, format) {
 			return format, nil
 		}
@@ -302,6 +367,9 @@ func compatibleDumpHeader(engine, text, target string) bool {
 func validateSQL(reader *bufio.Reader, engine, version string) error {
 	header, _ := reader.Peek(16 * 1024)
 	text := strings.TrimSpace(strings.TrimPrefix(string(header), "\ufeff"))
+	if engine == "postgresql" && strings.Contains(text, "-- PostgreSQL database cluster dump") {
+		return errors.New("este SQL é um dump de instância. Exporte somente o banco desejado com pg_dump")
+	}
 	if strings.HasPrefix(text, "PGDMP") || strings.ContainsRune(text, 0) ||
 		(engine == "mysql" && strings.Contains(text, "PostgreSQL database dump")) ||
 		(engine == "postgresql" && strings.Contains(text, "MySQL dump")) {

@@ -29,7 +29,7 @@ func TestSnapshotCompatibility(t *testing.T) {
 		engine, name string
 		valid        bool
 	}{
-		{"postgresql", "example.dump", true}, {"postgresql", "example.SQL", true},
+		{"postgresql", "example.dump", true}, {"postgresql", "example.SQL", true}, {"postgresql", "example.zip", true},
 		{"mysql", "example.sql.gz", true}, {"mysql", "example.dump", false},
 		{"mongodb", "example.archive.gz", true}, {"redis", "example.rdb", true},
 	} {
@@ -57,6 +57,91 @@ func TestRestrictedSQLPreservesLargeLines(t *testing.T) {
 	text := string(data)
 	if !strings.HasPrefix(text, "\\restrict ") || strings.Contains(text, "OriginalKey") || !strings.Contains(text, line) {
 		t.Fatal("the SQL wrapper lost data or preserved the original restriction key")
+	}
+}
+
+func TestPostgresSnapshotArchiveObjects(t *testing.T) {
+	empty := ";     TOC Entries: 5\n; Selected TOC Entries:\n5; 2615 2200 SCHEMA - public cloudforge\n"
+	if hasPostgresSnapshotObjects(empty) {
+		t.Fatal("the default public schema was counted as a restorable object")
+	}
+	for _, entry := range []string{
+		"6; 2615 16401 SCHEMA - app cloudforge",
+		"7; 1259 16402 TABLE public accounts cloudforge",
+		"8; 0 16402 TABLE DATA public accounts cloudforge",
+	} {
+		if !hasPostgresSnapshotObjects(empty + entry + "\n") {
+			t.Fatalf("restorable entry was ignored: %s", entry)
+		}
+	}
+}
+
+func TestPostgresSnapshotInstanceDocker(t *testing.T) {
+	if os.Getenv("CLOUDFORGE_SNAPSHOT_DOCKER_TEST") != "1" {
+		t.Skip("requires local Docker and the Cloudforge PostgreSQL image")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
+	defer cancel()
+	m := testManager(t)
+	source := disposableSnapshotDB(t, ctx, m, "Origem snapshot instância", "postgresql")
+	target := disposableSnapshotDB(t, ctx, m, "Destino snapshot instância", "postgresql")
+	admin := func(db *SnapshotDatabase, database, statement string) string {
+		t.Helper()
+		var out bytes.Buffer
+		if err := db.exec(strings.NewReader(db.secret.Admin+"\n"+statement), &out,
+			"/bin/sh", "-ec", pgAdmin+"exec psql -X -w -U cfadmin -d \"$1\" -Atq -v ON_ERROR_STOP=1",
+			"setup", postgresSnapshotDSN(database)); err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(out.String())
+	}
+	admin(source, DatabaseName, `CREATE DATABASE "NCT" OWNER cloudforge TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C';`)
+	admin(source, "NCT", `CREATE TABLE usuarios(value text); INSERT INTO usuarios VALUES ('snapshot NCT');`)
+	admin(target, DatabaseName, `CREATE TABLE stale(value text);`)
+	archive, err := os.Create(filepath.Join(t.TempDir(), "snapshot.zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+	trace := func(stage string) { t.Log(stage) }
+	if err := source.Dump(archive, trace); err != nil {
+		t.Fatal(err)
+	}
+	manifest, entries, err := readPostgresSnapshot(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Databases) != 2 || manifest.Databases[0].Name != "NCT" || manifest.Databases[1].Name != "cloudforge" {
+		t.Fatalf("snapshot databases: %+v", manifest.Databases)
+	}
+	if err := target.Restore(archive, "zip", "", false, "", trace); err != nil {
+		t.Fatal(err)
+	}
+	if got := admin(target, "NCT", "SET ROLE cloudforge; SELECT value FROM usuarios;"); got != "snapshot NCT" {
+		t.Fatalf("restored row: %q", got)
+	}
+	if got := admin(target, "NCT", "SELECT datcollate FROM pg_catalog.pg_database WHERE datname = current_database();"); got != "C" {
+		t.Fatalf("restored collation: %q", got)
+	}
+	if got := admin(target, DatabaseName, "SELECT to_regclass('stale') IS NULL;"); got != "t" {
+		t.Fatalf("empty database was not restored: %q", got)
+	}
+	admin(target, "NCT", "UPDATE usuarios SET value='destino';")
+	offset, err := entries[postgresDumpEntry(1)].DataOffset()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := archive.WriteAt([]byte{0}, offset); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.Restore(archive, "zip", "", false, "", trace); err == nil {
+		t.Fatal("the corrupted second database was accepted")
+	}
+	if got := admin(target, "NCT", "SELECT value FROM usuarios;"); got != "destino" {
+		t.Fatalf("first database changed after restore failed: %q", got)
+	}
+	if got := admin(target, DatabaseName, "SELECT count(*) FROM pg_database WHERE datname LIKE 'cf_snapshot_%';"); got != "0" {
+		t.Fatalf("restore left temporary databases: %s", got)
 	}
 }
 
@@ -93,13 +178,13 @@ func TestSnapshotDockerRoundTrip(t *testing.T) {
 			if _, err = file.Seek(0, io.SeekStart); err != nil {
 				t.Fatal(err)
 			}
-			if err = source.Restore(file, SnapshotFormat(engine), version, true, func(s string) { t.Log(s) }); err != nil {
+			if err = source.Restore(file, SnapshotFormat(engine), version, true, "", func(s string) { t.Log(s) }); err != nil {
 				t.Fatal(err)
 			}
 			if _, err = file.Seek(0, io.SeekStart); err != nil {
 				t.Fatal(err)
 			}
-			if err = target.Restore(file, SnapshotFormat(engine), version, false, func(s string) { t.Log(s) }); err != nil {
+			if err = target.Restore(file, SnapshotFormat(engine), version, false, "", func(s string) { t.Log(s) }); err != nil {
 				t.Fatal(err)
 			}
 			if got := snapshotSample(t, source, "read"); got != "cloudforge-snapshot" {
@@ -109,6 +194,24 @@ func TestSnapshotDockerRoundTrip(t *testing.T) {
 				t.Fatalf("destino: %q", got)
 			}
 			if engine == "postgresql" {
+				legacy, err := os.Create(filepath.Join(t.TempDir(), "legacy.dump"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer legacy.Close()
+				if err := source.dumpPostgresDatabase(legacy, DatabaseName); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := legacy.Seek(0, io.SeekStart); err != nil {
+					t.Fatal(err)
+				}
+				snapshotSample(t, target, "change")
+				if err := target.Restore(legacy, "dump", "", false, DatabaseName, func(s string) { t.Log(s) }); err != nil {
+					t.Fatal(err)
+				}
+				if got := snapshotSample(t, target, "read"); got != "cloudforge-snapshot" {
+					t.Fatalf("legacy dump: %q", got)
+				}
 				sql, err := os.Create(filepath.Join(t.TempDir(), "plain.sql"))
 				if err != nil {
 					t.Fatal(err)
@@ -120,7 +223,7 @@ func TestSnapshotDockerRoundTrip(t *testing.T) {
 				if _, err = sql.Seek(0, io.SeekStart); err != nil {
 					t.Fatal(err)
 				}
-				if err = target.Restore(sql, "sql", "", false, func(s string) { t.Log(s) }); err != nil {
+				if err = target.Restore(sql, "sql", "", false, "", func(s string) { t.Log(s) }); err != nil {
 					t.Fatal(err)
 				}
 				if got := snapshotSample(t, target, "read"); got != "cloudforge-snapshot" {

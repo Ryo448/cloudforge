@@ -1,0 +1,1 @@
+ALTER TABLE snapshot_settings ADD COLUMN paused INTEGER NOT NULL DEFAULT 0;
