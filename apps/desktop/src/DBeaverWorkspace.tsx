@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, DatabaseZap, RefreshCw } from "lucide-react";
+import {
+  ArrowUpRight,
+  DatabaseZap,
+  ExternalLink,
+  RefreshCw,
+} from "lucide-react";
 import { ErrorMessage, Spinner } from "../../../packages/ui";
 import type { DBeaverDatabase } from "../../../packages/ui/Databases";
 import { message } from "./api";
@@ -7,8 +12,13 @@ import "./dbeaver-workspace.css";
 
 export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
   const slot = useRef<HTMLDivElement>(null);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const sessionRef = useRef<string | null>(null);
+  const [state, setState] = useState<
+    "loading" | "ready" | "detached" | "error"
+  >("loading");
   const [error, setError] = useState("");
+  const [detachError, setDetachError] = useState("");
+  const [detaching, setDetaching] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const supported =
     database.engine === "postgresql" || database.engine === "mysql";
@@ -18,6 +28,7 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
     if (!supported || !online || !slot.current) return;
     const element = slot.current;
     const session = crypto.randomUUID();
+    sessionRef.current = session;
     let active = true;
     let requested = false;
     const layout = () => {
@@ -34,15 +45,17 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
     };
     const observer = new ResizeObserver(layout);
     observer.observe(element);
+    if (element.parentElement) observer.observe(element.parentElement);
     window.addEventListener("resize", layout);
     window.addEventListener("scroll", layout, true);
     setState("loading");
     setError("");
+    setDetachError("");
     const start = window.setTimeout(() => {
       requested = true;
       void window.cloudforge.openDBeaver(session, database.id).then(
-        () => {
-          if (active) setState("ready");
+        (result) => {
+          if (active) setState(result);
         },
         (reason: unknown) => {
           if (!active) return;
@@ -54,6 +67,7 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
     }, 0);
     return () => {
       active = false;
+      if (sessionRef.current === session) sessionRef.current = null;
       window.clearTimeout(start);
       observer.disconnect();
       window.removeEventListener("resize", layout);
@@ -62,6 +76,28 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
     };
   }, [attempt, database.id, online, supported]);
 
+  useEffect(() => {
+    if (state !== "detached") return;
+    return window.cloudforge.onDBeaverDetachedClosed((id) => {
+      if (id === database.id) setAttempt((value) => value + 1);
+    });
+  }, [database.id, state]);
+
+  const detach = async () => {
+    const session = sessionRef.current;
+    if (!session || detaching) return;
+    setDetaching(true);
+    setDetachError("");
+    try {
+      await window.cloudforge.detachDBeaver(session, database.name);
+      setState("detached");
+    } catch (reason) {
+      setDetachError(message(reason));
+    } finally {
+      setDetaching(false);
+    }
+  };
+
   return (
     <section className="dbeaver-workspace" aria-labelledby="dbeaver-heading">
       <header className="dbeaver-heading">
@@ -69,17 +105,30 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
           <h1 id="dbeaver-heading">DBeaver</h1>
           <p className="muted">{database.name}</p>
         </div>
-        <button
-          className="button"
-          onClick={() =>
-            void window.cloudforge.openExternal(
-              "https://github.com/dbeaver/dbeaver",
-            )
-          }
-        >
-          DBeaver Corp e colaboradores <ArrowUpRight size={14} />
-        </button>
+        <div className="dbeaver-heading-actions">
+          {state === "ready" && (
+            <button
+              className="button"
+              onClick={() => void detach()}
+              disabled={detaching}
+            >
+              <ExternalLink size={15} />{" "}
+              {detaching ? "Abrindo janela…" : "Abrir em janela"}
+            </button>
+          )}
+          <button
+            className="button"
+            onClick={() =>
+              void window.cloudforge.openExternal(
+                "https://github.com/dbeaver/dbeaver",
+              )
+            }
+          >
+            DBeaver Corp e colaboradores <ArrowUpRight size={14} />
+          </button>
+        </div>
       </header>
+      {detachError && <ErrorMessage error={detachError} />}
       <div
         className="dbeaver-slot"
         ref={slot}
@@ -101,6 +150,23 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
                 <p>
                   Inicie o banco e aguarde a validação do TLS para conectar.
                 </p>
+              </>
+            ) : state === "detached" ? (
+              <>
+                <ExternalLink size={23} />
+                <p>O DBeaver deste banco está aberto em uma janela separada.</p>
+                <button
+                  className="button"
+                  onClick={() => {
+                    const session = sessionRef.current;
+                    if (session)
+                      void window.cloudforge
+                        .openDBeaver(session, database.id)
+                        .catch((reason) => setDetachError(message(reason)));
+                  }}
+                >
+                  Mostrar janela
+                </button>
               </>
             ) : state === "loading" ? (
               <div role="status">

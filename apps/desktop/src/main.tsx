@@ -12,11 +12,15 @@ import "../../../packages/ui/styles.css";
 import "./window-controls.css";
 import App from "./App";
 import TerminalWindow from "./TerminalWindow";
+import DBeaverWindow from "./DBeaverWindow";
 const isTerminal = location.hash === "#tui";
+const isDBeaver = location.hash === "#dbeaver";
 createRoot(document.getElementById("root")!).render(
   <div className="desktop-window">
     {isTerminal ? (
       <TerminalWindow />
+    ) : isDBeaver ? (
+      <DBeaverWindow />
     ) : (
       <React.StrictMode>
         <App />

@@ -200,7 +200,7 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "2.1.0", "apiVersion": 8})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": "2.1.1", "apiVersion": 8})
 		return
 	}
 	if path == "api/state" && r.Method == "GET" {

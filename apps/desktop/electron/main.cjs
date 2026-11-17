@@ -17,6 +17,8 @@ const {
   openDBeaver,
   layoutDBeaver,
   closeDBeaver,
+  detachDBeaver,
+  detachedDBeaverWindow,
   hasDBeaver,
 } = require("./dbeaver-view.cjs");
 app.setName("Cloudforge");
@@ -323,6 +325,8 @@ function controlledWindow(event) {
     checkSender(event);
     return window;
   }
+  const detached = detachedDBeaverWindow(event);
+  if (detached) return detached;
   return terminalSession(event).terminal;
 }
 ipcMain.handle("window:is-maximized", (event) =>
@@ -423,10 +427,39 @@ ipcMain.handle("dbeaver:open", (event, session, id) => {
   return openDBeaver(
     window,
     session,
+    id,
     () => request("POST", `/api/databases/${id}/dbeaver`),
     bundle,
     dbeaverFonts,
   );
+});
+ipcMain.handle("dbeaver:detach", async (event, session, name) => {
+  checkSender(event);
+  if (
+    typeof session !== "string" ||
+    !/^[a-f0-9-]{36}$/.test(session) ||
+    typeof name !== "string" ||
+    !name.trim() ||
+    name.length > 120
+  )
+    throw new Error("Janela do DBeaver inválida.");
+  const titlebarURL =
+    process.env.CLOUDFORGE_DEV === "1"
+      ? new URL("http://127.0.0.1:5173/")
+      : pathToFileURL(path.join(__dirname, "../dist/index.html"));
+  titlebarURL.searchParams.set("database", name);
+  titlebarURL.hash = "dbeaver";
+  const detachedWindow = await detachDBeaver(
+    session,
+    name,
+    iconPath,
+    titlebarURL.href,
+    (database) => {
+      if (window && !window.isDestroyed())
+        window.webContents.send("dbeaver:detached-closed", database);
+    },
+  );
+  watchWindowState(detachedWindow);
 });
 ipcMain.on("dbeaver:layout", (event, session, bounds) => {
   try {

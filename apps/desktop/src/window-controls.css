@@ -137,6 +137,12 @@
   height: calc(100vh - var(--window-titlebar-height));
 }
 
+.desktop-window > .dbeaver-window-body {
+  flex: 1;
+  min-height: calc(100vh - var(--window-titlebar-height));
+  background: var(--bg);
+}
+
 @media (max-width: 1150px) {
   .window-titlebar-brand {
     width: 200px;

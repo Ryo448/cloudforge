@@ -11,6 +11,14 @@ contextBridge.exposeInMainWorld("windowControls", {
 contextBridge.exposeInMainWorld("cloudforge", {
   openDBeaver: (session, database) =>
     ipcRenderer.invoke("dbeaver:open", session, database),
+  detachDBeaver: (session, name) =>
+    ipcRenderer.invoke("dbeaver:detach", session, name),
+  onDBeaverDetachedClosed: (callback) => {
+    const listener = (_event, database) => callback(database);
+    ipcRenderer.on("dbeaver:detached-closed", listener);
+    return () =>
+      ipcRenderer.removeListener("dbeaver:detached-closed", listener);
+  },
   layoutDBeaver: (session, bounds) =>
     ipcRenderer.send("dbeaver:layout", session, bounds),
   closeDBeaver: (session) => ipcRenderer.send("dbeaver:close", session),
