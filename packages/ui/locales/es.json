@@ -1168,5 +1168,7 @@
   "Endereço HTTPS inválido": "Dirección HTTPS Invalida",
   "Texto inválido": "Texto Invalido",
   "Nenhuma atualização disponível.": "No hay actualizaciones disponibles.",
-  "O download não foi concluído. Tente novamente.": "La descarga no ha terminado, prueba de nuevo."
+  "O download não foi concluído. Tente novamente.": "La descarga no ha terminado, prueba de nuevo.",
+  "Recolher barra lateral": "Contraer barra lateral",
+  "Fixar barra lateral": "Fijar barra lateral"
 }

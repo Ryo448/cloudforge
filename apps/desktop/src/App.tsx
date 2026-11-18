@@ -5,7 +5,12 @@ import {
   useLocale,
 } from "../../../packages/ui/i18n";
 import { LanguageSelector } from "../../../packages/ui/LanguageSelector";
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import {
   Activity,
   ArrowLeft,
@@ -57,6 +62,8 @@ import { EnvironmentIcon } from "./EnvironmentIcon";
 import { DBeaverWorkspace } from "./DBeaverWorkspace";
 
 type Page = "overview" | "projects" | "databases" | "cloudflare" | "settings";
+
+const sidebarPreferenceKey = "cloudforge.sidebarCollapsed";
 
 const projectNavigation = [
   { id: "logs", label: "Logs", icon: Terminal },
@@ -121,7 +128,108 @@ export default function App() {
       warning: string;
     } | null>(null),
     [wizard, setWizard] = useState<boolean | null>(null),
-    [connected, setConnected] = useState(false);
+    [connected, setConnected] = useState(false),
+    [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+      try {
+        return (
+          globalThis.localStorage?.getItem(sidebarPreferenceKey) === "true"
+        );
+      } catch {
+        return false;
+      }
+    }),
+    [sidebarHovered, setSidebarHovered] = useState(false);
+  const getOverlayWidth = () => {
+    const raw = getComputedStyle(
+      document.querySelector(".desktop-window") ?? document.documentElement,
+    ).getPropertyValue("--sidebar-width");
+    const parsed = Number.parseFloat(raw);
+    return Number.isFinite(parsed) && parsed > 0
+      ? parsed
+      : window.innerWidth <= 1150
+        ? 200
+        : 224;
+  };
+  const isInsideOverlayBounds = (clientX: number, clientY: number) =>
+    clientX >= 0 &&
+    clientX <= getOverlayWidth() + 4 &&
+    clientY >= 0 &&
+    clientY < window.innerHeight;
+  const handleSidebarMouseEnter = () => {
+    if (!sidebarCollapsed) return;
+    setSidebarHovered(true);
+  };
+  const handleSidebarMouseLeave = (e: ReactMouseEvent<HTMLElement>) => {
+    if (!sidebarCollapsed || !sidebarHovered) return;
+    if (!isInsideOverlayBounds(e.clientX, e.clientY)) {
+      setSidebarHovered(false);
+    }
+  };
+  const toggleSidebarCollapsed = () => {
+    setSidebarHovered(false);
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        globalThis.localStorage?.setItem(sidebarPreferenceKey, String(next));
+      } catch {
+        // Keep the preference in memory when storage is unavailable.
+      }
+      return next;
+    });
+  };
+  useEffect(() => {
+    if (!sidebarCollapsed || !sidebarHovered) return;
+    let leaveTimer: number | null = null;
+    const clearLeaveTimer = () => {
+      if (leaveTimer !== null) {
+        window.clearTimeout(leaveTimer);
+        leaveTimer = null;
+      }
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      clearLeaveTimer();
+      if (e.clientX > getOverlayWidth() + 4) {
+        setSidebarHovered(false);
+      }
+    };
+    const onDocumentLeave = (e: MouseEvent) => {
+      if (e.clientX > getOverlayWidth() + 4) {
+        clearLeaveTimer();
+        setSidebarHovered(false);
+        return;
+      }
+      if (
+        e.clientX > 0 &&
+        e.clientX <= getOverlayWidth() + 4 &&
+        e.clientY > 0 &&
+        e.clientY < window.innerHeight
+      ) {
+        return;
+      }
+      clearLeaveTimer();
+      leaveTimer = window.setTimeout(() => {
+        setSidebarHovered(false);
+      }, 100);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarHovered(false);
+    };
+    const onBlur = () => setSidebarHovered(false);
+    window.addEventListener("mousemove", onMouseMove);
+    document.documentElement.addEventListener("mouseleave", onDocumentLeave);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      clearLeaveTimer();
+      window.removeEventListener("mousemove", onMouseMove);
+      document.documentElement.removeEventListener(
+        "mouseleave",
+        onDocumentLeave,
+      );
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [sidebarCollapsed, sidebarHovered]);
   async function refresh() {
     try {
       const data = await api<Snapshot>("GET", "/api/state");
@@ -268,11 +376,19 @@ export default function App() {
     ...projectNavigation,
     ...projectSettingsNavigation,
   ].find((item) => item.id === projectSection)?.label;
+  const sidebarOverlay = sidebarCollapsed && sidebarHovered;
   return (
     <>
       <WindowControls
         updates
         filesDirty={filesDirty}
+        sidebar={{
+          collapsed: sidebarCollapsed,
+          overlay: sidebarOverlay,
+          onToggle: toggleSidebarCollapsed,
+          onMouseEnter: handleSidebarMouseEnter,
+          onMouseLeave: handleSidebarMouseLeave,
+        }}
         heading={
           project ? (
             <>
@@ -310,10 +426,27 @@ export default function App() {
           </>
         }
       />
-      <div className="app-shell">
-        <aside className="sidebar">
+      <div
+        className={
+          sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"
+        }
+      >
+        <aside
+          className={[
+            "sidebar",
+            sidebarCollapsed && "is-collapsed",
+            sidebarOverlay && "is-overlay",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          onMouseEnter={sidebarCollapsed ? handleSidebarMouseEnter : undefined}
+          onMouseLeave={sidebarCollapsed ? handleSidebarMouseLeave : undefined}
+        >
           {!project && (
-            <div className="local-node">
+            <div
+              className="local-node"
+              title={`${state.system.hostname} · ${t("Servidor local")}`}
+            >
               <span
                 className={connected ? "node-light" : "node-light offline"}
               />

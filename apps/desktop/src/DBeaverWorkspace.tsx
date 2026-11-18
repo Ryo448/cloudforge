@@ -31,6 +31,7 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
     const languageControl = document.querySelector(
       ".window-titlebar .language-selector",
     );
+    const sidebar = document.querySelector(".sidebar");
     const session = crypto.randomUUID();
     sessionRef.current = session;
     let active = true;
@@ -38,12 +39,17 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
     const layout = () => {
       if (!requested) return;
       const { x, y, width, height } = element.getBoundingClientRect();
+      const sidebarRight = sidebar?.classList.contains("is-overlay")
+        ? Math.ceil(sidebar.getBoundingClientRect().right)
+        : 0;
+      const left = Math.max(Math.ceil(x), sidebarRight);
+      const right = Math.floor(x + width);
       const top = Math.max(y, 56);
       const bottom = Math.min(y + height, window.innerHeight);
       window.cloudforge.layoutDBeaver(session, {
-        x: Math.ceil(x),
+        x: left,
         y: Math.ceil(top),
-        width: Math.floor(width),
+        width: Math.max(0, right - left),
         height: languageControl?.querySelector(".language-menu")
           ? 0
           : Math.max(0, Math.floor(bottom - top)),
@@ -51,8 +57,16 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
     };
     const observer = new ResizeObserver(layout);
     const languageObserver = new MutationObserver(layout);
+    const sidebarObserver = new MutationObserver(layout);
     if (languageControl)
       languageObserver.observe(languageControl, { childList: true });
+    if (sidebar) {
+      observer.observe(sidebar);
+      sidebarObserver.observe(sidebar, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    }
     observer.observe(element);
     if (element.parentElement) observer.observe(element.parentElement);
     window.addEventListener("resize", layout);
@@ -80,6 +94,7 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
       window.clearTimeout(start);
       observer.disconnect();
       languageObserver.disconnect();
+      sidebarObserver.disconnect();
       window.removeEventListener("resize", layout);
       window.removeEventListener("scroll", layout, true);
       if (requested) window.cloudforge.closeDBeaver(session);

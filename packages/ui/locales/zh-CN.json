@@ -1168,5 +1168,7 @@
   "Endereço HTTPS inválido": "无效的 HTTPS 地址",
   "Texto inválido": "无效文本",
   "Nenhuma atualização disponível.": "没有可用的更新。",
-  "O download não foi concluído. Tente novamente.": "下载未完成,再试一次。"
+  "O download não foi concluído. Tente novamente.": "下载未完成,再试一次。",
+  "Recolher barra lateral": "折叠侧边栏",
+  "Fixar barra lateral": "固定侧边栏"
 }

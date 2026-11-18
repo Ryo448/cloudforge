@@ -1168,5 +1168,7 @@
   "Endereço HTTPS inválido": "Invalid HTTPS address",
   "Texto inválido": "Invalid text",
   "Nenhuma atualização disponível.": "No update available.",
-  "O download não foi concluído. Tente novamente.": "The download has not been completed. try again."
+  "O download não foi concluído. Tente novamente.": "The download has not been completed. try again.",
+  "Recolher barra lateral": "Collapse sidebar",
+  "Fixar barra lateral": "Pin sidebar"
 }

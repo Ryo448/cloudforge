@@ -1,10 +1,55 @@
 import { t, useLocale } from "../../../packages/ui/i18n";
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  type MouseEventHandler,
+  type ReactNode,
+} from "react";
 import { Minus, Square, X } from "lucide-react";
 import { Brand } from "../../../packages/ui";
 import { AppUpdate } from "./AppUpdate";
 
 type WindowAction = "minimize" | "maximize" | "close";
+
+export type SidebarWindowControl = {
+  collapsed: boolean;
+  overlay: boolean;
+  onToggle: () => void;
+  onMouseEnter: MouseEventHandler<HTMLElement>;
+  onMouseLeave: MouseEventHandler<HTMLElement>;
+};
+
+export function SidebarToggleIcon({
+  active = false,
+  size = 18,
+}: {
+  active?: boolean;
+  size?: number;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {active && (
+        <path
+          d="M6 3H9V21H6A3 3 0 0 1 3 18V6A3 3 0 0 1 6 3Z"
+          fill="currentColor"
+          stroke="none"
+        />
+      )}
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <line x1="9" y1="3" x2="9" y2="21" />
+    </svg>
+  );
+}
 
 declare global {
   interface Window {
@@ -21,11 +66,13 @@ export default function WindowControls({
   details,
   updates = false,
   filesDirty = false,
+  sidebar,
 }: {
   heading: ReactNode;
   details?: ReactNode;
   updates?: boolean;
   filesDirty?: boolean;
+  sidebar?: SidebarWindowControl;
 }) {
   useLocale();
   const [maximized, setMaximized] = useState(false);
@@ -42,13 +89,53 @@ export default function WindowControls({
     void window.windowControls?.action(action);
   };
 
+  const sidebarToggleLabel = sidebar?.collapsed
+    ? t("Fixar barra lateral")
+    : t("Recolher barra lateral");
+
   return (
     <header
-      className="window-titlebar"
+      className={
+        sidebar?.collapsed && sidebar.overlay
+          ? "window-titlebar is-sidebar-overlay"
+          : "window-titlebar"
+      }
       aria-label={t("Barra superior do Cloudforge")}
     >
-      <div className="window-titlebar-brand">
-        <Brand />
+      <div
+        className={[
+          "window-titlebar-brand",
+          sidebar && "has-sidebar-toggle",
+          sidebar?.collapsed && "is-collapsed",
+          sidebar?.collapsed && sidebar.overlay && "is-overlay",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onMouseEnter={sidebar?.collapsed ? sidebar.onMouseEnter : undefined}
+        onMouseLeave={sidebar?.collapsed ? sidebar.onMouseLeave : undefined}
+      >
+        {sidebar?.collapsed && sidebar.overlay && (
+          <div className="window-titlebar-brand-hit" aria-hidden="true" />
+        )}
+        <div className="window-titlebar-brand-surface">
+          <Brand />
+          {sidebar && (
+            <button
+              type="button"
+              className={
+                sidebar.collapsed
+                  ? "sidebar-toggle-button active"
+                  : "sidebar-toggle-button"
+              }
+              aria-label={sidebarToggleLabel}
+              title={sidebarToggleLabel}
+              aria-pressed={sidebar.collapsed}
+              onClick={sidebar.onToggle}
+            >
+              <SidebarToggleIcon active={sidebar.collapsed} size={17} />
+            </button>
+          )}
+        </div>
       </div>
       <div className="window-titlebar-heading">{heading}</div>
       {updates && <AppUpdate filesDirty={filesDirty} />}

@@ -372,6 +372,13 @@ func (s *Supervisor) loop(ctx context.Context, j *job) {
 			cmd = fresh
 			cmd.Dir = p.WorkingDirectory
 			cmd.Env = os.Environ()
+			if p.TerminalEnabled {
+				// The integrated terminal supports color. A project can still opt out below.
+				cmd.Env = slices.DeleteFunc(cmd.Env, func(entry string) bool {
+					key, _, _ := strings.Cut(entry, "=")
+					return key == "NO_COLOR" || (runtime.GOOS == "windows" && strings.EqualFold(key, "NO_COLOR"))
+				})
+			}
 			files, envErr := projects.EnvironmentFiles(p.Path)
 			if envErr == nil && len(files) > 0 {
 				selected := files[0]

@@ -1168,5 +1168,7 @@
   "Endereço HTTPS inválido": "無効なHTTPSアドレス",
   "Texto inválido": "無効テキスト",
   "Nenhuma atualização disponível.": "アップデートがありません。",
-  "O download não foi concluído. Tente novamente.": "ダウンロードは完了していませんので、再度試してみてください。"
+  "O download não foi concluído. Tente novamente.": "ダウンロードは完了していませんので、再度試してみてください。",
+  "Recolher barra lateral": "サイドバーを折りたたむ",
+  "Fixar barra lateral": "サイドバーを固定"
 }

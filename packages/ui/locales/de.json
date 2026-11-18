@@ -1168,5 +1168,7 @@
   "Endereço HTTPS inválido": "Invalid HTTPS Adresse",
   "Texto inválido": "Invalid Text",
   "Nenhuma atualização disponível.": "Keine Updates verfügbar.",
-  "O download não foi concluído. Tente novamente.": "Das Download ist nicht abgeschlossen. versuchen Sie erneut."
+  "O download não foi concluído. Tente novamente.": "Das Download ist nicht abgeschlossen. versuchen Sie erneut.",
+  "Recolher barra lateral": "Seitenleiste einklappen",
+  "Fixar barra lateral": "Seitenleiste anheften"
 }
