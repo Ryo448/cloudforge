@@ -110,6 +110,37 @@ func TestConcurrentReservationAndOwnership(t *testing.T) {
 	}
 }
 
+func TestStartAfterFailedDelete(t *testing.T) {
+	m := testManager(t)
+	instance, err := m.Create(context.Background(), "owner", Input{Name: "Teste", Engine: "postgresql"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := m.get("owner", instance.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Desired, r.Action, r.State = "stopped", "delete", "stopping"
+	if err = m.save(r); err != nil {
+		t.Fatal(err)
+	}
+	start := Change{Action: "start"}
+	if _, err = m.Change(r.Owner, r.ID, start); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a exclusão em andamento deve impedir o início: %v", err)
+	}
+	r.State, r.Issue = "error", "Docker: falha em network"
+	if err = m.save(r); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Change(r.Owner, r.ID, start); err != nil {
+		t.Fatal(err)
+	}
+	r, err = m.get(r.Owner, r.ID)
+	if err != nil || r.Action != "recover" || r.Desired != "running" || r.State != "starting" {
+		t.Fatalf("recuperação não agendada: ação %q, estado %q, erro %v", r.Action, r.State, err)
+	}
+}
+
 func TestCreateMemoryLimit(t *testing.T) {
 	m := testManager(t)
 	ctx := context.Background()

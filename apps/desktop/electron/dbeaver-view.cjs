@@ -2,6 +2,7 @@ const { BrowserWindow, WebContentsView } = require("electron");
 const { readFile } = require("node:fs/promises");
 const path = require("node:path");
 const { startRuntime, connectRuntime } = require("./dbeaver-runtime.cjs");
+const { systemLanguageArguments } = require("./locales.cjs");
 
 let embedded;
 const detached = new Map();
@@ -65,6 +66,7 @@ async function openDBeaver(
   getConnection,
   bundle,
   fonts,
+  locale,
 ) {
   const existing = detached.get(database);
   if (existing) {
@@ -78,6 +80,7 @@ async function openDBeaver(
         getConnection,
         bundle,
         fonts,
+        locale,
       );
     }
     existing.detached.show();
@@ -111,6 +114,9 @@ async function openDBeaver(
     });
     state.view = view;
     const contents = view.webContents;
+    if (locale) {
+      contents.session.setUserAgent(contents.session.getUserAgent(), locale);
+    }
     const { origin } = runtime;
     const allow = (url) => new URL(url).origin === origin;
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -189,6 +195,7 @@ async function detachDBeaver(session, name, icon, titlebarURL, onClosed) {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "dbeaver-window-preload.cjs"),
+      additionalArguments: systemLanguageArguments(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

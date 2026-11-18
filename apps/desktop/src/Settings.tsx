@@ -1,3 +1,4 @@
+import { getLocale, t, translateMessage } from "../../../packages/ui/i18n";
 import { useEffect, useState, type FormEvent } from "react";
 import { Check, KeyRound, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
 import type { Session, Snapshot } from "../../../packages/shared-types";
@@ -53,9 +54,11 @@ export function SettingsPage({
     <>
       <div className="page-heading">
         <div>
-          <h1>Configurações</h1>
+          <h1>{t("Configurações")}</h1>
           <p>
-            Preferências locais, conta administrativa e dispositivos conectados.
+            {t(
+              "Preferências locais, conta administrativa e dispositivos conectados.",
+            )}
           </p>
         </div>
       </div>
@@ -63,19 +66,23 @@ export function SettingsPage({
       {notice && (
         <div className="notice" role="status">
           <Check size={17} />
-          {notice}
+          {translateMessage(notice)}
         </div>
       )}
       <section className="settings-section">
-        <h2>Inicialização e execução</h2>
+        <h2>{t("Inicialização e execução")}</h2>
         <div className="setting-row">
           <div>
-            <strong>Iniciar o Core automaticamente</strong>
+            <strong>{t("Iniciar o Core automaticamente")}</strong>
             <p className="muted">
               {state.system.os === "windows"
-                ? "Inicia em segundo plano ao entrar no Windows com este usuário."
-                : "Usa um serviço systemd do usuário na sua sessão."}{" "}
-              Recupera somente os projetos cujo estado desejado é executar.
+                ? t(
+                    "Inicia em segundo plano ao entrar no Windows com este usuário.",
+                  )
+                : t("Usa um serviço systemd do usuário na sua sessão.")}{" "}
+              {t(
+                "Recupera somente os projetos cujo estado desejado é executar.",
+              )}
             </p>
           </div>
           <button
@@ -83,15 +90,16 @@ export function SettingsPage({
             disabled={busy}
             onClick={() => setAutostart(!state.autostart)}
           >
-            {state.autostart ? "Ativado" : "Ativar"}
+            {state.autostart ? t("Ativado") : t("Ativar")}
           </button>
         </div>
         <div className="setting-row">
           <div>
-            <strong>Fechar a janela mantém as aplicações</strong>
+            <strong>{t("Fechar a janela mantém as aplicações")}</strong>
             <p className="muted">
-              Core, projetos, túnel e dashboard são independentes desta
-              interface.
+              {t(
+                "Core, projetos, túnel e dashboard são independentes desta interface.",
+              )}
             </p>
           </div>
           <ShieldCheck size={21} />
@@ -99,14 +107,15 @@ export function SettingsPage({
       </section>
       <GoogleDriveSettings focusOnMount={focusGoogleDrive} />
       <section className="settings-section">
-        <h2>Conta administrativa</h2>
+        <h2>{t("Conta administrativa")}</h2>
         <p className="muted">
-          Alterar a senha encerra todas as sessões remotas. A senha é armazenada
-          com Argon2id e salt individual.
+          {t(
+            "Alterar a senha encerra todas as sessões remotas. A senha é armazenada com Argon2id e salt individual.",
+          )}
         </p>
         <form className="narrow-form" onSubmit={changePassword}>
           <label>
-            Senha atual
+            {t("Senha atual")}
             <input
               type="password"
               autoComplete="current-password"
@@ -117,7 +126,7 @@ export function SettingsPage({
           </label>
           <div className="form-grid">
             <label>
-              Nova senha
+              {t("Nova senha")}
               <input
                 type="password"
                 autoComplete="new-password"
@@ -128,7 +137,7 @@ export function SettingsPage({
               />
             </label>
             <label>
-              Confirmar nova senha
+              {t("Confirmar nova senha")}
               <input
                 type="password"
                 autoComplete="new-password"
@@ -140,32 +149,35 @@ export function SettingsPage({
             </label>
           </div>
           <button className="button" disabled={busy}>
-            {busy ? <Spinner /> : <KeyRound size={16} />}Alterar senha
+            {busy ? <Spinner /> : <KeyRound size={16} />}
+            {t("Alterar senha")}
           </button>
         </form>
       </section>
       <section className="settings-section">
         <div className="section-heading">
-          <h2>Sessões remotas</h2>
+          <h2>{t("Sessões remotas")}</h2>
           <button className="text-button" onClick={() => void load()}>
-            Atualizar
+            {t("Atualizar")}
             <RefreshCw size={14} />
           </button>
         </div>
         {!sessions.length ? (
-          <p className="muted">Nenhuma sessão remota ativa.</p>
+          <p className="muted">{t("Nenhuma sessão remota ativa.")}</p>
         ) : (
           sessions.map((session) => (
             <div className="setting-row" key={session.id}>
               <div>
                 <strong>{session.username}</strong>
                 <p className="muted small">
-                  {session.device || "Dispositivo sem identificação"}
+                  {session.device || t("Dispositivo sem identificação")}
                 </p>
                 <span className="small muted">
-                  Expira em{" "}
-                  {new Date(session.expiresAt * 1000).toLocaleDateString(
-                    "pt-BR",
+                  {t(
+                    "Expira em {0}",
+                    new Date(session.expiresAt * 1000).toLocaleDateString(
+                      getLocale(),
+                    ),
                   )}
                 </span>
               </div>
@@ -181,64 +193,69 @@ export function SettingsPage({
                 }}
               >
                 <Unplug size={15} />
-                Revogar
+                {t("Revogar")}
               </button>
             </div>
           ))
         )}
       </section>
       <section className="settings-section">
-        <h2>Sobre esta instalação</h2>
+        <h2>{t("Sobre esta instalação")}</h2>
         <dl className="details-list">
           <div>
-            <dt>Máquina</dt>
+            <dt>{t("Máquina")}</dt>
             <dd>{state.system.hostname}</dd>
           </div>
           <div>
-            <dt>Sistema</dt>
+            <dt>{t("Sistema")}</dt>
             <dd>
               {state.system.os} / {state.system.arch}
             </dd>
           </div>
           <div>
-            <dt>Processador</dt>
+            <dt>{t("Processador")}</dt>
             <dd>{state.system.cpuModel}</dd>
           </div>
           <div>
-            <dt>Memória total</dt>
+            <dt>{t("Memória total")}</dt>
             <dd>{bytes(state.system.memory?.total)}</dd>
           </div>
           <div>
-            <dt>Tema</dt>
-            <dd>Escuro</dd>
+            <dt>{t("Tema")}</dt>
+            <dd>{t("Escuro")}</dd>
           </div>
           <div>
-            <dt>Persistência</dt>
-            <dd>SQLite local · migrations versionadas</dd>
+            <dt>{t("Persistência")}</dt>
+            <dd>{t("SQLite local · migrations versionadas")}</dd>
           </div>
         </dl>
         <p className="small muted">
-          A plataforma executa código confiável com os privilégios deste
-          usuário. Os processos não são isolados em containers.
+          {t(
+            "A plataforma executa código confiável com os privilégios deste usuário. Os processos não são isolados em containers.",
+          )}
         </p>
       </section>
       {autostart !== null && (
         <Modal
           title={
             autostart
-              ? "Ativar inicialização automática?"
-              : "Desativar inicialização automática?"
+              ? t("Ativar inicialização automática?")
+              : t("Desativar inicialização automática?")
           }
           onClose={() => setAutostart(null)}
         >
           <p>
             {autostart
-              ? "O Core será iniciado ao entrar na sessão do sistema e recuperará seus projetos em execução."
-              : "O Core deixará de iniciar automaticamente nas próximas sessões. Os processos atuais continuam ativos."}
+              ? t(
+                  "O Core será iniciado ao entrar na sessão do sistema e recuperará seus projetos em execução.",
+                )
+              : t(
+                  "O Core deixará de iniciar automaticamente nas próximas sessões. Os processos atuais continuam ativos.",
+                )}
           </p>
           <div className="form-footer">
             <button className="button" onClick={() => setAutostart(null)}>
-              Cancelar
+              {t("Cancelar")}
             </button>
             <button
               className="button primary"
@@ -260,7 +277,7 @@ export function SettingsPage({
                 }
               }}
             >
-              Confirmar alteração
+              {t("Confirmar alteração")}
             </button>
           </div>
         </Modal>

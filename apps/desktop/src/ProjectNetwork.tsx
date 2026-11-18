@@ -1,3 +1,5 @@
+import { t, translateMessage } from "../../../packages/ui/i18n";
+import { Translated } from "../../../packages/ui/Translated";
 import { useEffect, useState, type FormEvent } from "react";
 import { Check, Copy, Globe, Trash2 } from "lucide-react";
 import type { CloudConfig, Project } from "../../../packages/shared-types";
@@ -40,12 +42,13 @@ export function ProjectRemoval({
   return (
     <section className="settings-section project-risk-section">
       <div className="project-risk-content">
-        <h2>Excluir projeto</h2>
+        <h2>{t("Excluir projeto")}</h2>
         <p>
-          Remove o projeto, os logs e o endereço público do Cloudforge. A pasta
-          e os arquivos permanecem no computador.
+          {t(
+            "Remove o projeto, os logs e o endereço público do Cloudforge. A pasta e os arquivos permanecem no computador.",
+          )}
         </p>
-        <span>Esta ação não pode ser desfeita.</span>
+        <span>{t("Esta ação não pode ser desfeita.")}</span>
       </div>
       <button
         className="button danger-quiet project-delete-trigger"
@@ -54,30 +57,34 @@ export function ProjectRemoval({
           setConfirm(true);
         }}
       >
-        <Trash2 size={16} /> Excluir projeto
+        <Trash2 size={16} /> {t("Excluir projeto")}
       </button>
       {confirm && (
         <DeleteConfirmationModal
-          title="Excluir projeto"
+          title={t("Excluir projeto")}
           name={project.name}
           summary={
             <>
-              O processo de <strong>{project.name}</strong> será encerrado. O
-              projeto, os logs e o endereço público serão removidos do
-              Cloudforge. Esta ação não pode ser desfeita.
+              <Translated
+                text="O processo de {0} será encerrado. O projeto, os logs e o endereço público serão removidos do Cloudforge. Esta ação não pode ser desfeita."
+                values={[<strong>{project.name}</strong>]}
+              />
               {project.hostname &&
-                ` O endereço ${project.hostname} deixará de abrir o projeto.`}
+                t(
+                  " O endereço {0} deixará de abrir o projeto.",
+                  project.hostname,
+                )}
             </>
           }
-          instruction="Digite o nome do projeto para confirmar"
-          pendingLabel="Excluindo projeto…"
+          instruction={t("Digite o nome do projeto para confirmar")}
+          pendingLabel={t("Excluindo projeto…")}
           busy={busy}
           error={error}
           onClose={() => setConfirm(false)}
           onConfirm={() => void remove()}
         >
           <div className="project-delete-preserved">
-            <span>A pasta e os arquivos serão preservados</span>
+            <span>{t("A pasta e os arquivos serão preservados")}</span>
             <code>{project.path}</code>
           </div>
         </DeleteConfirmationModal>
@@ -120,55 +127,58 @@ export function ProjectPort({ project, onChanged }: Props) {
   }
   return (
     <section className="settings-section">
-      <h2>Porta HTTP do projeto</h2>
+      <h2>{t("Porta HTTP do projeto")}</h2>
       <p className="muted">
-        Informe a porta que o servidor realmente usa. Se o código fixa a porta
-        em 80, informe 80. Para mudar a porta pelo Cloudforge, o código deve ler
-        a variável <code>PORT</code>.
+        <Translated
+          text="Informe a porta que o servidor realmente usa. Se o código fixa a porta em 80, informe 80. Para mudar a porta pelo Cloudforge, o código deve ler a variável {0}."
+          values={[<code>PORT</code>]}
+        />
       </p>
       {project.hostname && (
         <p className="muted">
-          A alteração também atualiza o destino de {project.hostname}.
+          {t("A alteração também atualiza o destino de {0}.", project.hostname)}
         </p>
       )}
       {routeMismatch && (
         <p className="muted">
-          O endereço público usa a porta {project.routePort}. Salve a porta
-          correta para alinhar as duas configurações.
+          {t(
+            "O endereço público usa a porta {0}. Salve a porta correta para alinhar as duas configurações.",
+            project.routePort,
+          )}
         </p>
       )}
       <form className="narrow-form" onSubmit={save}>
         <label>
-          Porta HTTP{" "}
+          {t("Porta HTTP")}{" "}
           <input
             type="number"
             min={1}
             max={65535}
             value={port}
-            placeholder="Ex.: 80"
+            placeholder={t("Ex.: 80")}
             onChange={(event) => setPort(event.target.value)}
           />
         </label>
         <p className="small muted">
-          Deixe em branco se o projeto não oferece um serviço HTTP.
+          {t("Deixe em branco se o projeto não oferece um serviço HTTP.")}
         </p>
         <ErrorMessage error={error} />
         {notice && (
           <div className="notice" role="status">
             <Check size={17} />
-            {notice}
+            {translateMessage(notice)}
           </div>
         )}
         <button
           className="button primary"
           disabled={busy || (Number(port) === project.port && !routeMismatch)}
         >
-          {busy ? <Spinner /> : <Check size={16} />} Salvar porta
+          {busy ? <Spinner /> : <Check size={16} />} {t("Salvar porta")}
         </button>
       </form>
       <div className="settings-subsection">
-        <h3>Terminal</h3>
-        <p className="muted">Permita abrir o terminal do projeto.</p>
+        <h3>{t("Terminal")}</h3>
+        <p className="muted">{t("Permita abrir o terminal do projeto.")}</p>
         <label className="checkbox-label">
           <input
             type="checkbox"
@@ -198,7 +208,7 @@ export function ProjectPort({ project, onChanged }: Props) {
               }
             }}
           />
-          <span>Mostrar opção de abrir o terminal deste projeto</span>
+          <span>{t("Mostrar opção de abrir o terminal deste projeto")}</span>
         </label>
         {terminalBusy && <Spinner />}
       </div>
@@ -265,11 +275,11 @@ export function ProjectDomain({
 
   return (
     <section className="settings-section">
-      <h2>Endereço público do projeto</h2>
+      <h2>{t("Endereço público do projeto")}</h2>
       <ErrorMessage error={error} />
       {notice && (
         <div className="notice" role="status">
-          {notice}
+          {translateMessage(notice)}
         </div>
       )}
       {project.hostname && !editing ? (
@@ -285,11 +295,11 @@ export function ProjectDomain({
                 )
               }
             >
-              Abrir
+              {t("Abrir")}
             </button>
             <button
               className="icon-button"
-              aria-label="Copiar endereço"
+              aria-label={t("Copiar endereço")}
               onClick={() =>
                 void window.cloudforge.copy(`https://${project.hostname}`)
               }
@@ -298,7 +308,7 @@ export function ProjectDomain({
             </button>
           </div>
           <p className="muted">
-            Destino local na porta {project.routePort || project.port}.
+            {t("Destino local na porta")} {project.routePort || project.port}.
           </p>
           <div className="actions">
             <button
@@ -309,24 +319,25 @@ export function ProjectDomain({
                 setEditing(true);
               }}
             >
-              Alterar domínio
+              {t("Alterar domínio")}
             </button>
             <button className="button" onClick={onEditPort}>
-              Editar porta
+              {t("Editar porta")}
             </button>
             <button
               className="button danger-quiet"
               disabled={busy}
               onClick={() => setRemoving(true)}
             >
-              <Trash2 size={15} /> Remover domínio
+              <Trash2 size={15} /> {t("Remover domínio")}
             </button>
           </div>
         </>
       ) : !cloud.tunnelId ? (
         <p className="muted">
-          Configure o endereço do painel na seção Cloudflare para publicar este
-          projeto.
+          {t(
+            "Configure o endereço do painel na seção Cloudflare para publicar este projeto.",
+          )}
         </p>
       ) : (
         <form
@@ -337,7 +348,7 @@ export function ProjectDomain({
           }}
         >
           <label>
-            Domínio{" "}
+            {t("Domínio")}{" "}
             <select
               required
               value={domain}
@@ -352,7 +363,7 @@ export function ProjectDomain({
             </select>
           </label>
           <label>
-            Subdomínio{" "}
+            {t("Subdomínio")}{" "}
             <div className="input-suffix">
               <input
                 required
@@ -374,10 +385,10 @@ export function ProjectDomain({
           )}
           <p className="muted">
             {project.port
-              ? `Destino local na porta ${project.port}.`
-              : "Configure uma porta HTTP antes de publicar."}{" "}
+              ? t("Destino local na porta {0}.", project.port)
+              : t("Configure uma porta HTTP antes de publicar.")}{" "}
             <button type="button" className="text-button" onClick={onEditPort}>
-              Editar porta
+              {t("Editar porta")}
             </button>
           </p>
           <label className="checkbox-label">
@@ -389,8 +400,8 @@ export function ProjectDomain({
             />
             <span>
               {project.hostname
-                ? "Confirmo a troca do endereço público deste projeto."
-                : "Confirmo a publicação deste serviço na internet."}
+                ? t("Confirmo a troca do endereço público deste projeto.")
+                : t("Confirmo a publicação deste serviço na internet.")}
             </span>
           </label>
           <div className="form-footer">
@@ -407,7 +418,7 @@ export function ProjectDomain({
                   setEditing(false);
                 }}
               >
-                Cancelar
+                {t("Cancelar")}
               </button>
             )}
             <button
@@ -415,19 +426,21 @@ export function ProjectDomain({
               disabled={busy || !confirmed || !project.port || !domain || !sub}
             >
               {busy ? <Spinner /> : <Globe size={16} />}{" "}
-              {project.hostname ? "Salvar endereço" : "Publicar projeto"}
+              {project.hostname ? t("Salvar endereço") : t("Publicar projeto")}
             </button>
           </div>
         </form>
       )}
       {removing && (
         <Modal
-          title="Remover endereço público?"
+          title={t("Remover endereço público?")}
           onClose={() => !busy && setRemoving(false)}
         >
           <p>
-            {project.hostname} deixará de abrir este projeto. O processo
-            continuará no estado atual.
+            {project.hostname}{" "}
+            {t(
+              "deixará de abrir este projeto. O processo continuará no estado atual.",
+            )}
           </p>
           <div className="form-footer">
             <button
@@ -435,14 +448,15 @@ export function ProjectDomain({
               disabled={busy}
               onClick={() => setRemoving(false)}
             >
-              Cancelar
+              {t("Cancelar")}
             </button>
             <button
               className="button danger-quiet"
               disabled={busy}
               onClick={() => void update("DELETE")}
             >
-              {busy ? <Spinner /> : <Trash2 size={15} />} Remover endereço
+              {busy ? <Spinner /> : <Trash2 size={15} />}{" "}
+              {t("Remover endereço")}
             </button>
           </div>
         </Modal>

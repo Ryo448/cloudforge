@@ -15,6 +15,7 @@ const WebSocket = require("ws");
 const { pathToFileURL } = require("node:url");
 const { createCoreManager } = require("./core-lifecycle.cjs");
 const { createUpdater } = require("./updater.cjs");
+const { dialogs, systemLanguageArguments } = require("./locales.cjs");
 const { autoUpdater } = require("electron-updater");
 const {
   openDBeaver,
@@ -25,6 +26,7 @@ const {
   hasDBeaver,
 } = require("./dbeaver-view.cjs");
 app.setName("Cloudforge");
+let currentLocale = "en-US";
 const root = path.resolve(__dirname, "../../..");
 const iconPath = app.isPackaged
   ? path.join(process.resourcesPath, "icon.png")
@@ -159,6 +161,7 @@ function openTuiWindow(project) {
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "terminal-preload.cjs"),
+      additionalArguments: systemLanguageArguments(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -269,6 +272,7 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
+      additionalArguments: systemLanguageArguments(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -335,6 +339,11 @@ function controlledWindow(event) {
 ipcMain.handle("update:state", (event) => {
   checkSender(event);
   return updates.state();
+});
+ipcMain.handle("locale:set", (event, locale) => {
+  checkSender(event);
+  if (typeof locale === "string" && Object.hasOwn(dialogs, locale))
+    currentLocale = locale;
 });
 ipcMain.handle("update:install", (event) => {
   checkSender(event);
@@ -444,6 +453,7 @@ ipcMain.handle("dbeaver:open", (event, session, id) => {
     () => request("POST", `/api/databases/${id}/dbeaver`),
     bundle,
     dbeaverFonts,
+    currentLocale,
   );
 });
 ipcMain.handle("dbeaver:detach", async (event, session, name) => {
@@ -508,9 +518,9 @@ ipcMain.handle("snapshot:pick", async (event, id, engine) => {
     ),
   ];
   const selected = await dialog.showOpenDialog(window, {
-    title: "Importar backup",
+    title: dialogs[currentLocale].importBackup,
     properties: ["openFile"],
-    filters: [{ name: "Arquivos de backup", extensions }],
+    filters: [{ name: dialogs[currentLocale].backupFiles, extensions }],
   });
   if (selected.canceled || !selected.filePaths.length) return null;
   const file = selected.filePaths[0];
@@ -562,7 +572,7 @@ ipcMain.handle("snapshot:download", async (event, id, driveId, name) => {
   )
     throw new Error("Snapshot inválido");
   const selected = await dialog.showSaveDialog(window, {
-    title: "Baixar snapshot",
+    title: dialogs[currentLocale].downloadSnapshot,
     defaultPath: path.join(app.getPath("downloads"), name),
   });
   if (selected.canceled || !selected.filePath) return null;
@@ -615,7 +625,7 @@ ipcMain.handle("core:reconnect", async (event) => {
 ipcMain.handle("project:choose", async (event) => {
   checkSender(event);
   const result = await dialog.showOpenDialog(window, {
-    title: "Selecionar pasta do projeto",
+    title: dialogs[currentLocale].chooseDirectory,
     properties: ["openDirectory"],
   });
   return result.canceled ? null : result.filePaths[0];
@@ -632,7 +642,7 @@ async function environmentProject(event, id) {
 ipcMain.handle("environment:import", async (event, id) => {
   const project = await environmentProject(event, id);
   const result = await dialog.showOpenDialog(window, {
-    title: "Importar arquivo de variáveis",
+    title: dialogs[currentLocale].importEnvironment,
     properties: ["openFile"],
   });
   if (result.canceled) return null;
@@ -663,7 +673,7 @@ ipcMain.handle("environment:export", async (event, id, content) => {
   if (typeof content !== "string" || content.length > 1024 * 1024)
     throw new Error("Conteúdo inválido");
   const result = await dialog.showSaveDialog(window, {
-    title: "Exportar variáveis",
+    title: dialogs[currentLocale].exportEnvironment,
     defaultPath: ".env",
   });
   if (result.canceled || !result.filePath) return false;

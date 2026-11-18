@@ -60,7 +60,9 @@
 
 .window-titlebar-heading strong {
   color: #f3f5f8;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .window-titlebar-project-name {
@@ -76,7 +78,7 @@
 .window-titlebar-details {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
   flex-shrink: 0;
   padding-right: 20px;
 }

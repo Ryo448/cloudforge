@@ -13,6 +13,74 @@ import (
 	"github.com/lib/pq"
 )
 
+func TestDockerDeleteDatabaseWithClients(t *testing.T) {
+	if os.Getenv("CLOUDFORGE_TEST_DATABASES") != "1" {
+		t.Skip("defina CLOUDFORGE_TEST_DATABASES=1 para executar com Docker Linux")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	m := testManager(t)
+	if !m.docker.available(ctx) {
+		t.Fatal("Docker Linux indisponível")
+	}
+	instance, err := m.Create(ctx, "test", Input{Name: "Exclusão com clientes", Engine: "postgresql"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := m.get("test", instance.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	network := containerName(r)
+	viewer, other := "cloudforge-dbeaver-"+r.ID, "cloudforge-test-client-"+r.ID
+	t.Cleanup(func() {
+		clean, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_, _ = m.docker.command(clean, nil, "rm", "-f", viewer, other)
+		if err := m.docker.remove(clean, r); err != nil {
+			t.Error(err)
+		}
+	})
+	if err = m.reconcile(ctx, &r); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) []byte {
+		t.Helper()
+		out, err := m.docker.command(ctx, nil, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	image := engines[r.Engine].Image
+	run("run", "-d", "--rm", "--name", viewer, "--network", network, "--user", "8978:8978",
+		"--tmpfs", "/opt/cloudbeaver/workspace:rw,nosuid,nodev,uid=8978,gid=8978,mode=0700",
+		"--entrypoint", "/bin/sleep", image, "300")
+	run("run", "-d", "--rm", "--name", other, "--network", network, "--entrypoint", "/bin/sleep", image, "300")
+	r.Action = "delete"
+	if err = m.reconcile(ctx, &r); !errors.Is(err, errDatabaseNetworkInUse) {
+		t.Fatalf("a rede em uso deveria bloquear a exclusão: %v", err)
+	}
+	if state, exists, err := m.docker.inspect(ctx, r); err != nil || !exists || !state.Running {
+		t.Fatalf("o banco deveria continuar em execução: %v", err)
+	}
+	if members := run("network", "inspect", "--format", "{{json .Containers}}", network); !bytes.Contains(members, []byte(viewer)) {
+		t.Fatal("a conexão do DBeaver deveria ser mantida enquanto a exclusão estiver bloqueada")
+	}
+	run("rm", "-f", other)
+	if err = m.reconcile(ctx, &r); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.get(r.Owner, r.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("o registro deveria ser excluído: %v", err)
+	}
+	for _, kind := range []string{"network", "volume"} {
+		if out := run(kind, "ls", "--filter", "label=cloudforge.database="+r.ID, "--format", "{{.Name}}"); len(bytes.TrimSpace(out)) != 0 {
+			t.Fatalf("recurso ainda presente: %s", out)
+		}
+	}
+}
+
 func TestDockerPostgresAuthentication(t *testing.T) {
 	if os.Getenv("CLOUDFORGE_TEST_DATABASES") != "1" {
 		t.Skip("defina CLOUDFORGE_TEST_DATABASES=1 para executar com Docker Linux")

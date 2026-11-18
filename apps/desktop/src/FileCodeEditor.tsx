@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { t, useLocale } from "../../../packages/ui/i18n";
+import { useEffect, useRef, useState } from "react";
 import { EditorView, basicSetup } from "codemirror";
+import { Compartment, EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import { python } from "@codemirror/lang-python";
 import { html } from "@codemirror/lang-html";
@@ -87,6 +89,38 @@ function language(name: string) {
   }
 }
 
+function editorPhrases() {
+  return EditorState.phrases.of({
+    Find: t("Buscar"),
+    Replace: t("Substituir"),
+    next: t("Próximo"),
+    previous: t("Anterior"),
+    all: t("Selecionar todos"),
+    "match case": t("Diferenciar maiúsculas e minúsculas"),
+    regexp: t("Expressão regular"),
+    "by word": t("Palavra inteira"),
+    replace: t("Substituir"),
+    "replace all": t("Substituir todos"),
+    close: t("Fechar"),
+    "Go to line": t("Ir para a linha"),
+    go: t("Ir"),
+    "current match": t("Ocorrência atual"),
+    "on line": t("na linha"),
+    "replaced match on line $": t("Ocorrência substituída na linha $"),
+    "replaced $ matches": t("$ ocorrências substituídas"),
+    "Fold line": t("Recolher linha"),
+    "Unfold line": t("Expandir linha"),
+    "Folded lines": t("Linhas recolhidas"),
+    "Unfolded lines": t("Linhas expandidas"),
+    "folded code": t("Código recolhido"),
+    unfold: t("Expandir"),
+    to: t("até"),
+    Completions: t("Sugestões"),
+    "Control character": t("Caractere de controle"),
+    "Selection deleted": t("Seleção excluída"),
+  });
+}
+
 export default function FileCodeEditor({
   name,
   initial,
@@ -98,6 +132,9 @@ export default function FileCodeEditor({
   onChange: (value: string) => void;
   onSave: () => void;
 }) {
+  const locale = useLocale();
+  const [phrases] = useState(() => new Compartment());
+  const editor = useRef<EditorView | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const save = useRef(onSave);
   const change = useRef(onChange);
@@ -110,6 +147,7 @@ export default function FileCodeEditor({
       doc: initial,
       extensions: [
         basicSetup,
+        phrases.of(editorPhrases()),
         codeTheme,
         syntaxHighlighting(codeHighlight),
         language(name),
@@ -132,13 +170,20 @@ export default function FileCodeEditor({
       ],
       parent: host.current,
     });
-    return () => view.destroy();
-  }, [name]);
+    editor.current = view;
+    return () => {
+      editor.current = null;
+      view.destroy();
+    };
+  }, [name, phrases]);
+  useEffect(() => {
+    editor.current?.dispatch({ effects: phrases.reconfigure(editorPhrases()) });
+  }, [locale, phrases]);
   return (
     <div
       className="project-file-code"
       ref={host}
-      aria-label={`Editor de ${name}`}
+      aria-label={t("Editor de {0}", name)}
     />
   );
 }

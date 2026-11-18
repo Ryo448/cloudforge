@@ -1,3 +1,5 @@
+import { getLocale, t, translateMessage } from "./i18n";
+import { Translated } from "./Translated";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -25,6 +27,7 @@ import {
   bytes,
   DeleteConfirmationModal,
   ErrorMessage,
+  formatUnit,
   Modal,
   OverviewIcon,
   percent,
@@ -141,8 +144,8 @@ function CertificateDownload({
 
   const formats = [
     { value: "pem", label: "PEM (.pem)", Icon: PemIcon },
-    { value: "crt", label: "Certificate CA (.crt)", Icon: CaIcon },
-    { value: "key", label: "Private Key (.key)", Icon: PrivateKeyIcon },
+    { value: "crt", label: t("Certificado CA (.crt)"), Icon: CaIcon },
+    { value: "key", label: t("Chave privada (.key)"), Icon: PrivateKeyIcon },
   ];
 
   useEffect(() => {
@@ -238,7 +241,7 @@ function CertificateDownload({
           ref={triggerRef}
           className="button db-certificate-trigger"
           type="button"
-          aria-label="Selecionar certificado"
+          aria-label={t("Selecionar certificado")}
           aria-haspopup="true"
           aria-expanded={open}
           disabled={!!loadingFormat || !database.tlsValidated}
@@ -271,7 +274,9 @@ function CertificateDownload({
           }}
         >
           <DownloadIcon className="db-certificate-trigger-icon" />
-          {loadingFormat ? "Carregando certificado…" : "Baixar certificado"}
+          {loadingFormat
+            ? t("Carregando certificado…")
+            : t("Baixar certificado")}
           <ChevronRight
             size={15}
             className={
@@ -288,7 +293,7 @@ function CertificateDownload({
               className="db-certificate-menu"
               style={menuPosition}
               role="menu"
-              aria-label="Certificados disponíveis"
+              aria-label={t("Certificados disponíveis")}
             >
               {formats.map(({ value, label, Icon }) => (
                 <div
@@ -317,8 +322,8 @@ function CertificateDownload({
                   <button
                     className="db-certificate-icon-button"
                     type="button"
-                    aria-label={`Baixar ${label}`}
-                    title={`Baixar ${label}`}
+                    aria-label={t("Baixar {0}", label)}
+                    title={t("Baixar {0}", label)}
                     disabled={!!loadingFormat || !database.tlsValidated}
                     onClick={() => void download(value)}
                   >
@@ -327,8 +332,8 @@ function CertificateDownload({
                   <button
                     className="db-certificate-icon-button"
                     type="button"
-                    aria-label={`Copiar ${label}`}
-                    title={`Copiar ${label}`}
+                    aria-label={t("Copiar {0}", label)}
+                    title={t("Copiar {0}", label)}
                     disabled={!!loadingFormat || !database.tlsValidated}
                     onClick={() => void copy(value)}
                   >
@@ -342,7 +347,7 @@ function CertificateDownload({
       </div>
       <div className="db-certificate-feedback" aria-live="polite">
         <ErrorMessage error={error} />
-        {copied && <span>Conteúdo copiado.</span>}
+        {copied && <span>{t("Conteúdo copiado.")}</span>}
       </div>
     </div>
   );
@@ -413,8 +418,8 @@ function PrivateKeyIcon({ className }: { className?: string }) {
 }
 function networkBytes(value?: number) {
   if (value === undefined || value >= 1024 ** 2) return bytes(value);
-  if (value < 1024) return `${value} B`;
-  return `${(value / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} KB`;
+  if (value < 1024) return formatUnit(value, "byte", "short");
+  return formatUnit(value / 1024, "kilobyte", "short", 1);
 }
 
 function EngineIcon({ engine }: { engine: Engine }) {
@@ -439,7 +444,7 @@ function Chart({
   if (!samples.length)
     return (
       <div className="project-chart project-chart-empty">
-        Sem amostras no período
+        {t("Sem amostras no período")}
       </div>
     );
   const first = samples[0].time;
@@ -503,15 +508,15 @@ export function DatabaseNavigation({
   return (
     <nav
       className="database-navigation"
-      aria-label="Navegação do banco de dados"
+      aria-label={t("Navegação do banco de dados")}
     >
       <button
         className="nav-item project-nav-back"
         onClick={list}
-        title="Todos os bancos"
+        title={t("Todos os bancos")}
       >
         <ArrowLeft size={18} />
-        <span>Todos os bancos</span>
+        <span>{t("Todos os bancos")}</span>
       </button>
       {navigation
         .filter(([id]) => id !== "snapshots" || snapshots)
@@ -521,17 +526,19 @@ export function DatabaseNavigation({
             {id === "general" && (
               <>
                 <div className="project-nav-divider" />
-                <span className="project-nav-heading">Configurações</span>
+                <span className="project-nav-heading">
+                  {t("Configurações")}
+                </span>
               </>
             )}
             <button
               className={section === id ? "nav-item active" : "nav-item"}
               aria-current={section === id ? "page" : undefined}
-              title={label}
+              title={t(label)}
               onClick={() => select(id)}
             >
               <Icon size={18} />
-              <span>{label}</span>
+              <span>{t(label)}</span>
             </button>
           </div>
         ))}
@@ -754,8 +761,8 @@ export function Databases({
     .filter(
       (db) =>
         db.name
-          .toLocaleLowerCase()
-          .includes(query.trim().toLocaleLowerCase()) &&
+          .toLocaleLowerCase(getLocale())
+          .includes(query.trim().toLocaleLowerCase(getLocale())) &&
         (!engine || engine === db.engine) &&
         (!state || db.state === state),
     )
@@ -772,20 +779,21 @@ export function Databases({
   function connection(db: Instance) {
     return (
       <div className="db-row">
-        <h3>URL de conexão</h3>
+        <h3>{t("URL de conexão")}</h3>
         <p className="muted">
-          Use a URL na máquina que executa o Cloudforge e substitua PASSWORD
-          pela sua senha.
+          {t(
+            "Use a URL na máquina que executa o Cloudforge e substitua PASSWORD pela sua senha.",
+          )}
         </p>
         {db.url ? (
           <CopyField
             value={db.url}
-            label="Copiar URL de conexão"
+            label={t("Copiar URL de conexão")}
             copy={copyValue}
           />
         ) : (
           <p className="muted">
-            A porta local será exibida quando o banco estiver pronto.
+            {t("A porta local será exibida quando o banco estiver pronto.")}
           </p>
         )}
       </div>
@@ -802,13 +810,14 @@ export function Databases({
       {needsDocker && (
         <div className="notice" role="status">
           {catalog.dockerStatus === "starting" &&
-            "O Cloudforge está iniciando o Docker. Aguarde para criar o banco."}
+            t(
+              "O Cloudforge está iniciando o Docker. Aguarde para criar o banco.",
+            )}
           {catalog.dockerStatus === "missing" && (
             <>
-              Instale o Docker na máquina que executa o Core. Use o Docker
-              Desktop no Windows ou o Docker Engine 28 ou superior no Linux.
-              Depois, abra o Docker Desktop com containers Linux ou inicie o
-              serviço do Docker no Linux.
+              {t(
+                "Instale o Docker na máquina que executa o Core. Use o Docker Desktop no Windows ou o Docker Engine 28 ou superior no Linux. Depois, abra o Docker Desktop com containers Linux ou inicie o serviço do Docker no Linux.",
+              )}
               <div className="db-docker-guides">
                 {dockerInstallGuides.map(([system, url]) => (
                   <a
@@ -825,17 +834,21 @@ export function Databases({
                       }
                     }}
                   >
-                    Guia para {system}
+                    {t("Guia para")} {system}
                   </a>
                 ))}
               </div>
             </>
           )}
           {catalog.dockerStatus === "unavailable" &&
-            "O Core não conseguiu acessar o Docker. Abra o Docker Desktop no Windows ou verifique se o serviço está ativo e acessível ao usuário do Core no Linux."}
+            t(
+              "O Core não conseguiu acessar o Docker. Abra o Docker Desktop no Windows ou verifique se o serviço está ativo e acessível ao usuário do Core no Linux.",
+            )}
           {catalog.dockerStatus === "incompatible" &&
-            "Use Docker Engine 28 ou superior com containers Linux. No Docker Desktop, selecione o modo Linux."}
-          {!catalog.dockerStatus && "Verificando o Docker local…"}
+            t(
+              "Use Docker Engine 28 ou superior com containers Linux. No Docker Desktop, selecione o modo Linux.",
+            )}
+          {!catalog.dockerStatus && t("Verificando o Docker local…")}
         </div>
       )}
       {notice && (
@@ -844,21 +857,21 @@ export function Databases({
           role="status"
           onAnimationEnd={() => setNotice("")}
         >
-          {notice}
+          {translateMessage(notice)}
         </span>
       )}
       {!id ? (
         <>
           {heading(
-            "Bancos de dados",
-            "Gerencie os bancos de dados hospedados na sua conta.",
+            t("Bancos de dados"),
+            t("Gerencie os bancos de dados hospedados na sua conta."),
             <button
               className="button primary"
               disabled={!catalog?.docker}
               onClick={() => setCreate(true)}
             >
               <Plus size={17} />
-              Criar banco de dados
+              {t("Criar banco de dados")}
             </button>,
           )}
           <div className="db-tools">
@@ -866,8 +879,8 @@ export function Databases({
               <Search size={17} />
               <input
                 type="search"
-                placeholder="Pesquisar banco de dados…"
-                aria-label="Pesquisar banco de dados"
+                placeholder={t("Pesquisar banco de dados…")}
+                aria-label={t("Pesquisar banco de dados")}
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -881,13 +894,13 @@ export function Databases({
               onClick={() => setFilter(!filter)}
             >
               <SlidersHorizontal size={16} />
-              Filtrar e ordenar
+              {t("Filtrar e ordenar")}
             </button>
           </div>
           {filter && (
             <div className="db-filters">
               <label>
-                Tecnologia
+                {t("Tecnologia")}
                 <select
                   value={engine}
                   onChange={(e) => {
@@ -895,7 +908,7 @@ export function Databases({
                     setPage(0);
                   }}
                 >
-                  <option value="">Todas</option>
+                  <option value="">{t("Todas")}</option>
                   {Object.entries(engines).map(([key, value]) => (
                     <option key={key} value={key}>
                       {value.name}
@@ -904,7 +917,7 @@ export function Databases({
                 </select>
               </label>
               <label>
-                Status
+                {t("Status")}
                 <select
                   value={state}
                   onChange={(e) => {
@@ -912,17 +925,17 @@ export function Databases({
                     setPage(0);
                   }}
                 >
-                  <option value="">Todos</option>
-                  <option value="running">Online</option>
-                  <option value="stopped">Offline</option>
-                  <option value="starting">Iniciando</option>
-                  <option value="restarting">Reiniciando</option>
-                  <option value="stopping">Parando</option>
-                  <option value="error">Erro</option>
+                  <option value="">{t("Todos")}</option>
+                  <option value="running">{t("Online")}</option>
+                  <option value="stopped">{t("Offline")}</option>
+                  <option value="starting">{t("Iniciando")}</option>
+                  <option value="restarting">{t("Reiniciando")}</option>
+                  <option value="stopping">{t("Parando")}</option>
+                  <option value="error">{t("Erro")}</option>
                 </select>
               </label>
               <label>
-                Ordenar por
+                {t("Ordenar por")}
                 <select
                   value={order}
                   onChange={(e) => {
@@ -930,9 +943,9 @@ export function Databases({
                     setPage(0);
                   }}
                 >
-                  <option value="recent">Mais recentes</option>
-                  <option value="oldest">Mais antigos</option>
-                  <option value="name">Nome</option>
+                  <option value="recent">{t("Mais recentes")}</option>
+                  <option value="oldest">{t("Mais antigos")}</option>
+                  <option value="name">{t("Nome")}</option>
                 </select>
               </label>
             </div>
@@ -940,7 +953,7 @@ export function Databases({
           {!catalog ? (
             <div className="empty-state compact">
               <Spinner />
-              Carregando bancos de dados…
+              {t("Carregando bancos de dados…")}
             </div>
           ) : visible.length ? (
             <div className="db-cards">
@@ -964,7 +977,7 @@ export function Databases({
                       samples={cardHistory[db.id] ?? []}
                       field="cpu"
                       second="memory"
-                      label="Histórico recente de CPU e RAM"
+                      label={t("Histórico recente de CPU e RAM")}
                     />
                     <div className="project-card-metrics">
                       <span>
@@ -986,36 +999,39 @@ export function Databases({
                 <Database size={32} />
                 <h2>
                   {catalog.databases.length
-                    ? "Nenhum resultado"
-                    : "Nenhum banco de dados"}
+                    ? t("Nenhum resultado")
+                    : t("Nenhum banco de dados")}
                 </h2>
                 <p>
                   {catalog.databases.length
-                    ? "Ajuste a pesquisa ou os filtros."
-                    : "Crie uma instância de MongoDB, Redis, PostgreSQL ou MySQL."}
+                    ? t("Ajuste a pesquisa ou os filtros.")
+                    : t(
+                        "Crie uma instância de MongoDB, Redis, PostgreSQL ou MySQL.",
+                      )}
                 </p>
               </div>
             </div>
           )}
           {!!visible.length && (
-            <nav className="db-pagination" aria-label="Paginação dos bancos">
+            <nav
+              className="db-pagination"
+              aria-label={t("Paginação dos bancos")}
+            >
               <button
                 className="button"
                 disabled={!currentPage}
                 onClick={() => setPage(currentPage - 1)}
               >
                 <ChevronLeft size={16} />
-                Anterior
+                {t("Anterior")}
               </button>
-              <span>
-                Página {currentPage + 1} de {pages}
-              </span>
+              <span>{t("Página {0} de {1}", currentPage + 1, pages)}</span>
               <button
                 className="button"
                 disabled={currentPage + 1 >= pages}
                 onClick={() => setPage(currentPage + 1)}
               >
-                Próximo
+                {t("Próximo")}
                 <ChevronRight size={16} />
               </button>
             </nav>
@@ -1026,11 +1042,11 @@ export function Databases({
           <Database size={28} />
           <h2>
             {catalog
-              ? "Banco de dados indisponível"
-              : "Carregando banco de dados…"}
+              ? t("Banco de dados indisponível")
+              : t("Carregando banco de dados…")}
           </h2>
           <button className="button" onClick={() => open(null)}>
-            Voltar aos bancos
+            {t("Voltar aos bancos")}
           </button>
         </div>
       ) : (
@@ -1042,14 +1058,16 @@ export function Databases({
           )}
           {database.credentialsPending && (
             <div className="notice db-credentials-prompt">
-              <span>As credenciais estão prontas para visualização única.</span>
+              <span>
+                {t("As credenciais estão prontas para visualização única.")}
+              </span>
               <button
                 className="button"
                 disabled={!!busy}
                 onClick={() => void reveal(database)}
               >
                 <KeyRound size={15} />
-                Exibir credenciais
+                {t("Exibir credenciais")}
               </button>
             </div>
           )}
@@ -1101,16 +1119,23 @@ export function Databases({
                     <strong>{bytes(database.latest?.memory)}</strong>
                     <small>
                       {database.memoryMb === 0
-                        ? "Ilimitado"
+                        ? t("Ilimitado")
                         : database.latest
-                          ? `de ${bytes(database.latest.memoryLimit)} · ${percent((100 * database.latest.memory) / database.latest.memoryLimit)}`
+                          ? t(
+                              "de {0} · {1}",
+                              bytes(database.latest.memoryLimit),
+                              percent(
+                                (100 * database.latest.memory) /
+                                  database.latest.memoryLimit,
+                              ),
+                            )
                           : "—"}
                     </small>
                   </div>
                   <div>
                     <span>
                       <Network size={15} />
-                      Rede
+                      {t("Rede")}
                     </span>
                     <strong>{networkBytes(database.latest?.rx)} ↓</strong>
                     <small>{networkBytes(database.latest?.tx)} ↑</small>
@@ -1118,17 +1143,17 @@ export function Databases({
                   <div>
                     <span>
                       <HardDrive size={15} />
-                      Armazenamento
+                      {t("Armazenamento")}
                     </span>
                     <strong>{bytes(database.latest?.storage)}</strong>
-                    <small>Volume persistente</small>
+                    <small>{t("Volume persistente")}</small>
                   </div>
                 </div>
               </div>
               <div className="db-section-heading">
-                <h2>Conectar</h2>
+                <h2>{t("Conectar")}</h2>
                 <button className="button" onClick={() => select("connection")}>
-                  Senha e certificado
+                  {t("Senha e certificado")}
                   <ChevronRight size={15} />
                 </button>
               </div>
@@ -1139,11 +1164,11 @@ export function Databases({
                     <code>{database.host}</code>
                   </div>
                   <div>
-                    <span>Porta local</span>
+                    <span>{t("Porta local")}</span>
                     <code>{database.port || "—"}</code>
                   </div>
                   <div>
-                    <span>Usuário</span>
+                    <span>{t("Usuário")}</span>
                     <code>cloudforge</code>
                   </div>
                 </div>
@@ -1151,20 +1176,21 @@ export function Databases({
               </div>
               <div className="db-section-heading">
                 <div>
-                  <h2>Métricas</h2>
+                  <h2>{t("Métricas")}</h2>
                   <p className="muted">
-                    Amostras de CPU, RAM e tráfego acumulado, armazenadas por
-                    até 24 horas.
+                    {t(
+                      "Amostras de CPU, RAM e tráfego acumulado, armazenadas por até 24 horas.",
+                    )}
                   </p>
                 </div>
                 <select
-                  aria-label="Período das métricas"
+                  aria-label={t("Período das métricas")}
                   value={period}
                   onChange={(e) => setPeriod(e.target.value)}
                 >
-                  <option value="10m">10 minutos</option>
-                  <option value="1h">1 hora</option>
-                  <option value="24h">24 horas</option>
+                  <option value="10m">{t("10 minutos")}</option>
+                  <option value="1h">{t("1 hora")}</option>
+                  <option value="24h">{t("24 horas")}</option>
                 </select>
               </div>
               <div className="project-card db-history">
@@ -1173,7 +1199,7 @@ export function Databases({
                   <Chart
                     samples={samples}
                     field="cpu"
-                    label="Histórico de CPU"
+                    label={t("Histórico de CPU")}
                   />
                 </div>
                 <div>
@@ -1181,16 +1207,16 @@ export function Databases({
                   <Chart
                     samples={samples}
                     field="memory"
-                    label="Histórico de RAM"
+                    label={t("Histórico de RAM")}
                   />
                 </div>
                 <div>
-                  <h3>Rede · entrada e saída</h3>
+                  <h3>{t("Rede · entrada e saída")}</h3>
                   <Chart
                     samples={samples}
                     field="rx"
                     second="tx"
-                    label="Histórico de tráfego de rede"
+                    label={t("Histórico de tráfego de rede")}
                   />
                 </div>
               </div>
@@ -1200,12 +1226,12 @@ export function Databases({
             <>
               {heading(
                 "Geral",
-                "Altere o nome de identificação usado no Cloudforge.",
+                t("Altere o nome de identificação usado no Cloudforge."),
               )}
               <div className="project-card db-row">
                 <EditField
                   key={database.name}
-                  title="Nome"
+                  title={t("Nome")}
                   initial={database.name}
                   busy={!!busy}
                   onSave={(name) => mutate("rename", { name })}
@@ -1216,8 +1242,10 @@ export function Databases({
           {section === "connection" && (
             <>
               {heading(
-                "Conexão",
-                "Conecte seu cliente de banco na máquina que executa o Cloudforge.",
+                t("Conexão"),
+                t(
+                  "Conecte seu cliente de banco na máquina que executa o Cloudforge.",
+                ),
               )}
               <div className="project-card">
                 <div className="db-row db-endpoints">
@@ -1225,16 +1253,16 @@ export function Databases({
                     <span>Host</span>
                     <CopyField
                       value={database.host}
-                      label="Copiar host"
+                      label={t("Copiar host")}
                       copy={copyValue}
                     />
                   </div>
                   <div>
-                    <span>Porta local</span>
+                    <span>{t("Porta local")}</span>
                     {database.port ? (
                       <CopyField
                         value={String(database.port)}
-                        label="Copiar porta local"
+                        label={t("Copiar porta local")}
                         copy={copyValue}
                       />
                     ) : (
@@ -1244,20 +1272,20 @@ export function Databases({
                   <div>
                     <span>
                       {database.engine === "redis"
-                        ? "Índice do banco"
-                        : "Nome do banco"}
+                        ? t("Índice do banco")
+                        : t("Nome do banco")}
                     </span>
                     <CopyField
                       value={database.engine === "redis" ? "0" : "cloudforge"}
-                      label="Copiar banco"
+                      label={t("Copiar banco")}
                       copy={copyValue}
                     />
                   </div>
                   <div>
-                    <span>Usuário</span>
+                    <span>{t("Usuário")}</span>
                     <CopyField
                       value="cloudforge"
-                      label="Copiar usuário"
+                      label={t("Copiar usuário")}
                       copy={copyValue}
                     />
                   </div>
@@ -1265,9 +1293,9 @@ export function Databases({
                 {connection(database)}
                 <div className="db-row db-with-action">
                   <div>
-                    <h3>Senha do banco de dados</h3>
+                    <h3>{t("Senha do banco de dados")}</h3>
                     <p className="muted">
-                      Gere uma nova senha para o usuário cloudforge.
+                      {t("Gere uma nova senha para o usuário cloudforge.")}
                     </p>
                   </div>
                   <button
@@ -1276,20 +1304,22 @@ export function Databases({
                     onClick={() => setConfirm("password")}
                   >
                     <KeyRound size={16} />
-                    Redefinir senha
+                    {t("Redefinir senha")}
                   </button>
                 </div>
                 <div className="db-row db-with-action db-certificate-row">
                   <div>
-                    <h3>Certificado SSL/TLS</h3>
+                    <h3>{t("Certificado SSL/TLS")}</h3>
                     <p className="muted">
-                      Use a CA para verificar a conexão. Para usar mTLS,
-                      configure também o certificado e a chave privada de
-                      cliente no driver.
+                      {t(
+                        "Use a CA para verificar a conexão. Para usar mTLS, configure também o certificado e a chave privada de cliente no driver.",
+                      )}
                     </p>
                     {!database.tlsValidated && (
                       <p className="muted">
-                        Os arquivos ficam disponíveis após a validação do TLS.
+                        {t(
+                          "Os arquivos ficam disponíveis após a validação do TLS.",
+                        )}
                       </p>
                     )}
                   </div>
@@ -1300,7 +1330,7 @@ export function Databases({
                       onClick={() => setConfirm("certificate")}
                     >
                       <ShieldCheck size={16} />
-                      Redefinir certificado
+                      {t("Redefinir certificado")}
                     </button>
                     <CertificateDownload
                       key={database.id}
@@ -1315,13 +1345,15 @@ export function Databases({
           {section === "risk" && (
             <>
               {heading(
-                "Área de risco",
-                "A exclusão remove o banco, o volume e os dados permanentemente.",
+                t("Área de risco"),
+                t(
+                  "A exclusão remove o banco, o volume e os dados permanentemente.",
+                ),
               )}
               <div className="project-card db-row db-with-action">
                 <div>
-                  <h3>Excluir banco de dados</h3>
-                  <p className="muted">Esta ação é irreversível.</p>
+                  <h3>{t("Excluir banco de dados")}</h3>
+                  <p className="muted">{t("Esta ação é irreversível.")}</p>
                 </div>
                 <button
                   className="button danger"
@@ -1336,26 +1368,25 @@ export function Databases({
                     setConfirm("delete");
                   }}
                 >
-                  Excluir banco de dados
+                  {t("Excluir banco de dados")}
                 </button>
               </div>
             </>
           )}
           {confirm === "delete" && (
             <DeleteConfirmationModal
-              title="Excluir banco de dados"
+              title={t("Excluir banco de dados")}
               name={database.name}
               summary={
-                <>
-                  O banco <strong>{database.name}</strong>, seu volume e todos
-                  os dados armazenados serão excluídos permanentemente. Esta
-                  ação é irreversível.
-                </>
+                <Translated
+                  text="O banco {0}, seu volume e todos os dados armazenados serão excluídos permanentemente. Esta ação é irreversível."
+                  values={[<strong>{database.name}</strong>]}
+                />
               }
-              instruction="Digite o nome do banco para confirmar"
-              pendingLabel="Excluindo banco de dados…"
+              instruction={t("Digite o nome do banco para confirmar")}
+              pendingLabel={t("Excluindo banco de dados…")}
               busy={!!busy}
-              error={error}
+              error={translateMessage(error)}
               onClose={() => setConfirm(undefined)}
               onConfirm={(confirmation) =>
                 void mutate("delete", { confirmation })
@@ -1366,8 +1397,8 @@ export function Databases({
             <Modal
               title={
                 confirm === "certificate"
-                  ? "Redefinir certificado"
-                  : "Redefinir senha"
+                  ? t("Redefinir certificado")
+                  : t("Redefinir senha")
               }
               onClose={() => setConfirm(undefined)}
               closeDisabled={!!busy}
@@ -1375,8 +1406,12 @@ export function Databases({
             >
               <p className="muted">
                 {confirm === "certificate"
-                  ? "O banco será reiniciado. Certificados e chaves anteriores poderão deixar de funcionar. Baixe os novos arquivos após a redefinição. Os dados e a senha serão preservados."
-                  : "A senha atual deixará de funcionar. Atualize a configuração das suas aplicações com a nova senha."}
+                  ? t(
+                      "O banco será reiniciado. Certificados e chaves anteriores poderão deixar de funcionar. Baixe os novos arquivos após a redefinição. Os dados e a senha serão preservados.",
+                    )
+                  : t(
+                      "A senha atual deixará de funcionar. Atualize a configuração das suas aplicações com a nova senha.",
+                    )}
               </p>
               <ErrorMessage error={error} />
               <div className="modal-actions">
@@ -1385,14 +1420,15 @@ export function Databases({
                   disabled={!!busy}
                   onClick={() => setConfirm(undefined)}
                 >
-                  Cancelar
+                  {t("Cancelar")}
                 </button>
                 <button
                   className="button primary"
                   disabled={!!busy}
                   onClick={() => void mutate(confirm)}
                 >
-                  {busy ? <Spinner /> : null}Confirmar
+                  {busy ? <Spinner /> : null}
+                  {t("Confirmar")}
                 </button>
               </div>
             </Modal>
@@ -1419,47 +1455,48 @@ export function Databases({
       )}
       {credentials && (
         <Modal
-          title="Credenciais do banco de dados"
+          title={t("Credenciais do banco de dados")}
           onClose={() => setCredentials(undefined)}
           wide
         >
           <p className="notice">
-            A senha será exibida apenas uma vez. Copie e guarde as credenciais
-            antes de fechar.
+            {t(
+              "A senha será exibida apenas uma vez. Copie e guarde as credenciais antes de fechar.",
+            )}
           </p>
           <dl className="db-credential-list">
             <div>
-              <dt>Banco</dt>
+              <dt>{t("Banco")}</dt>
               <dd>
                 {credentials.database.name} ·{" "}
                 {engines[credentials.database.engine].name}
               </dd>
             </div>
             <div>
-              <dt>Host</dt>
+              <dt>{t("Host")}</dt>
               <dd>{credentials.database.host}</dd>
             </div>
             <div>
-              <dt>Porta</dt>
+              <dt>{t("Porta")}</dt>
               <dd>{credentials.database.port || "—"}</dd>
             </div>
             <div>
-              <dt>Usuário</dt>
+              <dt>{t("Usuário")}</dt>
               <dd>cloudforge</dd>
             </div>
           </dl>
-          <h3>Senha</h3>
+          <h3>{t("Senha")}</h3>
           <CopyField
             value={credentials.password}
-            label="Copiar senha"
+            label={t("Copiar senha")}
             copy={copyValue}
           />
           {credentials.url && (
             <>
-              <h3>URL de conexão</h3>
+              <h3>{t("URL de conexão")}</h3>
               <CopyField
                 value={credentials.url}
-                label="Copiar URL de conexão"
+                label={t("Copiar URL de conexão")}
                 copy={copyValue}
               />
             </>
@@ -1467,10 +1504,11 @@ export function Databases({
           {credentials.database.tlsValidated && (
             <div className="db-row db-with-action db-certificate-row">
               <div>
-                <h3>Certificados SSL/TLS</h3>
+                <h3>{t("Certificados SSL/TLS")}</h3>
                 <p className="muted">
-                  Baixe a CA para verificar a conexão. O certificado e a chave
-                  de cliente são opcionais; guarde a chave como uma senha.
+                  {t(
+                    "Baixe a CA para verificar a conexão. O certificado e a chave de cliente são opcionais; guarde a chave como uma senha.",
+                  )}
                 </p>
               </div>
               <CertificateDownload
@@ -1484,7 +1522,7 @@ export function Databases({
               className="button primary"
               onClick={() => setCredentials(undefined)}
             >
-              Concluir
+              {t("Concluir")}
             </button>
           </div>
         </Modal>
@@ -1518,7 +1556,7 @@ function CopyField({
         }}
       >
         <Copy size={15} />
-        {copied && <span>Copiado</span>}
+        {copied && <span>{t("Copiado")}</span>}
       </button>
     </div>
   );
@@ -1548,7 +1586,7 @@ function EditField({
         <input value={value} onChange={(e) => setValue(e.target.value)} />
       </label>
       <button className="button primary" disabled={busy || value === initial}>
-        Salvar
+        {t("Salvar")}
       </button>
     </form>
   );
@@ -1588,7 +1626,7 @@ function CreateDatabase({
   }
   return (
     <Modal
-      title="Criar novo banco de dados"
+      title={t("Criar novo banco de dados")}
       onClose={onClose}
       closeDisabled={busy}
       wide
@@ -1602,13 +1640,13 @@ function CreateDatabase({
         </div>
         <form className="db-create-form" onSubmit={create}>
           <p className="muted">
-            Escolha a tecnologia, o nome e o limite de memória do banco.
+            {t("Escolha a tecnologia, o nome e o limite de memória do banco.")}
           </p>
           <label>
-            Nome
+            {t("Nome")}
             <input
               autoFocus
-              placeholder="Nome do banco de dados"
+              placeholder={t("Nome do banco de dados")}
               maxLength={60}
               required
               value={name}
@@ -1616,7 +1654,7 @@ function CreateDatabase({
             />
           </label>
           <label className="db-memory-field">
-            <span>Limite de memória</span>
+            <span>{t("Limite de memória")}</span>
             <span className="db-memory-input">
               <input
                 type="number"
@@ -1630,10 +1668,10 @@ function CreateDatabase({
               />
               <span>MB</span>
             </span>
-            <small id="db-memory-hint">0 para ilimitado</small>
+            <small id="db-memory-hint">{t("0 para ilimitado")}</small>
           </label>
           <fieldset>
-            <legend>Banco de dados</legend>
+            <legend>{t("Banco de dados")}</legend>
             <div className="db-engine-options">
               {engineOptions.map((key) => (
                 <label className="db-engine-option" key={key}>
@@ -1658,10 +1696,11 @@ function CreateDatabase({
               disabled={busy}
               onClick={onClose}
             >
-              Cancelar
+              {t("Cancelar")}
             </button>
             <button className="button primary" disabled={busy}>
-              {busy && <Spinner />}Criar banco de dados
+              {busy && <Spinner />}
+              {t("Criar banco de dados")}
             </button>
           </div>
         </form>

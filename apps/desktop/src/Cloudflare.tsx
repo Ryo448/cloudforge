@@ -1,3 +1,4 @@
+import { t, translateMessage } from "../../../packages/ui/i18n";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowUpRight,
@@ -128,7 +129,7 @@ export function CloudflarePage({
       <div className="page-heading">
         <div>
           <h1>Cloudflare</h1>
-          <p>Publique o painel e seus projetos usando seu domínio.</p>
+          <p>{t("Publique o painel e seus projetos usando seu domínio.")}</p>
         </div>
         {config.tunnelId && (
           <button
@@ -136,7 +137,7 @@ export function CloudflarePage({
             disabled={!!busy}
             onClick={() => void run("status", refresh)}
           >
-            <RefreshCw size={16} /> Atualizar status
+            <RefreshCw size={16} /> {t("Atualizar status")}
           </button>
         )}
       </div>
@@ -144,14 +145,14 @@ export function CloudflarePage({
       {notice && (
         <div className="notice" role="status">
           <Check size={17} />
-          {notice}
+          {translateMessage(notice)}
         </div>
       )}
       <section className="settings-section">
         {config.adminHost && !pending ? (
           <>
             <div className="section-heading">
-              <h2>Endereço do painel</h2>
+              <h2>{t("Endereço do painel")}</h2>
               <span
                 className={
                   status?.connected ? "status online" : "status offline"
@@ -159,8 +160,8 @@ export function CloudflarePage({
               >
                 <span className="status-dot" />
                 {status?.connected
-                  ? "Acesso HTTPS ativo"
-                  : "Aguardando conexão"}
+                  ? t("Acesso HTTPS ativo")
+                  : t("Aguardando conexão")}
               </span>
             </div>
             <div className="configured-domain">
@@ -168,7 +169,7 @@ export function CloudflarePage({
               <strong>https://{config.adminHost}</strong>
               <button
                 className="icon-button"
-                aria-label="Copiar endereço do painel"
+                aria-label={t("Copiar endereço do painel")}
                 onClick={() =>
                   void run("copy", async () => {
                     await window.cloudforge.copy(`https://${config.adminHost}`);
@@ -188,7 +189,7 @@ export function CloudflarePage({
                   )
                 }
               >
-                Abrir painel <ArrowUpRight size={15} />
+                {t("Abrir painel")} <ArrowUpRight size={15} />
               </button>
             </div>
             <ErrorMessage error={status?.lastError || ""} />
@@ -205,7 +206,7 @@ export function CloudflarePage({
                 }
               >
                 {busy === "verify" ? <Spinner /> : <ShieldCheck size={16} />}{" "}
-                Verificar acesso HTTPS
+                {t("Verificar acesso HTTPS")}
               </button>
               <button
                 className="button"
@@ -215,11 +216,11 @@ export function CloudflarePage({
                   setEditSubdomain(config.adminHost.split(".")[0]);
                 }}
               >
-                Alterar endereço do painel
+                {t("Alterar endereço do painel")}
               </button>
               {config.mode === "local" && (
                 <button className="button" disabled={!!busy} onClick={login}>
-                  Autorizar outro domínio <ArrowUpRight size={15} />
+                  {t("Autorizar outro domínio")} <ArrowUpRight size={15} />
                 </button>
               )}
             </div>
@@ -228,9 +229,9 @@ export function CloudflarePage({
                 className="narrow-form domain-form"
                 onSubmit={changeAddress}
               >
-                <h3>Novo endereço do painel</h3>
+                <h3>{t("Novo endereço do painel")}</h3>
                 <label>
-                  Domínio{" "}
+                  {t("Domínio")}{" "}
                   <select
                     value={editDomain}
                     onChange={(event) => setEditDomain(event.target.value)}
@@ -243,7 +244,7 @@ export function CloudflarePage({
                   </select>
                 </label>
                 <label>
-                  Subdomínio{" "}
+                  {t("Subdomínio")}{" "}
                   <div className="input-suffix">
                     <input
                       required
@@ -263,8 +264,9 @@ export function CloudflarePage({
                   </p>
                 )}
                 <p className="muted">
-                  O endereço anterior será desativado. Entre novamente pelo novo
-                  endereço.
+                  {t(
+                    "O endereço anterior será desativado. Entre novamente pelo novo endereço.",
+                  )}
                 </p>
                 <div className="form-footer">
                   <button
@@ -273,7 +275,7 @@ export function CloudflarePage({
                     disabled={!!busy}
                     onClick={() => setEditDomain("")}
                   >
-                    Cancelar
+                    {t("Cancelar")}
                   </button>
                   <button
                     className="button primary"
@@ -288,7 +290,7 @@ export function CloudflarePage({
                     ) : (
                       <Check size={16} />
                     )}{" "}
-                    Salvar novo endereço
+                    {t("Salvar novo endereço")}
                   </button>
                 </div>
               </form>
@@ -296,10 +298,11 @@ export function CloudflarePage({
           </>
         ) : pending ? (
           <>
-            <h2>Autorize um domínio no navegador</h2>
+            <h2>{t("Autorize um domínio no navegador")}</h2>
             <p className="muted" role="status">
-              O Cloudforge está aguardando a autorização. Entre na sua conta
-              Cloudflare e selecione o domínio que deseja usar.
+              {t(
+                "O Cloudforge está aguardando a autorização. Entre na sua conta Cloudflare e selecione o domínio que deseja usar.",
+              )}
             </p>
             <button
               className="button"
@@ -311,20 +314,20 @@ export function CloudflarePage({
                 })
               }
             >
-              Cancelar conexão
+              {t("Cancelar conexão")}
             </button>
           </>
         ) : browser?.authorized ? (
           <>
             <div className="section-heading">
-              <h2>Escolher endereço do painel</h2>
+              <h2>{t("Escolher endereço do painel")}</h2>
               <button className="text-button" disabled={!!busy} onClick={login}>
-                Escolher outro domínio <ArrowUpRight size={14} />
+                {t("Escolher outro domínio")} <ArrowUpRight size={14} />
               </button>
             </div>
             <form className="narrow-form" onSubmit={provision}>
               <label>
-                Domínio
+                {t("Domínio")}
                 <input
                   required
                   maxLength={253}
@@ -340,11 +343,11 @@ export function CloudflarePage({
               </label>
               {!browser.domain && (
                 <p className="muted small" id="authorized-domain">
-                  Digite o mesmo domínio que você autorizou no navegador.
+                  {t("Digite o mesmo domínio que você autorizou no navegador.")}
                 </p>
               )}
               <label>
-                Subdomínio
+                {t("Subdomínio")}
                 <div className="input-suffix">
                   <input
                     required
@@ -367,37 +370,55 @@ export function CloudflarePage({
                 className="button primary"
                 disabled={!!busy || !validDomain || !validSubdomain}
               >
-                {busy === "provision" ? <Spinner /> : <Globe size={16} />} Criar
-                endereço público
+                {busy === "provision" ? <Spinner /> : <Globe size={16} />}{" "}
+                {t("Criar endereço público")}
               </button>
             </form>
           </>
         ) : (
           <>
-            <h2>Conecte sua conta</h2>
+            <h2>{t("Conecte sua conta")}</h2>
             <p className="muted">
-              Entre na Cloudflare pelo navegador e escolha o domínio. Depois,
-              defina o subdomínio que vai abrir o painel.
+              {t(
+                "Entre na Cloudflare pelo navegador e escolha o domínio. Depois, defina o subdomínio que vai abrir o painel.",
+              )}
             </p>
             <button
               className="button primary"
               disabled={!!busy || (!status && !error)}
               onClick={login}
             >
-              {busy === "login" ? <Spinner /> : <Cloud size={16} />} Conectar
-              com a Cloudflare
+              {busy === "login" ? <Spinner /> : <Cloud size={16} />}{" "}
+              {t("Conectar com a Cloudflare")}
             </button>
           </>
         )}
       </section>
       {!!status?.pendingOperations?.length && (
         <section className="settings-section">
-          <h2>Operações pendentes</h2>
+          <h2>{t("Operações pendentes")}</h2>
           {status.pendingOperations.map((operation) => (
             <div className="operation-row" key={operation.id}>
-              <strong>{operation.kind}</strong>
-              <span>{operation.status}</span>
-              <p>{operation.lastError}</p>
+              <strong>
+                {(
+                  {
+                    "cloudflare-provision": t("Configuração do Cloudflare"),
+                    "cloudflare-route": t("Rota do projeto"),
+                  } as Record<string, string>
+                )[operation.kind] ?? operation.kind}
+              </strong>
+              <span>
+                {(
+                  {
+                    pending: t("Pendente"),
+                    "tunnel-created": t("Túnel criado"),
+                    "dns-created": t("DNS criado"),
+                    "needs-cleanup": t("Limpeza pendente"),
+                    "rolled-back": t("Revertida"),
+                  } as Record<string, string>
+                )[operation.status] ?? operation.status}
+              </span>
+              <p>{translateMessage(operation.lastError)}</p>
             </div>
           ))}
           <button
@@ -410,7 +431,7 @@ export function CloudflarePage({
               })
             }
           >
-            <RefreshCw size={16} /> Recuperar operações
+            <RefreshCw size={16} /> {t("Recuperar operações")}
           </button>
         </section>
       )}

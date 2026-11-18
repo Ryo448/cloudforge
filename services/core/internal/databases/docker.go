@@ -355,7 +355,8 @@ func (d docker) create(ctx context.Context, r record) error {
 		return err
 	}
 	for _, kind := range []string{"volume", "network"} {
-		if err = d.ensureResource(ctx, r, kind, !hasLegacy || kind == "network"); err != nil {
+		allowCreate := kind == "network" || (!hasLegacy && r.Action != "recover" && r.Port == 0)
+		if err = d.ensureResource(ctx, r, kind, allowCreate); err != nil {
 			return err
 		}
 	}
@@ -448,9 +449,21 @@ func (d docker) lifecycle(ctx context.Context, r record, args ...string) error {
 }
 
 func (d docker) remove(ctx context.Context, r record) error {
+	name := containerName(r)
 	_, exists, err := d.inspect(ctx, r)
 	if err != nil {
 		return err
+	}
+	network, err := d.command(ctx, nil, "network", "ls", "--no-trunc", "--filter", "name=^"+name+"$",
+		"--filter", "label=cloudforge.database="+r.ID, "--format", "{{.ID}}")
+	if err != nil {
+		return err
+	}
+	networkID := strings.TrimSpace(string(network))
+	if networkID != "" {
+		if err = d.disconnectDBeaver(ctx, name, networkID); err != nil {
+			return err
+		}
 	}
 	if exists {
 		if err = d.lifecycle(ctx, r, "rm", "-f", "-v"); err != nil {
@@ -460,18 +473,57 @@ func (d docker) remove(ctx context.Context, r record) error {
 	if err = d.removeLegacy(ctx, r); err != nil {
 		return err
 	}
-	name := containerName(r)
-	for _, kind := range []string{"network", "volume"} {
-		out, err := d.command(ctx, nil, kind, "ls", "--filter", "label=cloudforge.database="+r.ID, "--format", "{{.Name}}")
+	if networkID != "" {
+		if _, err = d.command(ctx, nil, "network", "rm", networkID); err != nil {
+			return err
+		}
+	}
+	volumes, err := d.command(ctx, nil, "volume", "ls", "--filter", "label=cloudforge.database="+r.ID, "--format", "{{.Name}}")
+	if err != nil {
+		return err
+	}
+	for _, volume := range strings.Fields(string(volumes)) {
+		if volume == name {
+			_, err = d.command(ctx, nil, "volume", "rm", name)
+			return err
+		}
+	}
+	return nil
+}
+
+var errDatabaseNetworkInUse = errors.New("a rede Docker do banco está em uso por outro container; desconecte-o e tente excluir novamente")
+
+func (d docker) disconnectDBeaver(ctx context.Context, network, networkID string) error {
+	raw, err := d.command(ctx, nil, "network", "inspect", "--format", "{{json .Containers}}", networkID)
+	if err != nil {
+		return err
+	}
+	var endpoints map[string]struct{ Name string }
+	if err = json.Unmarshal(raw, &endpoints); err != nil {
+		return errors.New("configuração da rede Docker do banco inválida")
+	}
+	var sessions []string
+	for id, endpoint := range endpoints {
+		if endpoint.Name == network || endpoint.Name == network+"-legacy" {
+			continue
+		}
+		if !strings.HasPrefix(endpoint.Name, "cloudforge-dbeaver-") {
+			return errDatabaseNetworkInUse
+		}
+		// Match the runtime configuration used by Electron, including existing sessions.
+		format := `{{.HostConfig.AutoRemove}} {{.HostConfig.NetworkMode}} {{.Config.User}} {{if index .HostConfig.Tmpfs "/opt/cloudbeaver/workspace"}}dbeaver{{end}}`
+		config, err := d.command(ctx, nil, "inspect", "--type", "container", "--format", format, id)
 		if err != nil {
 			return err
 		}
-		for _, line := range strings.Fields(string(out)) {
-			if line == name {
-				if _, err = d.command(ctx, nil, kind, "rm", name); err != nil {
-					return err
-				}
-			}
+		if strings.TrimSpace(string(config)) != "true "+network+" 8978:8978 dbeaver" {
+			return errDatabaseNetworkInUse
+		}
+		sessions = append(sessions, id)
+	}
+	for _, id := range sessions {
+		if _, err = d.command(ctx, nil, "network", "disconnect", "--force", networkID, id); err != nil {
+			return err
 		}
 	}
 	return nil

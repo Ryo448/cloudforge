@@ -1,3 +1,4 @@
+import { t, translateMessage } from "../../../packages/ui/i18n";
 import {
   lazy,
   Suspense,
@@ -205,7 +206,7 @@ export function ProjectFiles({
       !saving &&
       (!dirty ||
         window.confirm(
-          "Há alterações não salvas. Descartar e abrir outro arquivo?",
+          t("Há alterações não salvas. Descartar e abrir outro arquivo?"),
         ))
     );
   }
@@ -322,7 +323,7 @@ export function ProjectFiles({
             {active && dirty && (
               <span
                 className="project-file-dirty"
-                aria-label="Alterações não salvas"
+                aria-label={t("Alterações não salvas")}
               />
             )}
           </button>
@@ -333,7 +334,7 @@ export function ProjectFiles({
                 className="project-file-folder-status"
                 style={{ paddingLeft: `${30 + depth * 16}px` }}
               >
-                Carregando…
+                {t("Carregando…")}
               </div>
             ) : folderErrors[entry.path] ? (
               <div
@@ -341,7 +342,7 @@ export function ProjectFiles({
                 style={{ paddingLeft: `${30 + depth * 16}px` }}
                 role="alert"
               >
-                Não foi possível abrir. Feche e tente novamente.
+                {t("Não foi possível abrir. Feche e tente novamente.")}
               </div>
             ) : folders[entry.path]?.length ? (
               renderFolder(entry.path, depth + 1)
@@ -350,7 +351,7 @@ export function ProjectFiles({
                 className="project-file-folder-status"
                 style={{ paddingLeft: `${30 + depth * 16}px` }}
               >
-                Pasta vazia
+                {t("Pasta vazia")}
               </div>
             ))}
         </div>
@@ -358,22 +359,22 @@ export function ProjectFiles({
     });
   }
   return (
-    <section className="project-files" aria-label="Arquivos do projeto">
+    <section className="project-files" aria-label={t("Arquivos do projeto")}>
       <div className="project-files-toolbar">
         <div className="project-files-location">
           <FolderOpen size={17} />
           <span>{project.name}</span>
           <span className="muted">/</span>
-          <span className="muted">Arquivos</span>
+          <span className="muted">{t("Arquivos")}</span>
         </div>
         <div className="project-files-actions">
           <button
             type="button"
             className="button"
             onClick={() => void refreshTree()}
-            title="Atualizar arquivos"
+            title={t("Atualizar arquivos")}
           >
-            <RefreshCw size={15} /> Atualizar
+            <RefreshCw size={15} /> {t("Atualizar")}
           </button>
           <button
             type="button"
@@ -384,28 +385,34 @@ export function ProjectFiles({
                 .catch((e) => setError(message(e)))
             }
           >
-            <FolderOpen size={15} /> Abrir no explorador
+            <FolderOpen size={15} /> {t("Abrir no explorador")}
           </button>
         </div>
       </div>
       <div className="project-files-body">
-        <aside className="project-files-tree" aria-label="Árvore de arquivos">
+        <aside
+          className="project-files-tree"
+          aria-label={t("Árvore de arquivos")}
+        >
           <div className="project-files-tree-heading">
-            ARQUIVOS <span>{folders[""]?.length ?? ""}</span>
+            {t("ARQUIVOS")} <span>{folders[""]?.length ?? ""}</span>
           </div>
           <div className="project-files-tree-scroll">
             {loadingFolder === "" && !folders[""] ? (
-              <p className="project-file-folder-status">Carregando arquivos…</p>
+              <p className="project-file-folder-status">
+                {t("Carregando arquivos…")}
+              </p>
             ) : folderErrors[""] ? (
               <p className="project-file-folder-status" role="alert">
-                Não foi possível carregar a árvore. Use Atualizar para tentar
-                novamente.
+                {t(
+                  "Não foi possível carregar a árvore. Use Atualizar para tentar novamente.",
+                )}
               </p>
             ) : folders[""]?.length ? (
               renderFolder("", 0)
             ) : (
               <p className="project-file-folder-status">
-                Este projeto não contém arquivos.
+                {t("Este projeto não contém arquivos.")}
               </p>
             )}
           </div>
@@ -419,17 +426,19 @@ export function ProjectFiles({
                     className="project-file-close"
                     type="button"
                     onClick={closeFile}
-                    aria-label="Fechar arquivo"
+                    aria-label={t("Fechar arquivo")}
                   >
                     <X size={16} />
                   </button>
                   <span title={selected.entry.path}>{selected.entry.name}</span>
                   {dirty && (
-                    <span className="project-files-unsaved">Não salvo</span>
+                    <span className="project-files-unsaved">
+                      {t("Não salvo")}
+                    </span>
                   )}
                 </>
               ) : (
-                <span>Visualização</span>
+                <span>{t("Visualização")}</span>
               )}
             </div>
             {selected?.kind === "text" && (
@@ -440,33 +449,41 @@ export function ProjectFiles({
                 disabled={!dirty || saving}
               >
                 <Save size={15} />
-                {saving ? "Salvando…" : "Salvar"}
+                {saving ? t("Salvando…") : t("Salvar")}
               </button>
             )}
           </div>
           {error && (
             <div className="project-files-message error" role="alert">
-              {error}
+              {translateMessage(error)}
             </div>
           )}
           {notice && (
             <div className="project-files-message" role="status">
-              {notice}
+              {translateMessage(notice)}
             </div>
           )}
           <div className="project-files-stage">
             {loadingFile ? (
-              <div className="project-files-empty">Carregando arquivo…</div>
+              <div className="project-files-empty">
+                {t("Carregando arquivo…")}
+              </div>
             ) : !selected ? (
               <div className="project-files-empty">
                 <FolderOpen size={34} />
-                <h2>Nenhum arquivo aberto</h2>
-                <p>Selecione um arquivo na árvore para visualizar ou editar.</p>
+                <h2>{t("Nenhum arquivo aberto")}</h2>
+                <p>
+                  {t(
+                    "Selecione um arquivo na árvore para visualizar ou editar.",
+                  )}
+                </p>
               </div>
             ) : selected.kind === "text" ? (
               <Suspense
                 fallback={
-                  <div className="project-files-empty">Preparando editor…</div>
+                  <div className="project-files-empty">
+                    {t("Preparando editor…")}
+                  </div>
                 }
               >
                 <FileCodeEditor
@@ -524,8 +541,8 @@ export function ProjectFiles({
             <div className="project-files-status">
               <span>{selected.entry.path}</span>
               <span>
-                {extension(selected.entry.name).toUpperCase() || "TEXTO"} ·
-                UTF-8 · Ctrl+S para salvar
+                {extension(selected.entry.name).toUpperCase() || t("TEXTO")}{" "}
+                {t("· UTF-8 · Ctrl+S para salvar")}
               </span>
             </div>
           )}

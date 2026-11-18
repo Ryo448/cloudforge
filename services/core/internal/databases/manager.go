@@ -156,7 +156,9 @@ func (m *Manager) Change(owner, id string, change Change) (Instance, error) {
 	if err != nil {
 		return Instance{}, err
 	}
-	if m.active[id] || (r.Action != "" && (r.State != "error" || (r.Action == "delete" && change.Action != "delete"))) {
+	start := change.Action == "start" || change.Action == "restart" || change.Action == "retry"
+	if m.active[id] || (r.Action != "" && r.State != "error") ||
+		(r.Action == "delete" && change.Action != "delete" && !start) {
 		return Instance{}, ErrConflict
 	}
 	switch change.Action {
@@ -171,8 +173,11 @@ func (m *Manager) Change(owner, id string, change Change) (Instance, error) {
 		}
 		r.Desired, r.State, r.Action = "stopped", "stopping", "delete"
 	case "start", "restart", "retry":
+		recovering := r.Action == "delete" || r.Action == "recover"
 		r.Desired, r.State, r.Action = "running", "starting", "reconcile"
-		if change.Action == "restart" {
+		if recovering {
+			r.Action = "recover"
+		} else if change.Action == "restart" {
 			r.Action = "restart"
 		}
 	case "stop":
@@ -266,6 +271,10 @@ func (m *Manager) Run(ctx context.Context) {
 		first := sort.Search(len(records), func(i int) bool { return records[i].ID > lastID })
 		for i := range records {
 			r := records[(first+i)%len(records)]
+			// A failed deletion requires a new confirmation, even after restarting the Core.
+			if r.Action == "delete" && r.State == "error" {
+				continue
+			}
 			if m.active[r.ID] || time.Now().Before(m.retryAt[r.ID]) {
 				continue
 			}

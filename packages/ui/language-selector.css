@@ -1,0 +1,120 @@
+.language-selector {
+  -webkit-app-region: no-drag;
+  position: relative;
+  flex: none;
+  color: #f1f3f7;
+  font-size: 13px;
+  text-align: start;
+}
+
+.language-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.language-trigger:hover,
+.language-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: #f1f3f7;
+}
+
+.language-flag {
+  width: 20px;
+  height: 14px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 12%);
+}
+
+.language-menu {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  z-index: 30;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-end: 0;
+  width: max-content;
+  min-width: 174px;
+  max-height: calc(100dvh - 64px);
+  overflow: auto;
+  padding: 5px;
+  border-radius: var(--radius);
+  background: #151922;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 54%);
+}
+
+.language-menu-label {
+  padding: 7px 8px 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.language-menu button {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 15px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+}
+
+.language-menu button:hover,
+.language-menu button:focus-visible {
+  background: #222834;
+}
+
+.language-menu button[aria-checked="true"] {
+  color: var(--accent);
+  background: #2c1b12;
+}
+
+.language-menu button:focus-visible {
+  outline-offset: -2px;
+}
+
+.remote-language {
+  position: absolute;
+  z-index: 3;
+  inset-block-start: 24px;
+  inset-inline-end: 24px;
+}
+
+.remote-header {
+  position: relative;
+  z-index: 3;
+}
+
+.pingo-error-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .remote-language {
+    inset-block-start: 14px;
+    inset-inline-end: 14px;
+  }
+
+  .remote-shell .language-trigger,
+  .remote-language .language-trigger,
+  .language-menu button {
+    min-height: 40px;
+  }
+}

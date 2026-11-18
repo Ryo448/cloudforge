@@ -1,3 +1,4 @@
+import type { Locale } from "../../../packages/ui/i18n";
 import type { Snapshot } from "../../../packages/shared-types";
 import type { SnapshotDesktop } from "../../../packages/ui/DatabaseSnapshots";
 export interface UpdateState {
@@ -13,6 +14,7 @@ export interface UpdateState {
   bytesPerSecond?: number;
 }
 interface Bridge extends SnapshotDesktop {
+  setLocale: (locale: Locale) => Promise<void>;
   updateState: () => Promise<UpdateState>;
   installUpdate: () => Promise<UpdateState>;
   onUpdateState: (callback: (state: UpdateState) => void) => () => void;

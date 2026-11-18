@@ -1,3 +1,10 @@
+import {
+  plural,
+  t,
+  translateMessage,
+  useLocale,
+} from "../../../packages/ui/i18n";
+import { LanguageSelector } from "../../../packages/ui/LanguageSelector";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Activity,
@@ -21,8 +28,6 @@ import {
   Settings2,
   ShieldCheck,
   Terminal,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 import type { Project, Snapshot } from "../../../packages/shared-types";
 import { mergeProjectUsage } from "../../../packages/shared-types/usage";
@@ -62,7 +67,7 @@ const projectNavigation = [
 const projectSettingsNavigation = [
   { id: "settings", label: "Geral", icon: Settings2 },
   { id: "environment", label: "Variáveis de ambiente", icon: EnvironmentIcon },
-  { id: "domain", label: "Network", icon: Globe },
+  { id: "domain", label: "Rede", icon: Globe },
   { id: "risk", label: "Área de risco", icon: ProjectRiskIcon },
 ] as const;
 
@@ -96,6 +101,10 @@ function CloudflareIcon({ size = 24 }: { size?: number }) {
 }
 
 export default function App() {
+  const locale = useLocale();
+  useEffect(() => {
+    void window.cloudforge?.setLocale?.(locale);
+  }, [locale]);
   const [state, setState] = useState<Snapshot | null>(null),
     [page, setPage] = useState<Page>("overview"),
     [focusGoogleDrive, setFocusGoogleDrive] = useState(false),
@@ -107,7 +116,10 @@ export default function App() {
     [filesDirty, setFilesDirty] = useState(false),
     [adding, setAdding] = useState(false),
     [error, setError] = useState(""),
-    [removalNotice, setRemovalNotice] = useState(""),
+    [removalNotice, setRemovalNotice] = useState<{
+      name: string;
+      warning: string;
+    } | null>(null),
     [wizard, setWizard] = useState<boolean | null>(null),
     [connected, setConnected] = useState(false);
   async function refresh() {
@@ -150,17 +162,20 @@ export default function App() {
       <>
         <WindowControls
           updates
-          heading={error ? "Core indisponível" : "Conectando ao Core"}
+          heading={error ? t("Core indisponível") : t("Conectando ao Core")}
+          details={<LanguageSelector />}
         />
         <div className="connection-page">
           <div className="connection-panel">
             <Server size={36} />
             <h1>
-              {error ? "Core indisponível" : "Conectando ao seu servidor"}
+              {error ? t("Core indisponível") : t("Conectando ao seu servidor")}
             </h1>
             <p>
-              {error ||
-                "O serviço local está iniciando. Seus projetos são gerenciados independentemente desta janela."}
+              {translateMessage(error) ||
+                t(
+                  "O serviço local está iniciando. Seus projetos são gerenciados independentemente desta janela.",
+                )}
             </p>
             {error ? (
               <button
@@ -175,7 +190,7 @@ export default function App() {
                 }}
               >
                 <RefreshCw size={16} />
-                Tentar novamente
+                {t("Tentar novamente")}
               </button>
             ) : (
               <Spinner />
@@ -187,7 +202,11 @@ export default function App() {
   if (wizard)
     return (
       <>
-        <WindowControls updates heading="Configuração inicial" />
+        <WindowControls
+          updates
+          heading={t("Configuração inicial")}
+          details={<LanguageSelector />}
+        />
         <Setup
           state={state}
           onComplete={() => {
@@ -215,7 +234,7 @@ export default function App() {
   const navigate = (p: Page, focusDrive = false) => {
     if (
       filesDirty &&
-      !window.confirm("Há alterações não salvas. Sair sem salvar?")
+      !window.confirm(t("Há alterações não salvas. Sair sem salvar?"))
     )
       return;
     setFilesDirty(false);
@@ -227,7 +246,7 @@ export default function App() {
   const openProject = (project: Project) => {
     if (
       filesDirty &&
-      !window.confirm("Há alterações não salvas. Sair sem salvar?")
+      !window.confirm(t("Há alterações não salvas. Sair sem salvar?"))
     )
       return;
     setFilesDirty(false);
@@ -239,7 +258,7 @@ export default function App() {
     if (section === projectSection) return;
     if (
       filesDirty &&
-      !window.confirm("Há alterações não salvas. Sair sem salvar?")
+      !window.confirm(t("Há alterações não salvas. Sair sem salvar?"))
     )
       return;
     setFilesDirty(false);
@@ -264,15 +283,15 @@ export default function App() {
                 {project.name}
               </span>
               <ChevronRight size={14} aria-hidden="true" />
-              <strong>{sectionLabel}</strong>
+              <strong>{sectionLabel && t(sectionLabel)}</strong>
             </>
           ) : (
             {
-              overview: "Visão geral",
-              projects: "Aplicações",
-              databases: "Bancos de dados",
+              overview: t("Visão geral"),
+              projects: t("Aplicações"),
+              databases: t("Bancos de dados"),
               cloudflare: "Cloudflare",
-              settings: "Configurações",
+              settings: t("Configurações"),
             }[page]
           )
         }
@@ -282,8 +301,9 @@ export default function App() {
               <span
                 className={connected ? "node-light" : "node-light offline"}
               />
-              {connected ? "Core conectado" : "Reconectando"}
+              {connected ? t("Core conectado") : t("Reconectando")}
             </span>
+            <LanguageSelector />
             <span className="host-chip">
               {state.system.os} / {state.system.arch}
             </span>
@@ -299,7 +319,7 @@ export default function App() {
               />
               <div>
                 <strong>{state.system.hostname}</strong>
-                <span>Servidor local</span>
+                <span>{t("Servidor local")}</span>
               </div>
               <Server size={16} />
             </div>
@@ -313,15 +333,15 @@ export default function App() {
               dbeaver
             />
           ) : project ? (
-            <nav aria-label="Navegação do projeto">
+            <nav aria-label={t("Navegação do projeto")}>
               <button
                 className="nav-item project-nav-back"
-                aria-label="Todas as aplicações"
-                title="Todas as aplicações"
+                aria-label={t("Todas as aplicações")}
+                title={t("Todas as aplicações")}
                 onClick={() => navigate("projects")}
               >
                 <ArrowLeft size={18} />
-                <span>Todas as aplicações</span>
+                <span>{t("Todas as aplicações")}</span>
               </button>
               {projectNavigation.map((item) => (
                 <button
@@ -330,16 +350,16 @@ export default function App() {
                     projectSection === item.id ? "nav-item active" : "nav-item"
                   }
                   aria-current={projectSection === item.id ? "page" : undefined}
-                  aria-label={item.label}
-                  title={item.label}
+                  aria-label={t(item.label)}
+                  title={t(item.label)}
                   onClick={() => changeProjectSection(item.id)}
                 >
                   <item.icon size={18} />
-                  <span>{item.label}</span>
+                  <span>{t(item.label)}</span>
                 </button>
               ))}
               <div className="project-nav-divider" aria-hidden="true" />
-              <span className="project-nav-heading">Configurações</span>
+              <span className="project-nav-heading">{t("Configurações")}</span>
               {projectSettingsNavigation.map((item) => (
                 <button
                   key={item.id}
@@ -347,28 +367,44 @@ export default function App() {
                     projectSection === item.id ? "nav-item active" : "nav-item"
                   }
                   aria-current={projectSection === item.id ? "page" : undefined}
-                  aria-label={item.label}
-                  title={item.label}
+                  aria-label={t(item.label)}
+                  title={t(item.label)}
                   onClick={() => changeProjectSection(item.id)}
                 >
                   <item.icon size={18} />
-                  <span>{item.label}</span>
+                  <span>{t(item.label)}</span>
                 </button>
               ))}
             </nav>
           ) : (
-            <nav aria-label="Navegação principal">
+            <nav aria-label={t("Navegação principal")}>
               {(
                 [
-                  { id: "overview", label: "Visão geral", icon: OverviewIcon },
-                  { id: "projects", label: "Aplicações", icon: ProjectsIcon },
-                  { id: "databases", label: "Bancos de dados", icon: Database },
+                  {
+                    id: "overview",
+                    label: t("Visão geral"),
+                    icon: OverviewIcon,
+                  },
+                  {
+                    id: "projects",
+                    label: t("Aplicações"),
+                    icon: ProjectsIcon,
+                  },
+                  {
+                    id: "databases",
+                    label: t("Bancos de dados"),
+                    icon: Database,
+                  },
                   {
                     id: "cloudflare",
                     label: "Cloudflare",
                     icon: CloudflareIcon,
                   },
-                  { id: "settings", label: "Configurações", icon: Settings2 },
+                  {
+                    id: "settings",
+                    label: t("Configurações"),
+                    icon: Settings2,
+                  },
                 ] as const
               ).map((item) => (
                 <button
@@ -392,13 +428,15 @@ export default function App() {
             <div className="service-note">
               <ShieldCheck size={17} />
               <div>
-                <strong>Core independente</strong>
-                <p>Suas aplicações continuam ativas ao fechar esta janela.</p>
+                <strong>{t("Core independente")}</strong>
+                <p>
+                  {t("Suas aplicações continuam ativas ao fechar esta janela.")}
+                </p>
               </div>
             </div>
             <div className="sidebar-version">
               <span>Cloudforge</span>
-              <span>v2.1.3</span>
+              <span>v2.1.4</span>
             </div>
           </div>
         </aside>
@@ -407,7 +445,10 @@ export default function App() {
             <ErrorMessage error={error} />
             {page === "projects" && !project && removalNotice && (
               <div className="notice" role="status">
-                {removalNotice}
+                {t("{0} foi excluído do Cloudforge.", removalNotice.name)}
+                {removalNotice.warning && (
+                  <> {translateMessage(removalNotice.warning)}</>
+                )}
               </div>
             )}
             {project ? (
@@ -432,9 +473,7 @@ export default function App() {
                   );
                   setSelected(null);
                   setPage("projects");
-                  setRemovalNotice(
-                    `${project.name} foi excluído do Cloudforge.${warning ? ` ${warning}` : ""}`,
-                  );
+                  setRemovalNotice({ name: project.name, warning });
                   void refresh();
                 }}
               />
@@ -442,10 +481,11 @@ export default function App() {
               <>
                 <div className="page-heading">
                   <div>
-                    <h1>Seu servidor. Suas aplicações.</h1>
+                    <h1>{t("Seu servidor. Suas aplicações.")}</h1>
                     <p>
-                      Acompanhe a máquina e mantenha suas aplicações em
-                      movimento.
+                      {t(
+                        "Acompanhe a máquina e mantenha suas aplicações em movimento.",
+                      )}
                     </p>
                   </div>
                   <button
@@ -453,29 +493,34 @@ export default function App() {
                     onClick={() => setAdding(true)}
                   >
                     <Plus size={17} />
-                    Adicionar projeto
+                    {t("Adicionar projeto")}
                   </button>
                 </div>
                 <div className="overview-layout">
                   <section className="machine-panel">
                     <div className="section-heading">
-                      <h2>Recursos da máquina</h2>
-                      <span className="muted small">Atualização a cada 5s</span>
+                      <h2>{t("Recursos da máquina")}</h2>
+                      <span className="muted small">
+                        {t("Atualização a cada 5s")}
+                      </span>
                     </div>
                     <div className="machine-metrics">
                       <Metric
-                        label="CPU da máquina"
+                        label={t("CPU da máquina")}
                         value={percent(state.system.cpu)}
                         icon={<Cpu size={17} />}
                       >
                         <progress max="100" value={state.system.cpu ?? 0} />
                         <span>
-                          {state.system.cores} núcleos · {state.system.threads}{" "}
-                          threads
+                          {t(
+                            "{0} núcleos · {1} threads",
+                            state.system.cores,
+                            state.system.threads,
+                          )}
                         </span>
                       </Metric>
                       <Metric
-                        label="Memória da máquina"
+                        label={t("Memória da máquina")}
                         value={bytes(state.system.memory?.used)}
                         icon={<MemoryStick size={17} />}
                       >
@@ -484,12 +529,15 @@ export default function App() {
                           value={state.system.memory?.usedPercent ?? 0}
                         />
                         <span>
-                          {bytes(state.system.memory?.total)} total ·{" "}
-                          {bytes(state.system.memory?.available)} disponível
+                          {t(
+                            "{0} total · {1} disponível",
+                            bytes(state.system.memory?.total),
+                            bytes(state.system.memory?.available),
+                          )}
                         </span>
                       </Metric>
                       <Metric
-                        label="Armazenamento"
+                        label={t("Armazenamento")}
                         value={bytes(state.system.disk?.used)}
                         icon={<HardDrive size={17} />}
                       >
@@ -498,19 +546,22 @@ export default function App() {
                           value={state.system.disk?.usedPercent ?? 0}
                         />
                         <span>
-                          {bytes(state.system.disk?.free)} livre de{" "}
-                          {bytes(state.system.disk?.total)}
+                          {t(
+                            "{0} livre de {1}",
+                            bytes(state.system.disk?.free),
+                            bytes(state.system.disk?.total),
+                          )}
                         </span>
                       </Metric>
                     </div>
                     <MachineHistory state={state} />
                     <div className="resource-breakdown">
                       <span>
-                        Aplicações · RSS{" "}
-                        {completeMemory ? bytes(projectMemory) : "coletando"}
+                        {t("Aplicações · RSS")}{" "}
+                        {completeMemory ? bytes(projectMemory) : t("coletando")}
                       </span>
                       <span>
-                        Outros processos · estimativa{" "}
+                        {t("Outros processos · estimativa")}{" "}
                         {completeMemory && state.system.memory
                           ? bytes(
                               Math.max(
@@ -525,14 +576,16 @@ export default function App() {
                       <span>
                         <Server size={14} />
                         {state.system.cpuModel ||
-                          "Modelo do processador indisponível"}
+                          t("Modelo do processador indisponível")}
                       </span>
-                      <span>Ligado há {duration(state.system.uptime)}</span>
+                      <span>
+                        {t("Ligado há {0}", duration(state.system.uptime))}
+                      </span>
                     </div>
                   </section>
                   <section className="summary-panel">
                     <div className="section-heading">
-                      <h2>Aplicações</h2>
+                      <h2>{t("Aplicações")}</h2>
                       <Activity size={17} />
                     </div>
                     <div className="app-summary">
@@ -540,41 +593,47 @@ export default function App() {
                         {online}
                         <span> / {state.projects.length}</span>
                       </strong>
-                      <span>em execução</span>
+                      <span>{t("em execução")}</span>
                     </div>
                     <div className="summary-line">
                       <span>
                         <span className="status-dot" />
-                        Online
+                        {t("Online")}
                       </span>
                       <strong>{online}</strong>
                     </div>
                     <div className="summary-line">
-                      <span className="muted">Paradas ou em transição</span>
+                      <span className="muted">
+                        {t("Paradas ou em transição")}
+                      </span>
                       <strong>{state.projects.length - online}</strong>
                     </div>
                     <div className="summary-divider" />
                     <div className="section-heading">
-                      <h3>Acesso remoto</h3>
+                      <h3>{t("Acesso remoto")}</h3>
                       <Cloud size={17} />
                     </div>
                     <p className="muted small">
                       {state.cloudflare.adminHost
-                        ? "Domínio administrativo configurado. Confira a conexão do túnel."
-                        : "Conecte seu domínio para controlar as aplicações de qualquer lugar."}
+                        ? t(
+                            "Domínio administrativo configurado. Confira a conexão do túnel.",
+                          )
+                        : t(
+                            "Conecte seu domínio para controlar as aplicações de qualquer lugar.",
+                          )}
                     </p>
                     <button
                       className="text-button"
                       onClick={() => navigate("cloudflare")}
                     >
-                      {state.cloudflare.adminHost || "Configurar Cloudflare"}
+                      {state.cloudflare.adminHost || t("Configurar Cloudflare")}
                       <ArrowUpRight size={15} />
                     </button>
                   </section>
                 </div>
                 <div className="section-heading projects-heading">
                   <h2>
-                    Suas aplicações{" "}
+                    {t("Suas aplicações")}{" "}
                     <span className="muted">{state.projects.length}</span>
                   </h2>
                   {state.projects.length > 0 && (
@@ -582,7 +641,7 @@ export default function App() {
                       className="text-button"
                       onClick={() => navigate("projects")}
                     >
-                      Ver todos
+                      {t("Ver todos")}
                       <ArrowRight size={15} />
                     </button>
                   )}
@@ -597,9 +656,11 @@ export default function App() {
               <>
                 <div className="page-heading">
                   <div>
-                    <h1>Aplicações</h1>
+                    <h1>{t("Aplicações")}</h1>
                     <p>
-                      Aplicações reais, executadas nos seus próprios diretórios.
+                      {t(
+                        "Aplicações reais, executadas nos seus próprios diretórios.",
+                      )}
                     </p>
                   </div>
                   <button
@@ -607,7 +668,7 @@ export default function App() {
                     onClick={() => setAdding(true)}
                   >
                     <Plus size={17} />
-                    Adicionar projeto
+                    {t("Adicionar projeto")}
                   </button>
                 </div>
                 <ProjectList
@@ -649,25 +710,6 @@ export default function App() {
               />
             )}
           </main>
-          <footer className="workspace-footer">
-            <span>
-              <span className="node-light" />
-              Gerenciamento local · SQLite
-            </span>
-            <span>
-              {state.system.internet ? (
-                <>
-                  <Wifi size={13} />
-                  Conexão disponível
-                </>
-              ) : (
-                <>
-                  <WifiOff size={13} />
-                  Sem resolução de internet
-                </>
-              )}
-            </span>
-          </footer>
         </div>
         {adding && (
           <AddProject
@@ -728,7 +770,7 @@ function MachineHistory({ state }: { state: Snapshot }) {
   return (
     <div className="history">
       <div className="history-head">
-        <span>Utilização recente</span>
+        <span>{t("Utilização recente")}</span>
         <div>
           <span className="chart-legend cpu">CPU</span>
           <span className="chart-legend ram">RAM</span>
@@ -737,7 +779,7 @@ function MachineHistory({ state }: { state: Snapshot }) {
       </div>
       {history.length < 2 ? (
         <div className="chart-waiting">
-          Coletando as primeiras amostras reais…
+          {t("Coletando as primeiras amostras reais…")}
         </div>
       ) : (
         <svg
@@ -745,7 +787,9 @@ function MachineHistory({ state }: { state: Snapshot }) {
           viewBox="0 0 1000 110"
           preserveAspectRatio="none"
           role="img"
-          aria-label="Histórico real de CPU e RAM desde a abertura da janela"
+          aria-label={t(
+            "Histórico real de CPU e RAM desde a abertura da janela",
+          )}
         >
           <path className="chart-guide" d="M0 25H1000 M0 50H1000 M0 75H1000" />
           <polyline className="cpu-line" points={points("cpu")} />
@@ -753,8 +797,8 @@ function MachineHistory({ state }: { state: Snapshot }) {
         </svg>
       )}
       <div className="history-axis">
-        <span>Desde a abertura</span>
-        <span>Agora</span>
+        <span>{t("Desde a abertura")}</span>
+        <span>{t("Agora")}</span>
       </div>
     </div>
   );
@@ -787,14 +831,14 @@ function ProjectList({
           <label className="search-field">
             <Search size={17} />
             <input
-              aria-label="Pesquisar projetos"
-              placeholder="Pesquisar por nome ou runtime…"
+              aria-label={t("Pesquisar projetos")}
+              placeholder={t("Pesquisar por nome ou runtime…")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
           </label>
           <span className="muted small">
-            {filtered.length} projeto{filtered.length !== 1 ? "s" : ""}
+            {plural(filtered.length, "{0} projeto", "{0} projetos")}
           </span>
         </div>
       )}
@@ -803,26 +847,27 @@ function ProjectList({
           <div className="empty-icon">
             <ProjectsIcon size={30} />
           </div>
-          <h3>Uma casa para seus projetos.</h3>
+          <h3>{t("Uma casa para seus projetos.")}</h3>
           <p>
-            Selecione uma pasta Python ou Node.js. O Cloudforge cuida do
-            ambiente, dos processos e dos logs.
+            {t(
+              "Selecione uma pasta Python ou Node.js. O Cloudforge cuida do ambiente, dos processos e dos logs.",
+            )}
           </p>
           <button className="button" onClick={onAdd}>
             <Plus size={16} />
-            Adicionar primeiro projeto
+            {t("Adicionar primeiro projeto")}
           </button>
           <span className="small muted">
-            Seus arquivos continuam no diretório original.
+            {t("Seus arquivos continuam no diretório original.")}
           </span>
         </div>
       ) : !filtered.length ? (
         <div className="empty-state compact">
           <Search size={24} />
-          <h3>Nenhum projeto encontrado</h3>
-          <p>Tente outro nome ou runtime.</p>
+          <h3>{t("Nenhum projeto encontrado")}</h3>
+          <p>{t("Tente outro nome ou runtime.")}</p>
           <button className="button" onClick={() => setQ("")}>
-            Limpar pesquisa
+            {t("Limpar pesquisa")}
           </button>
         </div>
       ) : onAction ? (
@@ -842,13 +887,13 @@ function ProjectList({
           <table>
             <thead>
               <tr>
-                <th>Projeto</th>
-                <th>Status</th>
+                <th>{t("Projeto")}</th>
+                <th>{t("Status")}</th>
                 <th>CPU</th>
-                <th>Memória</th>
-                <th>Tempo ativo</th>
+                <th>{t("Memória")}</th>
+                <th>{t("Tempo ativo")}</th>
                 <th>
-                  <span className="sr-only">Abrir</span>
+                  <span className="sr-only">{t("Abrir")}</span>
                 </th>
               </tr>
             </thead>
@@ -887,7 +932,7 @@ function ProjectList({
                   <td>
                     <button
                       className="icon-button"
-                      aria-label={`Gerenciar ${p.name}`}
+                      aria-label={t("Gerenciar {0}", p.name)}
                       onClick={() => onSelect(p)}
                     >
                       <ChevronRight size={17} />
@@ -936,19 +981,17 @@ function Setup({
     <div className="setup-page">
       <div className="setup-layout">
         <aside className="setup-sidebar">
-          <h1>
-            Um lugar para
-            <br />o que você cria.
-          </h1>
+          <h1>{t("Um lugar para o que você cria.")}</h1>
           <p>
-            Transforme sua máquina em uma plataforma de hospedagem sob seu
-            controle.
+            {t(
+              "Transforme sua máquina em uma plataforma de hospedagem sob seu controle.",
+            )}
           </p>
           <ol className="setup-steps">
             {[
-              "Verificar a máquina",
-              "Criar administrador",
-              "Configurar acesso remoto",
+              t("Verificar a máquina"),
+              t("Criar administrador"),
+              t("Configurar acesso remoto"),
             ].map((label, i) => (
               <li
                 key={label}
@@ -962,9 +1005,9 @@ function Setup({
           <div className="setup-trust">
             <ShieldCheck size={19} />
             <span>
-              Gerenciamento local primeiro.
+              {t("Gerenciamento local primeiro.")}
               <br />
-              Cloudflare quando você precisar.
+              {t("Cloudflare quando você precisar.")}
             </span>
           </div>
         </aside>
@@ -974,10 +1017,11 @@ function Setup({
               <div className="setup-symbol">
                 <Server size={28} />
               </div>
-              <h2>Vamos conhecer sua máquina.</h2>
+              <h2>{t("Vamos conhecer sua máquina.")}</h2>
               <p className="muted">
-                A verificação usa informações reais do sistema. Python e Node.js
-                são exigidos apenas para os projetos que usam cada runtime.
+                {t(
+                  "A verificação usa informações reais do sistema. Python e Node.js são exigidos apenas para os projetos que usam cada runtime.",
+                )}
               </p>
               <div className="setup-machine">
                 <strong>{state.system.hostname}</strong>
@@ -985,7 +1029,9 @@ function Setup({
                   {state.system.os} · {state.system.arch} ·{" "}
                   {bytes(state.system.memory?.total)} RAM
                 </span>
-                <span>{bytes(state.system.disk?.free)} livres no disco</span>
+                <span>
+                  {bytes(state.system.disk?.free)} {t("livres no disco")}
+                </span>
               </div>
               <div className="checklist">
                 {[
@@ -1007,10 +1053,10 @@ function Setup({
                       {ok ? (
                         <>
                           <CheckCircle2 size={15} />
-                          Disponível
+                          {t("Disponível")}
                         </>
                       ) : (
-                        "Configurar quando necessário"
+                        t("Configurar quando necessário")
                       )}
                     </span>
                   </div>
@@ -1018,10 +1064,10 @@ function Setup({
               </div>
               <div className="form-footer">
                 <span className="muted small">
-                  Nenhuma configuração global foi alterada.
+                  {t("Nenhuma configuração global foi alterada.")}
                 </span>
                 <button className="button primary" onClick={() => setStep(1)}>
-                  Continuar
+                  {t("Continuar")}
                   <ArrowRight size={16} />
                 </button>
               </div>
@@ -1031,14 +1077,15 @@ function Setup({
               <div className="setup-symbol">
                 <ShieldCheck size={28} />
               </div>
-              <h2>Sua conta de administrador.</h2>
+              <h2>{t("Sua conta de administrador.")}</h2>
               <p className="muted">
-                Esta conta também será usada para entrar na dashboard remota.
-                Não existem credenciais padrão.
+                {t(
+                  "Esta conta também será usada para entrar na dashboard remota. Não existem credenciais padrão.",
+                )}
               </p>
               <form onSubmit={create}>
                 <label>
-                  Nome de usuário
+                  {t("Nome de usuário")}
                   <input
                     autoComplete="username"
                     minLength={3}
@@ -1049,7 +1096,7 @@ function Setup({
                   />
                 </label>
                 <label>
-                  Senha
+                  {t("Senha")}
                   <input
                     type="password"
                     autoComplete="new-password"
@@ -1059,10 +1106,10 @@ function Setup({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
-                  <small>Use pelo menos 12 caracteres.</small>
+                  <small>{t("Use pelo menos 12 caracteres.")}</small>
                 </label>
                 <label>
-                  Confirmar senha
+                  {t("Confirmar senha")}
                   <input
                     type="password"
                     autoComplete="new-password"
@@ -1080,11 +1127,11 @@ function Setup({
                     disabled={busy}
                     onClick={() => setStep(0)}
                   >
-                    Voltar
+                    {t("Voltar")}
                   </button>
                   <button className="button primary" disabled={busy}>
-                    {busy ? <Spinner /> : <ShieldCheck size={16} />}Criar
-                    administrador
+                    {busy ? <Spinner /> : <ShieldCheck size={16} />}
+                    {t("Criar administrador")}
                   </button>
                 </div>
               </form>
@@ -1094,29 +1141,31 @@ function Setup({
               <div className="setup-symbol">
                 <Cloud size={28} />
               </div>
-              <h2>Seu servidor, além de casa.</h2>
+              <h2>{t("Seu servidor, além de casa.")}</h2>
               <p className="muted">
-                Deseja conectar sua conta Cloudflare para configurar o acesso
-                remoto? O túnel usa conexões de saída, sem abrir portas no
-                roteador.
+                {t(
+                  "Deseja conectar sua conta Cloudflare para configurar o acesso remoto? O túnel usa conexões de saída, sem abrir portas no roteador.",
+                )}
               </p>
               <div className="setup-machine">
-                <strong>A escolha é sua.</strong>
+                <strong>{t("A escolha é sua.")}</strong>
                 <span>
-                  Todos os recursos locais funcionam sem domínio ou conexão com
-                  a Cloudflare.
+                  {t(
+                    "Todos os recursos locais funcionam sem domínio ou conexão com a Cloudflare.",
+                  )}
                 </span>
               </div>
               <p className="small muted">
-                Entre na sua conta pelo navegador e autorize o domínio que
-                deseja usar.
+                {t(
+                  "Entre na sua conta pelo navegador e autorize o domínio que deseja usar.",
+                )}
               </p>
               <div className="form-footer">
                 <button className="button" onClick={onComplete}>
-                  Configurar posteriormente
+                  {t("Configurar posteriormente")}
                 </button>
                 <button className="button primary" onClick={onCloud}>
-                  Conectar agora
+                  {t("Conectar agora")}
                   <ArrowUpRight size={16} />
                 </button>
               </div>
@@ -1125,8 +1174,9 @@ function Setup({
         </section>
       </div>
       <div className="setup-footnote">
-        Execute apenas código confiável. Os projetos usam os privilégios do seu
-        usuário; não há isolamento por containers.
+        {t(
+          "Execute apenas código confiável. Os projetos usam os privilégios do seu usuário; não há isolamento por containers.",
+        )}
       </div>
     </div>
   );

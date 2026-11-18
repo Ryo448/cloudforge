@@ -1,3 +1,5 @@
+import { t } from "../../../packages/ui/i18n";
+import { LanguageSelector } from "../../../packages/ui/LanguageSelector";
 import { RefreshCw } from "lucide-react";
 import "./error-screen.css";
 import baseMascot from "./mascots/base.webp";
@@ -61,26 +63,29 @@ export function ErrorScreen({ kind, onRetry }: ErrorScreenProps) {
             Cloud<span>forge</span>
           </span>
         </a>
-        <span className="pingo-error-status">{content.status}</span>
+        <div className="pingo-error-tools">
+          <span className="pingo-error-status">{t(content.status)}</span>
+          <LanguageSelector />
+        </div>
       </header>
       <section className="pingo-error-content">
         <div className="pingo-error-copy">
-          <h1 id="pingo-error-title">{content.title}</h1>
-          <p className="pingo-error-message">{content.message}</p>
-          <p className="pingo-error-guidance">{content.guidance}</p>
+          <h1 id="pingo-error-title">{t(content.title)}</h1>
+          <p className="pingo-error-message">{t(content.message)}</p>
+          <p className="pingo-error-guidance">{t(content.guidance)}</p>
           <button className="pingo-error-action" onClick={onRetry}>
             <RefreshCw size={16} aria-hidden="true" />
-            Tentar novamente
+            {t("Tentar novamente")}
           </button>
         </div>
         <img
           className="pingo-error-mascot"
           src={content.mascot}
-          alt={content.alt}
+          alt={t(content.alt)}
         />
       </section>
       <footer className="pingo-error-footer">
-        Cloudforge · Controle de aplicações
+        {t("Cloudforge · Controle de aplicações")}
       </footer>
     </main>
   );

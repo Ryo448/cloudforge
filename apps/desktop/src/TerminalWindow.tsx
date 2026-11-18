@@ -1,3 +1,4 @@
+import { t, useLocale } from "../../../packages/ui/i18n";
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -17,6 +18,7 @@ declare global {
 }
 
 export default function TerminalWindow() {
+  const locale = useLocale();
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!container.current) return;
@@ -59,15 +61,25 @@ export default function TerminalWindow() {
       terminal.dispose();
     };
   }, []);
+  useEffect(() => {
+    Terminal.strings.promptLabel = t("Entrada do terminal");
+    Terminal.strings.tooMuchOutput = t("Há texto demais para anunciar.");
+    container.current
+      ?.querySelector("textarea")
+      ?.setAttribute("aria-label", Terminal.strings.promptLabel);
+  }, [locale]);
   return (
     <>
       <WindowControls
-        heading={`Terminal · ${new URLSearchParams(location.search).get("project") || "Cloudforge"}`}
+        heading={t(
+          "Terminal · {0}",
+          new URLSearchParams(location.search).get("project") || "Cloudforge",
+        )}
       />
       <main
         className="tui-window"
         ref={container}
-        aria-label="Terminal do projeto"
+        aria-label={t("Terminal do projeto")}
       />
     </>
   );

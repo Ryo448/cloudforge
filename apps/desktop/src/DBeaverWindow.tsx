@@ -1,8 +1,10 @@
+import { t, useLocale } from "../../../packages/ui/i18n";
 import WindowControls from "./WindowControls";
 
 export default function DBeaverWindow() {
+  useLocale();
   const name =
-    new URLSearchParams(location.search).get("database") || "Banco de dados";
+    new URLSearchParams(location.search).get("database") || t("Banco de dados");
 
   return (
     <>

@@ -1,3 +1,5 @@
+import { getLocale, t, translateMessage } from "../../../packages/ui/i18n";
+import { Translated } from "../../../packages/ui/Translated";
 import {
   useEffect,
   useLayoutEffect,
@@ -70,7 +72,7 @@ export function parseArguments(text: string): string[] {
       active = true;
     }
   }
-  if (quote) throw new Error("Feche as aspas nos argumentos.");
+  if (quote) throw new Error(t("Feche as aspas nos argumentos."));
   if (active) tokens.push(token);
   return tokens;
 }
@@ -116,7 +118,9 @@ export function AddProject({
       });
       if (!d.runtimes.length)
         throw new Error(
-          "Não foram encontrados arquivos de um projeto Python ou Node.js nesta pasta.",
+          t(
+            "Não foram encontrados arquivos de um projeto Python ou Node.js nesta pasta.",
+          ),
         );
       setDetection(d);
       setPath(d.path);
@@ -200,14 +204,14 @@ export function AddProject({
 
   return (
     <Modal
-      title="Adicionar projeto"
+      title={t("Adicionar projeto")}
       className="add-project"
       onClose={onClose}
       closeDisabled={pending === "save"}
     >
       <ol
         className="add-project-steps"
-        aria-label="Etapas para adicionar um projeto"
+        aria-label={t("Etapas para adicionar um projeto")}
       >
         <li
           className={detection ? "is-complete" : undefined}
@@ -216,11 +220,11 @@ export function AddProject({
           <span aria-hidden="true">
             {detection ? <Check size={14} /> : "1"}
           </span>
-          Pasta do projeto
+          {t("Pasta do projeto")}
         </li>
         <li aria-current={detection ? "step" : undefined}>
           <span aria-hidden="true">2</span>
-          Configuração
+          {t("Configuração")}
         </li>
       </ol>
       {!detection ? (
@@ -237,10 +241,11 @@ export function AddProject({
                 <FolderOpen size={25} strokeWidth={1.6} />
               </div>
               <div>
-                <h3>Escolha a pasta original</h3>
+                <h3>{t("Escolha a pasta original")}</h3>
                 <p>
-                  O Cloudforge usa seus arquivos no local, sem copiá-los ou
-                  movê-los.
+                  {t(
+                    "O Cloudforge usa seus arquivos no local, sem copiá-los ou movê-los.",
+                  )}
                 </p>
               </div>
               <button
@@ -250,13 +255,15 @@ export function AddProject({
                 disabled={!!pending}
                 onClick={chooseDirectory}
               >
-                {pending === "choose" ? "Abrindo seletor…" : "Selecionar pasta"}
+                {pending === "choose"
+                  ? t("Abrindo seletor…")
+                  : t("Selecionar pasta")}
                 <ArrowRight size={16} aria-hidden="true" />
               </button>
             </div>
             <div className="add-project-manual">
               <label htmlFor="add-project-path">
-                Ou informe o caminho absoluto
+                {t("Ou informe o caminho absoluto")}
               </label>
               <div className="add-project-path-controls">
                 <input
@@ -275,7 +282,7 @@ export function AddProject({
                 />
                 <button className="button" disabled={!!pending || !path.trim()}>
                   <Search size={15} aria-hidden="true" />
-                  Verificar pasta
+                  {t("Verificar pasta")}
                 </button>
               </div>
             </div>
@@ -285,14 +292,14 @@ export function AddProject({
             <p role="status">
               {pending === "inspect" ? (
                 <>
-                  <Spinner /> Verificando a pasta…
+                  <Spinner /> {t("Verificando a pasta…")}
                 </>
               ) : (
-                "Projetos Python e Node.js"
+                t("Projetos Python e Node.js")
               )}
             </p>
             <button type="button" className="button" onClick={onClose}>
-              Cancelar
+              {t("Cancelar")}
             </button>
           </div>
         </form>
@@ -303,7 +310,7 @@ export function AddProject({
               <Folder size={21} aria-hidden="true" />
               <div>
                 <h3 ref={configHeading} tabIndex={-1}>
-                  Pasta selecionada
+                  {t("Pasta selecionada")}
                 </h3>
                 <code>{path}</code>
               </div>
@@ -313,7 +320,7 @@ export function AddProject({
                 disabled={!!pending}
                 onClick={changeDirectory}
               >
-                Trocar pasta
+                {t("Trocar pasta")}
               </button>
             </div>
             <fieldset className="add-project-fields" disabled={!!pending}>
@@ -321,10 +328,10 @@ export function AddProject({
                 className="add-project-section"
                 aria-labelledby="add-project-identity"
               >
-                <h3 id="add-project-identity">Identificação</h3>
+                <h3 id="add-project-identity">{t("Identificação")}</h3>
                 <div className="add-project-grid">
                   <label>
-                    Nome do projeto
+                    {t("Nome do projeto")}
                     <input
                       required
                       maxLength={100}
@@ -333,14 +340,14 @@ export function AddProject({
                     />
                   </label>
                   <label>
-                    Ambiente de execução
+                    {t("Ambiente de execução")}
                     <select
                       required
                       value={runtime}
                       onChange={(e) => setRuntime(e.target.value)}
                     >
                       <option value="" disabled>
-                        Escolha um ambiente
+                        {t("Escolha um ambiente")}
                       </option>
                       {detection.runtimes.map((r) => (
                         <option key={r} value={r}>
@@ -355,12 +362,12 @@ export function AddProject({
                 className="add-project-section"
                 aria-labelledby="add-project-launch"
               >
-                <h3 id="add-project-launch">Execução</h3>
+                <h3 id="add-project-launch">{t("Execução")}</h3>
                 <div className="add-project-grid">
                   {runtime === "python" ? (
                     <>
                       <label>
-                        Arquivo principal
+                        {t("Arquivo principal")}
                         <input
                           className="add-project-code"
                           list="python-files"
@@ -375,12 +382,12 @@ export function AddProject({
                           ))}
                         </datalist>
                         <small id="add-project-python-help">
-                          A venv e o pip são gerenciados nesta pasta.
+                          {t("A venv e o pip são gerenciados nesta pasta.")}
                         </small>
                       </label>
                       <label>
                         <span>
-                          Argumentos <small>opcional</small>
+                          {t("Argumentos")} <small>{t("opcional")}</small>
                         </span>
                         <input
                           className="add-project-code"
@@ -392,7 +399,7 @@ export function AddProject({
                     </>
                   ) : runtime === "node" ? (
                     <label className="add-project-full">
-                      Comando de inicialização
+                      {t("Comando de inicialização")}
                       <input
                         className="add-project-code"
                         list="node-scripts"
@@ -410,15 +417,16 @@ export function AddProject({
                         ))}
                       </datalist>
                       <small id="add-project-node-help">
-                        Escolha um script detectado ou informe um comando como{" "}
-                        <code>node index.js</code>. A execução é feita sem
-                        shell.
+                        <Translated
+                          text="Escolha um script detectado ou informe um comando como {0}. A execução é feita sem shell."
+                          values={[<code>node index.js</code>]}
+                        />
                       </small>
                     </label>
                   ) : null}
                   <label>
                     <span>
-                      Porta HTTP <small>opcional</small>
+                      {t("Porta HTTP")} <small>{t("opcional")}</small>
                     </span>
                     <input
                       className="add-project-code"
@@ -431,19 +439,21 @@ export function AddProject({
                       aria-describedby="add-project-port-help"
                     />
                     <small id="add-project-port-help">
-                      Deixe em branco para projetos sem HTTP.
+                      {t("Deixe em branco para projetos sem HTTP.")}
                     </small>
                   </label>
                   <label>
-                    Reinicialização automática
+                    {t("Reinicialização automática")}
                     <select
                       value={policy}
                       onChange={(e) => setPolicy(e.target.value)}
                     >
-                      <option value="never">Nunca</option>
-                      <option value="on-failure">Em caso de falha</option>
+                      <option value="never">{t("Nunca")}</option>
+                      <option value="on-failure">
+                        {t("Em caso de falha")}
+                      </option>
                       <option value="always">
-                        Sempre, exceto parada manual
+                        {t("Sempre, exceto parada manual")}
                       </option>
                     </select>
                   </label>
@@ -458,10 +468,11 @@ export function AddProject({
                   required
                 />
                 <span>
-                  <strong>Confio neste projeto</strong>
+                  <strong>{t("Confio neste projeto")}</strong>
                   <small id="add-project-trust-help">
-                    Autorizo a execução do código e dos scripts de instalação de
-                    dependências com as permissões do meu usuário.
+                    {t(
+                      "Autorizo a execução do código e dos scripts de instalação de dependências com as permissões do meu usuário.",
+                    )}
                   </small>
                 </span>
               </label>
@@ -475,7 +486,7 @@ export function AddProject({
               disabled={!!pending}
               onClick={onClose}
             >
-              Cancelar
+              {t("Cancelar")}
             </button>
             <button
               className="button primary"
@@ -483,11 +494,11 @@ export function AddProject({
             >
               {pending === "save" ? (
                 <>
-                  <Spinner /> Adicionando…
+                  <Spinner /> {t("Adicionando…")}
                 </>
               ) : (
                 <>
-                  <Plus size={16} aria-hidden="true" /> Adicionar projeto
+                  <Plus size={16} aria-hidden="true" /> {t("Adicionar projeto")}
                 </>
               )}
             </button>
@@ -532,9 +543,9 @@ export function ProjectPage({
   const online = execution.actualState === "online";
   const health =
     {
-      running: "Ativo",
-      "http-listening": "Porta acessível",
-      "port-unavailable": "Porta sem resposta",
+      running: t("Ativo"),
+      "http-listening": t("Porta acessível"),
+      "port-unavailable": t("Porta sem resposta"),
     }[execution.health] ?? "Offline";
   async function action(action: string) {
     setBusy(true);
@@ -574,7 +585,9 @@ export function ProjectPage({
                         .catch((e) => setError(message(e)));
                     }}
                   >
-                    <span>Visitar {project.hostname}</span>
+                    <span>
+                      {t("Visitar")} {project.hostname}
+                    </span>
                     <ArrowUpRight size={15} />
                   </button>
                 )}
@@ -583,7 +596,9 @@ export function ProjectPage({
             <div className="project-summary-status">
               <Status state={execution.actualState} />
               {online && execution.startedAt && (
-                <span className="muted">Há {uptime(execution.startedAt)}</span>
+                <span className="muted">
+                  {t("Há {0}", uptime(execution.startedAt))}
+                </span>
               )}
             </div>
           </div>
@@ -604,21 +619,21 @@ export function ProjectPage({
             </div>
             <div>
               <dt>
-                <Server size={15} /> Processos
+                <Server size={15} /> {t("Processos")}
               </dt>
               <dd>
                 {execution.pid || "—"}
                 {execution.pid > 0 && (
-                  <small>{execution.children} filhos</small>
+                  <small>{t("{0} filhos", execution.children)}</small>
                 )}
               </dd>
             </div>
             <div>
               <dt>
-                <Globe size={15} /> Porta HTTP
+                <Globe size={15} /> {t("Porta HTTP")}
               </dt>
               <dd>
-                {project.port || "Sem HTTP"}
+                {project.port || t("Sem HTTP")}
                 {project.port > 0 && <small>{health}</small>}
               </dd>
             </div>
@@ -629,18 +644,18 @@ export function ProjectPage({
           <h1>
             {
               {
-                logs: "Logs",
-                files: "Arquivos",
-                environment: "Variáveis de ambiente",
-                domain: "Network",
-                settings: "Geral",
-                risk: "Área de risco",
+                logs: t("Logs"),
+                files: t("Arquivos"),
+                environment: t("Variáveis de ambiente"),
+                domain: t("Rede"),
+                settings: t("Geral"),
+                risk: t("Área de risco"),
               }[section]
             }
           </h1>
           {section === "risk" && (
             <p className="project-risk-description">
-              Ações permanentes deste projeto.
+              {t("Ações permanentes deste projeto.")}
             </p>
           )}
         </div>
@@ -648,18 +663,22 @@ export function ProjectPage({
       {overview && <ErrorMessage error={error || execution.lastError} />}
       {overview && execution.health === "port-unavailable" && (
         <div className="notice">
-          Nenhum serviço respondeu na porta {project.port}. Confira a porta no
-          código.{" "}
+          {t(
+            "Nenhum serviço respondeu na porta {0}. Confira a porta no código.",
+            project.port,
+          )}{" "}
           <button
             className="text-button"
             onClick={() => onSectionChange("settings")}
           >
-            Editar porta
+            {t("Editar porta")}
           </button>
         </div>
       )}
       {overview && (
-        <h2 className="project-console-heading">Console em tempo real</h2>
+        <h2 className="project-console-heading">
+          {t("Console em tempo real")}
+        </h2>
       )}
       {overview || section === "logs" ? (
         <Logs
@@ -701,8 +720,8 @@ export function ProjectPage({
           aria-labelledby="project-metrics-heading"
         >
           <div className="section-heading">
-            <h2 id="project-metrics-heading">Métricas</h2>
-            <span className="muted small">Últimos 2 minutos</span>
+            <h2 id="project-metrics-heading">{t("Métricas")}</h2>
+            <span className="muted small">{t("Últimos 2 minutos")}</span>
           </div>
           <div className="project-metrics-grid">
             <div>
@@ -727,32 +746,43 @@ export function ProjectPage({
             </div>
           </div>
           <p className="small muted resource-note">
-            CPU e RAM incluem o processo principal e os filhos detectados. RAM
-            usa RSS e pode contar memória compartilhada mais de uma vez.
+            {t(
+              "CPU e RAM incluem o processo principal e os filhos detectados. RAM usa RSS e pode contar memória compartilhada mais de uma vez.",
+            )}
           </p>
         </section>
       )}
       {confirm && (
         <Modal
           title={
-            confirm === "stop" ? "Parar aplicação?" : "Reiniciar aplicação?"
+            confirm === "stop"
+              ? t("Parar aplicação?")
+              : t("Reiniciar aplicação?")
           }
           onClose={() => setConfirm("")}
         >
           <p>
             {confirm === "stop"
-              ? `O processo de ${project.name} será encerrado. O túnel e o subdomínio continuarão configurados.`
-              : `${project.name} ficará indisponível durante a reinicialização.`}
+              ? t(
+                  "O processo de {0} será encerrado. O túnel e o subdomínio continuarão configurados.",
+                  project.name,
+                )
+              : t(
+                  "{0} ficará indisponível durante a reinicialização.",
+                  project.name,
+                )}
           </p>
           <div className="form-footer">
             <button className="button" onClick={() => setConfirm("")}>
-              Cancelar
+              {t("Cancelar")}
             </button>
             <button
               className="button primary"
               onClick={() => void action(confirm)}
             >
-              {confirm === "stop" ? "Parar aplicação" : "Reiniciar aplicação"}
+              {confirm === "stop"
+                ? t("Parar aplicação")
+                : t("Reiniciar aplicação")}
             </button>
           </div>
         </Modal>
@@ -820,11 +850,11 @@ function ProjectStartup({
 
   return (
     <section className="settings-section">
-      <h2>Inicialização</h2>
+      <h2>{t("Inicialização")}</h2>
       <form className="narrow-form" onSubmit={save}>
         {node ? (
           <label>
-            Comando de inicialização
+            {t("Comando de inicialização")}
             <input
               required
               value={values.command}
@@ -832,14 +862,20 @@ function ProjectStartup({
               onChange={(event) => edit("command", event.target.value)}
             />
             <small>
-              Use <code>node arquivo.js</code> ou um script do{" "}
-              <code>package.json</code>, como <code>npm run start</code>.
+              <Translated
+                text="Use {0} ou um script do {1}, como {2}."
+                values={[
+                  <code>node arquivo.js</code>,
+                  <code>package.json</code>,
+                  <code>npm run start</code>,
+                ]}
+              />
             </small>
           </label>
         ) : (
           <>
             <label>
-              Arquivo principal
+              {t("Arquivo principal")}
               <input
                 required
                 value={values.entry}
@@ -848,7 +884,7 @@ function ProjectStartup({
               />
             </label>
             <label>
-              Argumentos de execução
+              {t("Argumentos de execução")}
               <input
                 value={values.args}
                 disabled={busy}
@@ -860,7 +896,7 @@ function ProjectStartup({
         <ErrorMessage error={error} />
         {notice && (
           <div className="notice" role="status">
-            <Check size={17} /> {notice}
+            <Check size={17} /> {translateMessage(notice)}
           </div>
         )}
         <button
@@ -871,7 +907,7 @@ function ProjectStartup({
             !(node ? values.command.trim() : values.entry.trim())
           }
         >
-          {busy ? <Spinner /> : <Check size={16} />} Salvar inicialização
+          {busy ? <Spinner /> : <Check size={16} />} {t("Salvar inicialização")}
         </button>
       </form>
     </section>
@@ -956,8 +992,8 @@ function Logs({
         {controls || (
           <div className="log-title">
             <Terminal size={16} />
-            <strong>Saída da aplicação</strong>
-            <span className="host-chip">Somente leitura</span>
+            <strong>{t("Saída da aplicação")}</strong>
+            <span className="host-chip">{t("Somente leitura")}</span>
           </div>
         )}
         <div className="log-tools">
@@ -967,22 +1003,22 @@ function Logs({
               disabled={openingTui}
               onClick={() => void openTui()}
             >
-              <Terminal size={15} /> Abrir terminal
+              <Terminal size={15} /> {t("Abrir terminal")}
             </button>
           )}
           <label className="search-field compact">
             <Search size={15} />
             <input
-              aria-label="Pesquisar nos logs"
-              placeholder="Pesquisar nos logs…"
+              aria-label={t("Pesquisar nos logs")}
+              placeholder={t("Pesquisar nos logs…")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
           </label>
           <button
             className="icon-button"
-            title="Copiar logs visíveis"
-            aria-label="Copiar logs visíveis"
+            title={t("Copiar logs visíveis")}
+            aria-label={t("Copiar logs visíveis")}
             onClick={async () => {
               await window.cloudforge.copy(
                 filtered
@@ -997,8 +1033,8 @@ function Logs({
           </button>
           <button
             className="icon-button"
-            title="Limpar visualização"
-            aria-label="Limpar visualização"
+            title={t("Limpar visualização")}
+            aria-label={t("Limpar visualização")}
             onClick={() => setHiddenUntil(logs.at(-1)?.seq ?? 0)}
           >
             <Trash2 size={16} />
@@ -1010,7 +1046,7 @@ function Logs({
         ref={output}
         className="terminal-output"
         role="log"
-        aria-label="Logs da aplicação"
+        aria-label={t("Logs da aplicação")}
         tabIndex={0}
         onScroll={(event) => {
           const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
@@ -1022,17 +1058,19 @@ function Logs({
             <Terminal size={25} />
             <p>
               {q
-                ? "Nenhuma mensagem corresponde à pesquisa."
+                ? t("Nenhuma mensagem corresponde à pesquisa.")
                 : hiddenUntil
-                  ? "Visualização limpa. Novas mensagens aparecerão aqui."
-                  : "Os logs reais aparecerão aqui quando o projeto for iniciado."}
+                  ? t("Visualização limpa. Novas mensagens aparecerão aqui.")
+                  : t(
+                      "Os logs reais aparecerão aqui quando o projeto for iniciado.",
+                    )}
             </p>
           </div>
         ) : (
           filtered.map((l) => (
             <div className={`log-line ${l.stream}`} key={l.seq}>
               <time dateTime={l.time}>
-                {new Date(l.time).toLocaleTimeString("pt-BR")}
+                {new Date(l.time).toLocaleTimeString(getLocale())}
               </time>
               <span className="log-stream">{l.stream}</span>
               <code>{l.message}</code>
@@ -1042,8 +1080,10 @@ function Logs({
       </div>
       <div className="log-footer">
         <span>
-          {filtered.length} mensagens visíveis · histórico limitado a 1.000
-          linhas
+          {t(
+            "{0} mensagens visíveis · histórico limitado a 1.000 linhas",
+            filtered.length.toLocaleString(getLocale()),
+          )}
         </span>
         <span>stdout + stderr</span>
       </div>

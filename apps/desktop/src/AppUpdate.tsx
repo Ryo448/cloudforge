@@ -1,3 +1,4 @@
+import { t } from "../../../packages/ui/i18n";
 import { useEffect, useState } from "react";
 import { ArrowDownToLine, ArrowRight, RefreshCw } from "lucide-react";
 import { bytes, ErrorMessage, Modal, Spinner } from "../../../packages/ui";
@@ -44,11 +45,11 @@ export function AppUpdate({ filesDirty = false }: { filesDirty?: boolean }) {
         onClick={() => setOpen(true)}
       >
         {busy ? <Spinner /> : <ArrowDownToLine size={15} aria-hidden="true" />}
-        {busy ? "Atualizando" : "Nova atualização"}
+        {busy ? t("Atualizando") : t("Nova atualização")}
       </button>
       {open && (
         <Modal
-          title={busy ? "Atualizando o Cloudforge" : "Nova atualização"}
+          title={busy ? t("Atualizando o Cloudforge") : t("Nova atualização")}
           className="app-update-modal"
           onClose={() => setOpen(false)}
           closeDisabled={busy}
@@ -56,21 +57,27 @@ export function AppUpdate({ filesDirty = false }: { filesDirty?: boolean }) {
           <div className="app-update-content">
             <p className="app-update-intro">
               {state.status === "installing"
-                ? "Download concluído. Encerrando o Core e instalando a nova versão…"
+                ? t(
+                    "Download concluído. Encerrando o Core e instalando a nova versão…",
+                  )
                 : busy
-                  ? "Baixando a nova versão. A instalação começará assim que o download terminar."
-                  : "Uma nova versão do Cloudforge está disponível. Deseja atualizar agora?"}
+                  ? t(
+                      "Baixando a nova versão. A instalação começará assim que o download terminar.",
+                    )
+                  : t(
+                      "Uma nova versão do Cloudforge está disponível. Deseja atualizar agora?",
+                    )}
             </p>
             <div
               className="app-update-versions"
-              aria-label="Versões do aplicativo"
+              aria-label={t("Versões do aplicativo")}
             >
               <span>
-                Versão atual <strong>{state.currentVersion}</strong>
+                {t("Versão atual")} <strong>{state.currentVersion}</strong>
               </span>
               <ArrowRight size={18} aria-hidden="true" />
               <span>
-                Nova versão <strong>{state.version}</strong>
+                {t("Nova versão")} <strong>{state.version}</strong>
               </span>
             </div>
             {busy ? (
@@ -82,23 +89,23 @@ export function AppUpdate({ filesDirty = false }: { filesDirty?: boolean }) {
                 <div className="app-update-progress-label">
                   <span>
                     {state.status === "installing"
-                      ? "Preparando a instalação"
-                      : "Baixando atualização"}
+                      ? t("Preparando a instalação")
+                      : t("Baixando atualização")}
                   </span>
                   <strong>{Math.floor(percent)}%</strong>
                 </div>
                 <progress
                   max={100}
                   value={percent}
-                  aria-label="Download da atualização"
+                  aria-label={t("Download da atualização")}
                 />
                 {state.status === "downloading" && (
                   <div className="app-update-transfer">
                     <span>
                       {bytes(state.transferred || 0)}
                       {state.total
-                        ? ` de ${bytes(state.total)}`
-                        : " · Conectando…"}
+                        ? t(" de {0}", bytes(state.total))
+                        : t(" · Conectando…")}
                     </span>
                     <span>
                       {state.bytesPerSecond
@@ -110,15 +117,16 @@ export function AppUpdate({ filesDirty = false }: { filesDirty?: boolean }) {
               </div>
             ) : (
               <p className="app-update-notice">
-                O app será fechado para instalar a atualização e abrirá
-                novamente ao concluir. Os projetos em execução serão reiniciados
-                com o Core atualizado.
+                {t(
+                  "O app será fechado para instalar a atualização e abrirá novamente ao concluir. Os projetos em execução serão reiniciados com o Core atualizado.",
+                )}
               </p>
             )}
             {filesDirty && !busy && (
               <p className="app-update-unsaved" role="alert">
-                Salve ou descarte as alterações nos arquivos abertos antes de
-                atualizar.
+                {t(
+                  "Salve ou descarte as alterações nos arquivos abertos antes de atualizar.",
+                )}
               </p>
             )}
             <ErrorMessage error={error || state.error || ""} />
@@ -126,7 +134,7 @@ export function AppUpdate({ filesDirty = false }: { filesDirty?: boolean }) {
           <div className="modal-actions">
             {!busy && (
               <button className="button" onClick={() => setOpen(false)}>
-                Agora não
+                {t("Agora não")}
               </button>
             )}
             <button
@@ -142,12 +150,12 @@ export function AppUpdate({ filesDirty = false }: { filesDirty?: boolean }) {
                 <ArrowDownToLine size={16} />
               )}
               {state.status === "installing"
-                ? "Instalando…"
+                ? t("Instalando…")
                 : busy
-                  ? "Baixando…"
+                  ? t("Baixando…")
                   : state.status === "error"
-                    ? "Tentar novamente"
-                    : "Atualizar agora"}
+                    ? t("Tentar novamente")
+                    : t("Atualizar agora")}
             </button>
           </div>
         </Modal>

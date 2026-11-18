@@ -1,3 +1,4 @@
+import { getLocale, t, translateMessage } from "./i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Play, Square, RotateCw, X, LoaderCircle, Trash2 } from "lucide-react";
 import brandIcon from "../../assets/icon/icon.png";
@@ -13,20 +14,40 @@ if (
 }
 export const bytes = (n: number | null | undefined) =>
   n == null
-    ? "Indisponível"
+    ? t("Indisponível")
     : n >= 1024 ** 3
-      ? `${(n / 1024 ** 3).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} GB`
-      : `${(n / 1024 ** 2).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+      ? formatUnit(n / 1024 ** 3, "gigabyte", "short", 1)
+      : formatUnit(n / 1024 ** 2, "megabyte", "short", 1);
+
+export function formatUnit(
+  value: number,
+  unit: string,
+  unitDisplay: "short" | "narrow",
+  maximumFractionDigits = 0,
+) {
+  return value.toLocaleString(getLocale(), {
+    style: "unit",
+    unit,
+    unitDisplay,
+    maximumFractionDigits,
+  });
+}
+
 export const percent = (n: number | null | undefined) =>
   n == null
     ? "—"
-    : `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+    : (n / 100).toLocaleString(getLocale(), {
+        style: "percent",
+        maximumFractionDigits: 1,
+      });
 export function duration(seconds: number) {
-  if (seconds < 60) return `${Math.floor(seconds)}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
+  const unit = (value: number, type: string) =>
+    formatUnit(Math.floor(value), type, "narrow");
+  if (seconds < 60) return unit(seconds, "second");
+  if (seconds < 3600) return unit(seconds / 60, "minute");
   if (seconds < 86400)
-    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}min`;
-  return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
+    return `${unit(seconds / 3600, "hour")} ${unit((seconds % 3600) / 60, "minute")}`;
+  return `${unit(seconds / 86400, "day")} ${unit((seconds % 86400) / 3600, "hour")}`;
 }
 export function uptime(start: string | null) {
   return start
@@ -45,7 +66,7 @@ export function Status({ state }: { state: string }) {
   return (
     <span className={`status ${state}`}>
       <span className="status-dot" />
-      {stateNames[state] || state}
+      {stateNames[state] ? t(stateNames[state]) : state}
     </span>
   );
 }
@@ -101,12 +122,14 @@ export function ProjectsIcon({
   );
 }
 export function Spinner() {
-  return <LoaderCircle size={18} className="spin" aria-label="Carregando" />;
+  return (
+    <LoaderCircle size={18} className="spin" aria-label={t("Carregando")} />
+  );
 }
 export function ErrorMessage({ error }: { error: string }) {
   return error ? (
     <div className="error-message" role="alert">
-      {error}
+      {translateMessage(error)}
     </div>
   ) : null;
 }
@@ -146,7 +169,7 @@ export function Modal({
         <button
           className="icon-button"
           onClick={onClose}
-          aria-label="Fechar"
+          aria-label={t("Fechar")}
           disabled={closeDisabled}
         >
           <X size={19} />
@@ -208,7 +231,7 @@ export function DeleteConfirmationModal({
             spellCheck={false}
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
-            aria-label={`Digite ${name} para confirmar a exclusão`}
+            aria-label={t("Digite {0} para confirmar a exclusão", name)}
             disabled={busy}
           />
         </label>
@@ -220,7 +243,7 @@ export function DeleteConfirmationModal({
             disabled={busy}
             onClick={onClose}
           >
-            Cancelar
+            {t("Cancelar")}
           </button>
           <button
             type="submit"
@@ -253,7 +276,7 @@ export function Actions({
         onClick={() => onAction("start")}
       >
         <Play size={15} />
-        Iniciar
+        {t("Iniciar")}
       </button>
       <button
         className="button"
@@ -261,7 +284,7 @@ export function Actions({
         onClick={() => onAction("restart")}
       >
         <RotateCw size={15} />
-        Reiniciar
+        {t("Reiniciar")}
       </button>
       <button
         className="button danger-quiet"
@@ -269,7 +292,7 @@ export function Actions({
         onClick={() => onAction("stop")}
       >
         <Square size={14} />
-        Parar
+        {t("Parar")}
       </button>
     </div>
   );

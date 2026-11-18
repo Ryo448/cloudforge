@@ -1,3 +1,4 @@
+import { formatDate, getLocale, t, translateMessage } from "./i18n";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   CalendarClock,
@@ -68,17 +69,14 @@ export type SnapshotDesktop = {
   ) => Promise<Job | null>;
 };
 
-const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const dateTime = new Intl.DateTimeFormat("pt-BR", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-const showDate = (value: string) => dateTime.format(new Date(value));
+const weekdays = [0, 1, 2, 3, 4, 5, 6];
+const showDate = (value: string) =>
+  formatDate(value, { dateStyle: "medium", timeStyle: "short" });
 const automaticAction = "Atualizando snapshots automáticos";
 const errorText = (err: unknown) =>
   err instanceof Error
     ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, "")
-    : "Não foi possível concluir a operação.";
+    : t("Não foi possível concluir a operação.");
 
 export function DatabaseSnapshots({
   database,
@@ -213,7 +211,7 @@ export function DatabaseSnapshots({
       setConfirmLimit(true);
       return;
     }
-    void run("Salvando configurações", async () => {
+    void run(t("Salvando configurações"), async () => {
       await request("PUT", route + "/schedule", {
         schedule: settings,
         confirm: confirmed,
@@ -239,7 +237,7 @@ export function DatabaseSnapshots({
 
   function startRestore() {
     if (!choice) return;
-    void run("Preparando restauração", async () => {
+    void run(t("Preparando restauração"), async () => {
       showJob(
         choice.file
           ? await desktop.importSnapshot(
@@ -263,10 +261,12 @@ export function DatabaseSnapshots({
     <section className="snapshots" aria-labelledby="snapshots-heading">
       <header className="snapshots-header">
         <div>
-          <h1 id="snapshots-heading">Snapshots do banco de dados</h1>
+          <h1 id="snapshots-heading">{t("Snapshots do banco de dados")}</h1>
           <p>
-            Guarde cópias do {database.name} no Google Drive e recupere os dados
-            quando precisar.
+            {t(
+              "Guarde cópias do {0} no Google Drive e recupere os dados quando precisar.",
+              database.name,
+            )}
           </p>
         </div>
         <div className="snapshots-actions">
@@ -279,19 +279,19 @@ export function DatabaseSnapshots({
               setSettings(configuredSchedule);
             }}
           >
-            <Settings2 size={15} /> Configurações
+            <Settings2 size={15} /> {t("Configurações")}
           </button>
           <button
             type="button"
             className="button primary"
             disabled={!connected || !online || busy}
             onClick={() =>
-              void run("Preparando snapshot", async () =>
+              void run(t("Preparando snapshot"), async () =>
                 showJob(await request<Job>("POST", route)),
               )
             }
           >
-            <Plus size={17} /> Realizar snapshot
+            <Plus size={17} /> {t("Realizar snapshot")}
           </button>
         </div>
       </header>
@@ -303,18 +303,18 @@ export function DatabaseSnapshots({
             <strong>Google Drive</strong>
             <p>
               {!summary
-                ? "Verificando conexão…"
+                ? t("Verificando conexão…")
                 : summary.drive.account?.email ||
                   (summary.drive.account
-                    ? "Conta conectada"
+                    ? t("Conta conectada")
                     : summary.drive.pending
-                      ? "Aguardando autorização no navegador"
-                      : "Nenhuma conta Google cadastrada.")}
+                      ? t("Aguardando autorização no navegador")
+                      : t("Nenhuma conta Google cadastrada."))}
             </p>
           </div>
           {summary && !connected && (
             <button className="button" onClick={onOpenDriveSettings}>
-              Abrir configurações do Google Drive
+              {t("Abrir configurações do Google Drive")}
             </button>
           )}
         </div>
@@ -324,39 +324,50 @@ export function DatabaseSnapshots({
           <div>
             <strong>
               {!configuredSchedule
-                ? "Verificando agendamento…"
+                ? t("Verificando agendamento…")
                 : !automaticEnabled
-                  ? "Snapshots automáticos desativados"
+                  ? t("Snapshots automáticos desativados")
                   : configuredSchedule.frequency === "daily"
-                    ? "Snapshots automáticos diários"
-                    : "Snapshots automáticos semanais"}
+                    ? t("Snapshots automáticos diários")
+                    : t("Snapshots automáticos semanais")}
             </strong>
             <p>
               {configuredSchedule &&
                 (!automaticEnabled
-                  ? "Você ainda pode realizar snapshots manuais."
+                  ? t("Você ainda pode realizar snapshots manuais.")
                   : !connected
-                    ? "Aguardando uma conta Google Drive."
+                    ? t("Aguardando uma conta Google Drive.")
                     : configuredSchedule.next
-                      ? "Próxima execução " + showDate(configuredSchedule.next)
-                      : "Os horários de execução seguem o fuso do computador.")}
+                      ? t(
+                          "Próxima execução {0}",
+                          showDate(configuredSchedule.next),
+                        )
+                      : t(
+                          "Os horários de execução seguem o fuso do computador.",
+                        ))}
               {configuredSchedule?.last && (
                 <span className="snapshots-last">
-                  Última execução programada {showDate(configuredSchedule.last)}
+                  {t("Última execução programada")}{" "}
+                  {showDate(configuredSchedule.last)}
                 </span>
               )}
             </p>
             {postgres && summary && (
               <p>
-                O snapshot inclui todos os bancos de aplicação da instância.
+                {t(
+                  "O snapshot inclui todos os bancos de aplicação da instância.",
+                )}
               </p>
             )}
           </div>
           <span className="snapshots-count">
             {connected && !loading && !listError
-              ? list.length + " / "
-              : "Limite de "}
-            {summary?.schedule.limit ?? "—"} snapshots
+              ? t(
+                  "{0} / {1} snapshots",
+                  list.length,
+                  summary?.schedule.limit ?? "—",
+                )
+              : t("Limite de {0} snapshots", summary?.schedule.limit ?? "—")}
           </span>
         </div>
       </div>
@@ -368,11 +379,11 @@ export function DatabaseSnapshots({
           role="status"
         >
           {(running || action) && <Spinner />}
-          <span>{action || summary?.job?.detail}</span>
+          <span>{translateMessage(action || summary?.job?.detail || "")}</span>
           {running && summary?.job?.progress !== undefined && (
             <>
               <progress
-                aria-label="Progresso da operação"
+                aria-label={t("Progresso da operação")}
                 max={100}
                 value={summary.job.progress}
               />
@@ -383,26 +394,26 @@ export function DatabaseSnapshots({
       )}
 
       <div className="snapshots-list-head">
-        <h2>Histórico de snapshots</h2>
+        <h2>{t("Histórico de snapshots")}</h2>
         <div className="snapshots-actions">
           <button
             className="button"
             disabled={!connected || busy}
             onClick={() =>
-              void run("Buscando backups no Drive", async () =>
+              void run(t("Buscando backups no Drive"), async () =>
                 setRecoverable(
                   await request<DriveSnapshot[]>("GET", route + "/recoverable"),
                 ),
               )
             }
           >
-            <Cloud size={15} /> Outros backups do Drive
+            <Cloud size={15} /> {t("Outros backups do Drive")}
           </button>
           <button
             className="button"
             disabled={!online || busy}
             onClick={() =>
-              void run("Selecionando arquivo", async () => {
+              void run(t("Selecionando arquivo"), async () => {
                 const file = await desktop.pickSnapshot(
                   database.id,
                   database.engine,
@@ -411,12 +422,12 @@ export function DatabaseSnapshots({
               })
             }
           >
-            <Upload size={15} /> Importar backup
+            <Upload size={15} /> {t("Importar backup")}
           </button>
           <button
             className="icon-button"
-            aria-label="Atualizar histórico"
-            title="Atualizar histórico"
+            aria-label={t("Atualizar histórico")}
+            title={t("Atualizar histórico")}
             disabled={!connected || loading}
             onClick={() => setRefresh((value) => value + 1)}
           >
@@ -429,16 +440,18 @@ export function DatabaseSnapshots({
         <ErrorMessage error={listError} />
       ) : loading || !summary ? (
         <div className="snapshots-empty" role="status">
-          <Spinner /> Carregando snapshots…
+          <Spinner /> {t("Carregando snapshots…")}
         </div>
       ) : list.length === 0 ? (
         <div className="snapshots-empty">
           <History size={24} aria-hidden="true" />
-          <strong>Nenhum snapshot neste banco</strong>
+          <strong>{t("Nenhum snapshot neste banco")}</strong>
           <span>
             {connected
-              ? "Use Realizar snapshot para salvar a primeira versão."
-              : "Conecte uma conta Google nas configurações do Cloudforge para criar e consultar snapshots."}
+              ? t("Use Realizar snapshot para salvar a primeira versão.")
+              : t(
+                  "Conecte uma conta Google nas configurações do Cloudforge para criar e consultar snapshots.",
+                )}
           </span>
         </div>
       ) : (
@@ -452,11 +465,13 @@ export function DatabaseSnapshots({
                   </time>
                 </strong>
                 {index === 0 && (
-                  <span className="snapshots-recent">Mais recente</span>
+                  <span className="snapshots-recent">{t("Mais recente")}</span>
                 )}
                 <div className="snapshots-meta">
                   <span>
-                    {snapshot.mode === "automatic" ? "Automático" : "Manual"}
+                    {snapshot.mode === "automatic"
+                      ? t("Automático")
+                      : t("Manual")}
                   </span>
                   <span>{bytes(snapshot.size)}</span>
                   <span>
@@ -474,13 +489,13 @@ export function DatabaseSnapshots({
                   disabled={!online || busy}
                   onClick={() => chooseRestore({ snapshot })}
                 >
-                  <RotateCcw size={15} /> Restaurar
+                  <RotateCcw size={15} /> {t("Restaurar")}
                 </button>
                 <button
                   className="button"
                   disabled={busy}
                   onClick={() =>
-                    void run("Selecionando destino", async () =>
+                    void run(t("Selecionando destino"), async () =>
                       showJob(
                         await desktop.downloadSnapshot(
                           database.id,
@@ -491,7 +506,7 @@ export function DatabaseSnapshots({
                     )
                   }
                 >
-                  <Download size={15} /> Baixar
+                  <Download size={15} /> {t("Baixar")}
                 </button>
               </div>
             </li>
@@ -501,7 +516,7 @@ export function DatabaseSnapshots({
 
       {settings && !confirmLimit && (
         <Modal
-          title="Configurações de snapshots"
+          title={t("Configurações de snapshots")}
           className="snapshots-settings-modal"
           onClose={() => setSettings(undefined)}
           closeDisabled={!!action}
@@ -525,14 +540,16 @@ export function DatabaseSnapshots({
       )}
       {confirmLimit && settings && (
         <Modal
-          title="Reduzir o limite de versões"
+          title={t("Reduzir o limite de versões")}
           onClose={() => setConfirmLimit(false)}
           closeDisabled={!!action}
         >
           <div className="snapshots-dialog">
             <p>
-              Serão mantidos os {settings.limit} snapshots mais recentes deste
-              banco. As versões excedentes serão excluídas do Google Drive.
+              {t(
+                "Serão mantidos os {0} snapshots mais recentes deste banco. As versões excedentes serão excluídas do Google Drive.",
+                settings.limit,
+              )}
             </p>
             <ErrorMessage error={error} />
             <div className="snapshots-dialog-actions">
@@ -541,14 +558,14 @@ export function DatabaseSnapshots({
                 onClick={() => setConfirmLimit(false)}
                 disabled={!!action}
               >
-                Voltar
+                {t("Voltar")}
               </button>
               <button
                 className="button danger"
                 disabled={!!action}
                 onClick={() => saveSettings(undefined, true)}
               >
-                Aplicar limite
+                {t("Aplicar limite")}
               </button>
             </div>
           </div>
@@ -556,17 +573,20 @@ export function DatabaseSnapshots({
       )}
       {recoverable && !choice && (
         <Modal
-          title="Outros backups do Google Drive"
+          title={t("Outros backups do Google Drive")}
           wide
           onClose={() => setRecoverable(undefined)}
         >
           <div className="snapshots-dialog">
             <p>
-              Selecione um snapshot de {engineName} de outro banco ou instalação
-              para restaurar em {database.name}.
+              {t(
+                "Selecione um snapshot de {0} de outro banco ou instalação para restaurar em {1}.",
+                engineName,
+                database.name,
+              )}
             </p>
             {recoverable.length === 0 ? (
-              <p>Nenhum backup compatível encontrado nesta conta.</p>
+              <p>{t("Nenhum backup compatível encontrado nesta conta.")}</p>
             ) : (
               <ul className="snapshots-recovery">
                 {recoverable.map((snapshot) => (
@@ -590,7 +610,7 @@ export function DatabaseSnapshots({
                       disabled={!online || busy}
                       onClick={() => chooseRestore({ snapshot })}
                     >
-                      Selecionar
+                      {t("Selecionar")}
                     </button>
                   </li>
                 ))}
@@ -601,32 +621,34 @@ export function DatabaseSnapshots({
       )}
       {choice && (
         <Modal
-          title="Confirmar restauração"
+          title={t("Confirmar restauração")}
           onClose={() => setChoice(undefined)}
           closeDisabled={!!action}
         >
           <div className="snapshots-dialog">
             <dl className="snapshots-restore-summary">
-              <dt>Backup</dt>
+              <dt>{t("Backup")}</dt>
               <dd>{choice.file ? choice.file.name : choice.snapshot.name}</dd>
               {choice.snapshot && (
                 <>
-                  <dt>Criado em</dt>
+                  <dt>{t("Criado em")}</dt>
                   <dd>{showDate(choice.snapshot.created)}</dd>
-                  <dt>Identificador</dt>
+                  <dt>{t("Identificador")}</dt>
                   <dd>
                     <code>{choice.snapshot.id}</code>
                   </dd>
                 </>
               )}
-              <dt>{postgres ? "Instância de destino" : "Banco de destino"}</dt>
+              <dt>
+                {postgres ? t("Instância de destino") : t("Banco de destino")}
+              </dt>
               <dd>
                 {database.name} · {engineName}
               </dd>
             </dl>
             {choosePostgresDatabase && (
               <label className="snapshots-destination">
-                Banco PostgreSQL de destino
+                {t("Banco PostgreSQL de destino")}
                 <input
                   value={restoreDatabase}
                   onChange={(event) => setRestoreDatabase(event.target.value)}
@@ -638,12 +660,18 @@ export function DatabaseSnapshots({
             )}
             <p className="snapshots-danger">
               {postgresInstance
-                ? "Cada banco incluído no snapshot será recriado com seu nome original. Bancos de mesmo nome serão substituídos. Encerre as conexões com esses bancos antes de restaurar."
-                : "A restauração pode substituir objetos e dados existentes. Objetos ausentes do backup podem permanecer no destino."}
+                ? t(
+                    "Cada banco incluído no snapshot será recriado com seu nome original. Bancos de mesmo nome serão substituídos. Encerre as conexões com esses bancos antes de restaurar.",
+                  )
+                : t(
+                    "A restauração pode substituir objetos e dados existentes. Objetos ausentes do backup podem permanecer no destino.",
+                  )}
               {database.engine !== "postgresql" &&
-                " Se a operação falhar, algumas alterações podem permanecer."}
+                t(
+                  " Se a operação falhar, algumas alterações podem permanecer.",
+                )}
               {choice.file &&
-                " Importe somente arquivos de uma origem confiável."}
+                t(" Importe somente arquivos de uma origem confiável.")}
             </p>
             <ErrorMessage error={error} />
             <div className="snapshots-dialog-actions">
@@ -652,7 +680,7 @@ export function DatabaseSnapshots({
                 disabled={!!action}
                 onClick={() => setChoice(undefined)}
               >
-                Cancelar
+                {t("Cancelar")}
               </button>
               <button
                 className="button danger"
@@ -666,7 +694,7 @@ export function DatabaseSnapshots({
                   setRecoverable(undefined);
                 }}
               >
-                Confirmar restauração
+                {t("Confirmar restauração")}
               </button>
             </div>
           </div>
@@ -715,10 +743,12 @@ function ScheduleForm({
       {automaticEnabled !== undefined && (
         <div className="snapshots-automatic">
           <div>
-            <strong>Snapshots automáticos</strong>
+            <strong>{t("Snapshots automáticos")}</strong>
             <small role="status">
-              {automaticEnabled ? "Ativados" : "Desativados"}. Seus horários
-              ficam salvos e os snapshots manuais continuam disponíveis.
+              {automaticEnabled ? t("Ativados") : t("Desativados")}.{" "}
+              {t(
+                "Seus horários ficam salvos e os snapshots manuais continuam disponíveis.",
+              )}
             </small>
           </div>
           <button
@@ -729,15 +759,15 @@ function ScheduleForm({
           >
             {toggling && <Spinner />}
             {automaticEnabled
-              ? "Desativar automáticos"
-              : "Reativar automáticos"}
+              ? t("Desativar automáticos")
+              : t("Reativar automáticos")}
           </button>
         </div>
       )}
       <fieldset className="snapshots-settings-fields" disabled={busy}>
         <div className="snapshots-frequency">
           <label>
-            Frequência
+            {t("Frequência")}
             <select
               value={value.frequency}
               onChange={(event) => {
@@ -749,14 +779,14 @@ function ScheduleForm({
                 });
               }}
             >
-              <option value="manual">Somente manual</option>
-              <option value="daily">Diariamente</option>
-              <option value="weekly">Semanalmente</option>
+              <option value="manual">{t("Somente manual")}</option>
+              <option value="daily">{t("Diariamente")}</option>
+              <option value="weekly">{t("Semanalmente")}</option>
             </select>
           </label>
           {value.frequency !== "manual" && (
             <label>
-              Snapshots por dia
+              {t("Snapshots por dia")}
               <input
                 type="number"
                 min={1}
@@ -770,10 +800,15 @@ function ScheduleForm({
         </div>
         {value.frequency === "weekly" && (
           <fieldset>
-            <legend>Dias da semana</legend>
+            <legend>{t("Dias da semana")}</legend>
             <div className="snapshots-weekdays">
-              {weekdays.map((day, index) => (
-                <label key={day}>
+              {weekdays.map((index) => (
+                <label
+                  key={new Intl.DateTimeFormat(getLocale(), {
+                    weekday: "short",
+                    timeZone: "UTC",
+                  }).format(Date.UTC(2024, 0, index + 7))}
+                >
                   <input
                     type="checkbox"
                     checked={value.days.includes(index)}
@@ -786,7 +821,10 @@ function ScheduleForm({
                       })
                     }
                   />
-                  {day}
+                  {new Intl.DateTimeFormat(getLocale(), {
+                    weekday: "short",
+                    timeZone: "UTC",
+                  }).format(Date.UTC(2024, 0, index + 7))}
                 </label>
               ))}
             </div>
@@ -795,7 +833,7 @@ function ScheduleForm({
         {value.frequency !== "manual" && (
           <fieldset>
             <legend>
-              Horários <span>Fuso do computador</span>
+              {t("Horários")} <span>{t("Fuso do computador")}</span>
             </legend>
             <div className="snapshots-times">
               {value.times.map((clock, index) => (
@@ -804,7 +842,7 @@ function ScheduleForm({
                   type="time"
                   required
                   value={clock}
-                  aria-label={"Horário " + (index + 1)}
+                  aria-label={t("Horário {0}", index + 1)}
                   onChange={(event) => {
                     const times = [...value.times];
                     times[index] = event.target.value;
@@ -817,8 +855,8 @@ function ScheduleForm({
         )}
         <label className="snapshots-retention">
           <span>
-            Versões a manter
-            <small>De 1 a 50 snapshots</small>
+            {t("Versões a manter")}
+            <small>{t("De 1 a 50 snapshots")}</small>
           </span>
           <input
             type="number"
@@ -841,13 +879,13 @@ function ScheduleForm({
           disabled={busy}
           onClick={cancel}
         >
-          Cancelar
+          {t("Cancelar")}
         </button>
         <button type="submit" className="button primary" disabled={busy}>
           {busy && !toggling && <Spinner />}
           {busy && !toggling
-            ? "Salvando configurações…"
-            : "Salvar configurações"}
+            ? t("Salvando configurações…")
+            : t("Salvar configurações")}
         </button>
       </div>
     </form>

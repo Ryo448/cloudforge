@@ -1,3 +1,4 @@
+import { t } from "../../../packages/ui/i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
@@ -27,6 +28,9 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
   useEffect(() => {
     if (!supported || !online || !slot.current) return;
     const element = slot.current;
+    const languageControl = document.querySelector(
+      ".window-titlebar .language-selector",
+    );
     const session = crypto.randomUUID();
     sessionRef.current = session;
     let active = true;
@@ -40,10 +44,15 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
         x: Math.ceil(x),
         y: Math.ceil(top),
         width: Math.floor(width),
-        height: Math.max(0, Math.floor(bottom - top)),
+        height: languageControl?.querySelector(".language-menu")
+          ? 0
+          : Math.max(0, Math.floor(bottom - top)),
       });
     };
     const observer = new ResizeObserver(layout);
+    const languageObserver = new MutationObserver(layout);
+    if (languageControl)
+      languageObserver.observe(languageControl, { childList: true });
     observer.observe(element);
     if (element.parentElement) observer.observe(element.parentElement);
     window.addEventListener("resize", layout);
@@ -70,6 +79,7 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
       if (sessionRef.current === session) sessionRef.current = null;
       window.clearTimeout(start);
       observer.disconnect();
+      languageObserver.disconnect();
       window.removeEventListener("resize", layout);
       window.removeEventListener("scroll", layout, true);
       if (requested) window.cloudforge.closeDBeaver(session);
@@ -113,7 +123,7 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
               disabled={detaching}
             >
               <ExternalLink size={15} />{" "}
-              {detaching ? "Abrindo janela…" : "Abrir em janela"}
+              {detaching ? t("Abrindo janela…") : t("Abrir em janela")}
             </button>
           )}
           <button
@@ -124,7 +134,7 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
               )
             }
           >
-            DBeaver Corp e colaboradores <ArrowUpRight size={14} />
+            {t("DBeaver Corp e colaboradores")} <ArrowUpRight size={14} />
           </button>
         </div>
       </header>
@@ -140,21 +150,28 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
               <>
                 <DatabaseZap size={23} />
                 <p>
-                  O DBeaver Community integrado oferece acesso a PostgreSQL e
-                  MySQL.
+                  {t(
+                    "O DBeaver Community integrado oferece acesso a PostgreSQL e MySQL.",
+                  )}
                 </p>
               </>
             ) : !online ? (
               <>
                 <DatabaseZap size={23} />
                 <p>
-                  Inicie o banco e aguarde a validação do TLS para conectar.
+                  {t(
+                    "Inicie o banco e aguarde a validação do TLS para conectar.",
+                  )}
                 </p>
               </>
             ) : state === "detached" ? (
               <>
                 <ExternalLink size={23} />
-                <p>O DBeaver deste banco está aberto em uma janela separada.</p>
+                <p>
+                  {t(
+                    "O DBeaver deste banco está aberto em uma janela separada.",
+                  )}
+                </p>
                 <button
                   className="button"
                   onClick={() => {
@@ -165,12 +182,12 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
                         .catch((reason) => setDetachError(message(reason)));
                   }}
                 >
-                  Mostrar janela
+                  {t("Mostrar janela")}
                 </button>
               </>
             ) : state === "loading" ? (
               <div role="status">
-                <Spinner /> Conectando ao banco…
+                <Spinner /> {t("Conectando ao banco…")}
               </div>
             ) : (
               <>
@@ -179,7 +196,7 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
                   className="button"
                   onClick={() => setAttempt((value) => value + 1)}
                 >
-                  <RefreshCw size={15} /> Tentar novamente
+                  <RefreshCw size={15} /> {t("Tentar novamente")}
                 </button>
               </>
             )}

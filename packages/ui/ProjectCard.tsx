@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useId, useState } from "react";
 import {
   ArrowUpRight,
@@ -89,12 +90,12 @@ export function ProjectUsage({
   if (!cpu.length && !memory.length) {
     return (
       <div className="project-chart project-chart-empty">
-        {online ? "Coletando métricas…" : "Sem amostras recentes"}
+        {online ? t("Coletando métricas…") : t("Sem amostras recentes")}
       </div>
     );
   }
   const label =
-    metric === "cpu" ? "CPU" : metric === "memory" ? "RAM" : "CPU e RAM";
+    metric === "cpu" ? "CPU" : metric === "memory" ? "RAM" : t("CPU e RAM");
   const area = metric === "cpu" ? cpu : memory;
   const chart = (
     <svg
@@ -102,7 +103,7 @@ export function ProjectUsage({
       viewBox={`0 0 ${chartWidth} ${chartHeight}`}
       preserveAspectRatio="none"
       role="img"
-      aria-label={`Histórico de ${label} nos últimos 2 minutos`}
+      aria-label={t("Histórico de {0} nos últimos 2 minutos", label)}
     >
       <defs>
         <linearGradient
@@ -172,9 +173,9 @@ export function ProjectUsage({
       </div>
       {chart}
       <div className="project-chart-times" aria-hidden="true">
-        <span>−2 min</span>
-        <span>−1 min</span>
-        <span>Agora</span>
+        <span>{t("−2 min")}</span>
+        <span>{t("−1 min")}</span>
+        <span>{t("Agora")}</span>
       </div>
     </div>
   );
@@ -273,7 +274,7 @@ export function ProjectCard({
             <ArrowUpRight size={13} aria-hidden="true" />
           </a>
         )}
-        <span className="project-card-window">Últimos 2 min</span>
+        <span className="project-card-window">{t("Últimos 2 min")}</span>
       </div>
       <ProjectUsage
         history={project.usageHistory}
@@ -294,7 +295,7 @@ export function ProjectCard({
         </span>
         <span
           className="project-card-metric"
-          aria-label={`Tempo ativo ${uptime(execution.startedAt)}`}
+          aria-label={t("Tempo ativo {0}", uptime(execution.startedAt))}
         >
           <Timer size={14} aria-hidden="true" />
           <strong>{uptime(execution.startedAt)}</strong>
@@ -314,25 +315,29 @@ export function ProjectCard({
       {confirm && (
         <Modal
           title={
-            confirm === "stop" ? "Parar aplicação?" : "Reiniciar aplicação?"
+            confirm === "stop"
+              ? t("Parar aplicação?")
+              : t("Reiniciar aplicação?")
           }
           onClose={() => setConfirm("")}
         >
           <p>
-            {project.name}{" "}
             {confirm === "stop"
-              ? "será encerrado."
-              : "ficará indisponível durante a reinicialização."}
+              ? t("O processo de {0} será encerrado.", project.name)
+              : t(
+                  "{0} ficará indisponível durante a reinicialização.",
+                  project.name,
+                )}
           </p>
           <div className="form-footer">
             <button className="button" onClick={() => setConfirm("")}>
-              Cancelar
+              {t("Cancelar")}
             </button>
             <button
               className="button primary"
               onClick={() => void run(confirm)}
             >
-              {confirm === "stop" ? "Parar" : "Reiniciar"}
+              {confirm === "stop" ? t("Parar") : t("Reiniciar")}
             </button>
           </div>
         </Modal>

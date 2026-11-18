@@ -1,3 +1,9 @@
+import {
+  plural,
+  t,
+  translateMessage,
+  useLocale,
+} from "../../../packages/ui/i18n";
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
@@ -186,41 +192,42 @@ export function EnvironmentPage({ project }: { project: Project }) {
       setError(message(e));
     }
   }
+  const locale = useLocale();
   const grouped = useMemo(() => {
-    const q = search.trim().toLocaleLowerCase("pt-BR");
+    const q = search.trim().toLocaleLowerCase(locale);
     const groups = new Map<string, { index: number; variable: Variable }[]>();
     variables.forEach((variable, index) => {
-      if (q && !variable.key.toLocaleLowerCase("pt-BR").includes(q)) return;
+      if (q && !variable.key.toLocaleLowerCase(locale).includes(q)) return;
       const originalKey = data?.variables[index]?.key;
       const prefix =
         originalKey === undefined
-          ? "NOVAS"
+          ? t("NOVAS")
           : originalKey.includes("_")
             ? originalKey.split("_")[0].toUpperCase()
-            : "OUTRAS";
+            : t("OUTRAS");
       if (!groups.has(prefix)) groups.set(prefix, []);
       groups.get(prefix)!.push({ index, variable });
     });
-    return [...groups.entries()].sort(([a], [b]) =>
-      a.localeCompare(b, "pt-BR"),
-    );
-  }, [data, variables, search]);
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, locale));
+  }, [data, variables, search, locale]);
   return (
-    <section className="env-page" aria-label="Variáveis de ambiente">
+    <section className="env-page" aria-label={t("Variáveis de ambiente")}>
       <div className="env-intro">
         <p>
-          Chaves e valores disponíveis para o processo quando o projeto inicia.
+          {t(
+            "Chaves e valores disponíveis para o processo quando o projeto inicia.",
+          )}
         </p>
       </div>
       <ErrorMessage error={error} />
       {notice && (
         <div className="notice" role="status">
-          {notice}
+          {translateMessage(notice)}
         </div>
       )}
       {busy && !data ? (
         <div className="env-loading">
-          <Spinner /> Carregando variáveis…
+          <Spinner /> {t("Carregando variáveis…")}
         </div>
       ) : (
         data && (
@@ -229,10 +236,10 @@ export function EnvironmentPage({ project }: { project: Project }) {
               <div className="env-file-bar">
                 <div>
                   <FileText size={17} />
-                  <span>Arquivo de ambiente</span>
+                  <span>{t("Arquivo de ambiente")}</span>
                 </div>
                 <label className="env-file-select">
-                  <span className="sr-only">Arquivo ativo</span>
+                  <span className="sr-only">{t("Arquivo ativo")}</span>
                   <select
                     value={data.file}
                     onChange={(e) => void load(e.target.value)}
@@ -251,9 +258,11 @@ export function EnvironmentPage({ project }: { project: Project }) {
               <div className="env-file-bar">
                 <div>
                   <span className="env-exclusive-dot" />{" "}
-                  <span>Variáveis exclusivas do Cloudforge</span>
+                  <span>{t("Variáveis exclusivas do Cloudforge")}</span>
                 </div>
-                <span className="muted small">Sem arquivo no projeto</span>
+                <span className="muted small">
+                  {t("Sem arquivo no projeto")}
+                </span>
               </div>
             )}
             {data.mode === "empty" ? (
@@ -261,20 +270,21 @@ export function EnvironmentPage({ project }: { project: Project }) {
                 <div className="env-empty-icon">
                   <FileText size={26} />
                 </div>
-                <h2>Nenhum arquivo de ambiente encontrado</h2>
+                <h2>{t("Nenhum arquivo de ambiente encontrado")}</h2>
                 <p>
-                  Importe um arquivo ou crie variáveis exclusivas para este
-                  projeto.
+                  {t(
+                    "Importe um arquivo ou crie variáveis exclusivas para este projeto.",
+                  )}
                 </p>
                 <div className="env-empty-actions">
                   <button
                     className="button primary"
                     onClick={() => setImportChoice("choose")}
                   >
-                    <Upload size={16} /> Importar arquivo
+                    <Upload size={16} /> {t("Importar arquivo")}
                   </button>
                   <button className="button" onClick={startExclusive}>
-                    <Plus size={16} /> Criar variáveis exclusivas
+                    <Plus size={16} /> {t("Criar variáveis exclusivas")}
                   </button>
                 </div>
               </div>
@@ -284,20 +294,19 @@ export function EnvironmentPage({ project }: { project: Project }) {
                   <label className="search-field">
                     <Search size={17} />
                     <input
-                      aria-label="Buscar variável por chave"
-                      placeholder="Buscar por chave…"
+                      aria-label={t("Buscar variável por chave")}
+                      placeholder={t("Buscar por chave…")}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </label>
                   <span className="muted small">
-                    {variables.length} variáve
-                    {variables.length === 1 ? "l" : "is"}
+                    {plural(variables.length, "{0} variável", "{0} variáveis")}
                   </span>
                 </div>
                 <div className="env-columns">
-                  <span>Chave</span>
-                  <span>Valor</span>
+                  <span>{t("Chave")}</span>
+                  <span>{t("Valor")}</span>
                 </div>
                 <div className="env-groups">
                   {grouped.length ? (
@@ -307,7 +316,7 @@ export function EnvironmentPage({ project }: { project: Project }) {
                         {items.map(({ index, variable }) => (
                           <div className="env-row" key={index}>
                             <input
-                              aria-label={`Nome da variável ${index + 1}`}
+                              aria-label={t("Nome da variável {0}", index + 1)}
                               value={variable.key}
                               onChange={(e) =>
                                 update(index, "key", e.target.value)
@@ -349,7 +358,10 @@ export function EnvironmentPage({ project }: { project: Project }) {
                                 </span>
                               )}
                               <input
-                                aria-label={`Valor de ${variable.key || `variável ${index + 1}`}`}
+                                aria-label={t(
+                                  "Valor de {0}",
+                                  variable.key || t("variável {0}", index + 1),
+                                )}
                                 type={shown.has(index) ? "text" : "password"}
                                 className={
                                   shown.has(index) ? "" : "env-value-hidden"
@@ -365,13 +377,13 @@ export function EnvironmentPage({ project }: { project: Project }) {
                                 className="env-icon"
                                 title={
                                   shown.has(index)
-                                    ? "Ocultar valor"
-                                    : "Exibir valor"
+                                    ? t("Ocultar valor")
+                                    : t("Exibir valor")
                                 }
                                 aria-label={
                                   shown.has(index)
-                                    ? `Ocultar ${variable.key}`
-                                    : `Exibir ${variable.key}`
+                                    ? t("Ocultar {0}", variable.key)
+                                    : t("Exibir {0}", variable.key)
                                 }
                                 onClick={() =>
                                   setShown((old) => {
@@ -386,8 +398,11 @@ export function EnvironmentPage({ project }: { project: Project }) {
                               </button>
                               <button
                                 className="env-icon"
-                                title="Copiar valor"
-                                aria-label={`Copiar valor de ${variable.key}`}
+                                title={t("Copiar valor")}
+                                aria-label={t(
+                                  "Copiar valor de {0}",
+                                  variable.key,
+                                )}
                                 onClick={async () => {
                                   await window.cloudforge.copy(variable.value);
                                   setCopied(index);
@@ -402,8 +417,8 @@ export function EnvironmentPage({ project }: { project: Project }) {
                             </div>
                             <button
                               className="env-icon env-remove"
-                              title="Remover variável"
-                              aria-label={`Remover ${variable.key}`}
+                              title={t("Remover variável")}
+                              aria-label={t("Remover {0}", variable.key)}
                               onClick={() =>
                                 setVariables((items) =>
                                   items.filter((_, i) => i !== index),
@@ -419,8 +434,10 @@ export function EnvironmentPage({ project }: { project: Project }) {
                   ) : (
                     <p className="env-no-results">
                       {search
-                        ? "Nenhuma variável corresponde à busca."
-                        : "Nenhuma variável neste projeto. Adicione a primeira abaixo."}
+                        ? t("Nenhuma variável corresponde à busca.")
+                        : t(
+                            "Nenhuma variável neste projeto. Adicione a primeira abaixo.",
+                          )}
                     </p>
                   )}
                 </div>
@@ -435,11 +452,12 @@ export function EnvironmentPage({ project }: { project: Project }) {
                       setSearch("");
                     }}
                   >
-                    <Plus size={16} /> Adicionar nova variável
+                    <Plus size={16} /> {t("Adicionar nova variável")}
                   </button>
                   <span>
-                    Cole CHAVE=valor no campo de chave para preencher os dois
-                    campos.
+                    {t(
+                      "Cole CHAVE=valor no campo de chave para preencher os dois campos.",
+                    )}
                   </span>
                 </div>
                 <div className="env-footer">
@@ -450,7 +468,7 @@ export function EnvironmentPage({ project }: { project: Project }) {
                         disabled={busy}
                         onClick={() => void exportExclusive()}
                       >
-                        <Download size={16} /> Exportar .env
+                        <Download size={16} /> {t("Exportar .env")}
                       </button>
                     )}
                   </div>
@@ -459,7 +477,7 @@ export function EnvironmentPage({ project }: { project: Project }) {
                     disabled={busy}
                     onClick={() => void save()}
                   >
-                    {busy ? "Salvando…" : "Salvar"}
+                    {busy ? t("Salvando…") : t("Salvar")}
                   </button>
                 </div>
               </>
@@ -480,10 +498,10 @@ export function EnvironmentPage({ project }: { project: Project }) {
             aria-modal="true"
             aria-labelledby="env-dialog-title"
           >
-            <h2 id="env-dialog-title">Onde está o arquivo?</h2>
+            <h2 id="env-dialog-title">{t("Onde está o arquivo?")}</h2>
             {importChoice === "choose" ? (
               <>
-                <p>Escolha a origem do arquivo de variáveis.</p>
+                <p>{t("Escolha a origem do arquivo de variáveis.")}</p>
                 <div className="env-dialog-actions">
                   <button
                     className="button"
@@ -492,21 +510,22 @@ export function EnvironmentPage({ project }: { project: Project }) {
                       void list("");
                     }}
                   >
-                    <Folder size={16} /> Dentro do projeto
+                    <Folder size={16} /> {t("Dentro do projeto")}
                   </button>
                   <button
                     className="button primary"
                     onClick={() => void importOutside()}
                   >
-                    <Upload size={16} /> No computador
+                    <Upload size={16} /> {t("No computador")}
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <p>
-                  Escolha um arquivo dentro do projeto. Outros nomes serão
-                  copiados como .env.
+                  {t(
+                    "Escolha um arquivo dentro do projeto. Outros nomes serão copiados como .env.",
+                  )}
                 </p>
                 <div className="env-browser-path">
                   <button className="text-button" onClick={() => void list("")}>
@@ -521,7 +540,7 @@ export function EnvironmentPage({ project }: { project: Project }) {
                           void list(folder.split("/").slice(0, -1).join("/"))
                         }
                       >
-                        Voltar
+                        {t("Voltar")}
                       </button>
                     </>
                   )}
@@ -551,7 +570,7 @@ export function EnvironmentPage({ project }: { project: Project }) {
               className="button env-dialog-close"
               onClick={() => setImportChoice(null)}
             >
-              Cancelar
+              {t("Cancelar")}
             </button>
           </div>
         </div>

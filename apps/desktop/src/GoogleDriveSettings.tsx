@@ -1,3 +1,4 @@
+import { t } from "../../../packages/ui/i18n";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { BookOpen, Cloud, ExternalLink, Unplug } from "lucide-react";
 import type { GoogleDriveState } from "../../../packages/shared-types";
@@ -100,13 +101,13 @@ export function GoogleDriveSettings({
     (!drive.configured || editing);
   const description = !drive
     ? error
-      ? "Estado da conexão indisponível."
-      : "Verificando conexão…"
+      ? t("Estado da conexão indisponível.")
+      : t("Verificando conexão…")
     : drive.account
-      ? drive.account.email || "Conta Google conectada."
+      ? drive.account.email || t("Conta Google conectada.")
       : drive.pending
-        ? "Conclua a autorização no navegador e volte ao Cloudforge."
-        : "Nenhuma conta Google cadastrada.";
+        ? t("Conclua a autorização no navegador e volte ao Cloudforge.")
+        : t("Nenhuma conta Google cadastrada.");
 
   return (
     <section
@@ -122,15 +123,17 @@ export function GoogleDriveSettings({
           type="button"
           onClick={() => setTutorial(true)}
         >
-          <BookOpen size={15} /> Tutorial de integração
+          <BookOpen size={15} /> {t("Tutorial de integração")}
         </button>
       </div>
       <p className="muted">
-        Conecte a conta que vai armazenar os snapshots dos bancos de dados.
+        {t(
+          "Conecte a conta que vai armazenar os snapshots dos bancos de dados.",
+        )}
       </p>
       <div className="setting-row">
         <div role="status">
-          <strong>Conta Google</strong>
+          <strong>{t("Conta Google")}</strong>
           <p className="muted">{description}</p>
         </div>
         {pending ? (
@@ -144,7 +147,7 @@ export function GoogleDriveSettings({
               setDisconnect(true);
             }}
           >
-            <Unplug size={15} /> Desconectar conta
+            <Unplug size={15} /> {t("Desconectar conta")}
           </button>
         ) : drive?.configured && !editing ? (
           <button
@@ -153,7 +156,7 @@ export function GoogleDriveSettings({
             disabled={busy}
             onClick={connect}
           >
-            <ExternalLink size={15} /> Conectar conta Google
+            <ExternalLink size={15} /> {t("Conectar conta Google")}
           </button>
         ) : !drive && error ? (
           <button
@@ -161,7 +164,7 @@ export function GoogleDriveSettings({
             disabled={busy}
             onClick={() => void perform(async () => setDrive(await status()))}
           >
-            Tentar novamente
+            {t("Tentar novamente")}
           </button>
         ) : (
           <Cloud size={20} aria-hidden="true" />
@@ -170,7 +173,7 @@ export function GoogleDriveSettings({
       <ErrorMessage error={error || drive?.error || ""} />
       {drive?.account && !drive.configured && (
         <p className="muted">
-          Desconecte a conta para configurar o cliente OAuth novamente.
+          {t("Desconecte a conta para configurar o cliente OAuth novamente.")}
         </p>
       )}
       {drive?.configured &&
@@ -187,17 +190,18 @@ export function GoogleDriveSettings({
               setEditing(true);
             }}
           >
-            Alterar cliente OAuth
+            {t("Alterar cliente OAuth")}
           </button>
         )}
       {showClient && (
         <form className="narrow-form" onSubmit={save}>
           <p className="muted">
-            Use o ID e o segredo do cliente OAuth do tipo App para computador
-            criado no Google Cloud.
+            {t(
+              "Use o ID e o segredo do cliente OAuth do tipo App para computador criado no Google Cloud.",
+            )}
           </p>
           <label>
-            ID do cliente OAuth
+            {t("ID do cliente OAuth")}
             <input
               ref={clientIdField}
               value={clientId}
@@ -209,7 +213,7 @@ export function GoogleDriveSettings({
             />
           </label>
           <label>
-            Segredo do cliente OAuth
+            {t("Segredo do cliente OAuth")}
             <input
               type="password"
               value={clientSecret}
@@ -232,11 +236,11 @@ export function GoogleDriveSettings({
                   setError("");
                 }}
               >
-                Cancelar
+                {t("Cancelar")}
               </button>
             )}
             <button className="button primary" type="submit" disabled={busy}>
-              {busy && <Spinner />} Salvar cliente OAuth
+              {busy && <Spinner />} {t("Salvar cliente OAuth")}
             </button>
           </div>
         </form>
@@ -254,13 +258,14 @@ export function GoogleDriveSettings({
       )}
       {disconnect && (
         <Modal
-          title="Desconectar conta Google"
+          title={t("Desconectar conta Google")}
           onClose={() => setDisconnect(false)}
           closeDisabled={busy}
         >
           <p>
-            Os snapshots já salvos continuarão no Drive. Os envios automáticos
-            ficarão suspensos até conectar uma conta.
+            {t(
+              "Os snapshots já salvos continuarão no Drive. Os envios automáticos ficarão suspensos até conectar uma conta.",
+            )}
           </p>
           <ErrorMessage error={error} />
           <div className="form-footer">
@@ -269,7 +274,7 @@ export function GoogleDriveSettings({
               disabled={busy}
               onClick={() => setDisconnect(false)}
             >
-              Cancelar
+              {t("Cancelar")}
             </button>
             <button
               className="button danger"
@@ -286,7 +291,7 @@ export function GoogleDriveSettings({
                 })
               }
             >
-              Desconectar conta
+              {t("Desconectar conta")}
             </button>
           </div>
         </Modal>

@@ -1,3 +1,5 @@
+import { t, useLocale } from "../../../packages/ui/i18n";
+import { LanguageSelector } from "../../../packages/ui/LanguageSelector";
 import React, { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { Database, LogOut, ShieldCheck, Wifi, WifiOff } from "lucide-react";
@@ -32,6 +34,7 @@ type Session = {
   expiresAt?: number;
 };
 function App() {
+  useLocale();
   const [session, setSession] = useState<Session | null>(null),
     [projects, setProjects] = useState<RemoteProject[] | null>(null),
     [username, setUsername] = useState(""),
@@ -61,17 +64,19 @@ function App() {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const data = await response
-      .json()
-      .catch(() => ({ error: "Resposta inválida do servidor." }));
+    const data = await response.json().catch(() => null);
     if (!response.ok) {
       if (response.status === 403) setDenied(true);
       if (response.status === 401 && path !== "/api/login") {
         setSession(null);
         void loadSession();
       }
-      throw new Error(data.error || `HTTP ${response.status}`);
+      throw new Error(
+        data?.error ||
+          (data ? `HTTP ${response.status}` : "Resposta inválida do servidor."),
+      );
     }
+    if (data === null) throw new Error("Resposta inválida do servidor.");
     return data;
   }
   async function loadSession() {
@@ -198,6 +203,9 @@ function App() {
       />
     ) : (
       <div className="connection-page">
+        <div className="remote-language">
+          <LanguageSelector />
+        </div>
         <Brand />
         <div className="connection-panel">
           <Spinner />
@@ -207,22 +215,21 @@ function App() {
   if (!session.authenticated)
     return (
       <div className="login-page">
+        <div className="remote-language">
+          <LanguageSelector />
+        </div>
         <Brand />
         <main className="login-panel">
           <div className="setup-symbol">
             <ShieldCheck size={28} />
           </div>
-          <h1>
-            Seu servidor,
-            <br />
-            onde você estiver.
-          </h1>
+          <h1>{t("Seu servidor, onde você estiver.")}</h1>
           <p className="muted">
-            Entre para acompanhar e controlar suas aplicações.
+            {t("Entre para acompanhar e controlar suas aplicações.")}
           </p>
           <form onSubmit={login}>
             <label>
-              Nome de usuário
+              {t("Nome de usuário")}
               <input
                 autoComplete="username"
                 required
@@ -231,7 +238,7 @@ function App() {
               />
             </label>
             <label>
-              Senha
+              {t("Senha")}
               <input
                 type="password"
                 autoComplete="current-password"
@@ -243,16 +250,17 @@ function App() {
             </label>
             <ErrorMessage error={error} />
             <button className="button primary full-width" disabled={!!busy}>
-              {busy ? <Spinner /> : <ShieldCheck size={16} />}Entrar
+              {busy ? <Spinner /> : <ShieldCheck size={16} />}
+              {t("Entrar")}
             </button>
           </form>
           <div className="login-note">
-            Use a conta criada no aplicativo desktop.
+            {t("Use a conta criada no aplicativo desktop.")}
             <br />
-            Sua sessão fica protegida neste dispositivo.
+            {t("Sua sessão fica protegida neste dispositivo.")}
           </div>
         </main>
-        <footer>Cloudforge · Controle remoto</footer>
+        <footer>{t("Cloudforge · Controle remoto")}</footer>
       </div>
     );
   return (
@@ -261,6 +269,7 @@ function App() {
         <Brand />
         <div>
           <span className="muted small">{session.username}</span>
+          <LanguageSelector />
           <button
             className="button"
             disabled={!!busy}
@@ -277,7 +286,7 @@ function App() {
             }}
           >
             <LogOut size={16} />
-            Sair
+            {t("Sair")}
           </button>
         </div>
       </header>
@@ -290,26 +299,26 @@ function App() {
               select={setDatabaseSection}
             />
           ) : (
-            <nav aria-label="Navegação principal">
+            <nav aria-label={t("Navegação principal")}>
               <button
                 className={page === "projects" ? "nav-item active" : "nav-item"}
-                aria-label="Aplicações"
+                aria-label={t("Aplicações")}
                 aria-current={page === "projects" ? "page" : undefined}
                 onClick={() => setPage("projects")}
               >
                 <ProjectsIcon size={18} />
-                <span>Aplicações</span>
+                <span>{t("Aplicações")}</span>
               </button>
               <button
                 className={
                   page === "databases" ? "nav-item active" : "nav-item"
                 }
-                aria-label="Bancos de dados"
+                aria-label={t("Bancos de dados")}
                 aria-current={page === "databases" ? "page" : undefined}
                 onClick={() => setPage("databases")}
               >
                 <Database size={18} />
-                <span>Bancos de dados</span>
+                <span>{t("Bancos de dados")}</span>
               </button>
             </nav>
           )}
@@ -331,14 +340,16 @@ function App() {
             <>
               <div className="page-heading">
                 <div>
-                  <h1>Suas aplicações</h1>
+                  <h1>{t("Suas aplicações")}</h1>
                   <p>
-                    Acompanhe o status e controle a execução dos seus projetos.
+                    {t(
+                      "Acompanhe o status e controle a execução dos seus projetos.",
+                    )}
                   </p>
                 </div>
                 <span className="connection-state">
                   {connected ? <Wifi size={15} /> : <WifiOff size={15} />}{" "}
-                  {connected ? "Em tempo real" : "Reconectando"}
+                  {connected ? t("Em tempo real") : t("Reconectando")}
                 </span>
               </div>
               <ErrorMessage error={error} />
@@ -346,17 +357,18 @@ function App() {
                 <section className="project-list">
                   <div className="empty-state compact" role="status">
                     <Spinner />
-                    <p>Carregando aplicações…</p>
+                    <p>{t("Carregando aplicações…")}</p>
                   </div>
                 </section>
               ) : !projects.length ? (
                 <section className="project-list">
                   <div className="empty-state">
                     <ProjectsIcon size={34} />
-                    <h2>Nenhum projeto cadastrado</h2>
+                    <h2>{t("Nenhum projeto cadastrado")}</h2>
                     <p>
-                      Adicione seus projetos no aplicativo desktop. Eles
-                      aparecerão aqui automaticamente.
+                      {t(
+                        "Adicione seus projetos no aplicativo desktop. Eles aparecerão aqui automaticamente.",
+                      )}
                     </p>
                   </div>
                 </section>
@@ -373,8 +385,9 @@ function App() {
               )}
               <p className="remote-note">
                 <ShieldCheck size={15} />
-                Arquivos, credenciais e configurações avançadas ficam no
-                aplicativo desktop.
+                {t(
+                  "Arquivos, credenciais e configurações avançadas ficam no aplicativo desktop.",
+                )}
               </p>
             </>
           )}

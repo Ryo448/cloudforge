@@ -1,3 +1,4 @@
+import { t, useLocale } from "../../../packages/ui/i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import { Minus, Square, X } from "lucide-react";
 import { Brand } from "../../../packages/ui";
@@ -26,6 +27,7 @@ export default function WindowControls({
   updates?: boolean;
   filesDirty?: boolean;
 }) {
+  useLocale();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export default function WindowControls({
   return (
     <header
       className="window-titlebar"
-      aria-label="Barra superior do Cloudforge"
+      aria-label={t("Barra superior do Cloudforge")}
     >
       <div className="window-titlebar-brand">
         <Brand />
@@ -55,16 +57,18 @@ export default function WindowControls({
         <div className="window-titlebar-actions">
           <button
             type="button"
-            aria-label="Minimizar janela"
-            title="Minimizar"
+            aria-label={t("Minimizar janela")}
+            title={t("Minimizar")}
             onClick={() => run("minimize")}
           >
             <Minus size={15} strokeWidth={1.7} aria-hidden="true" />
           </button>
           <button
             type="button"
-            aria-label={maximized ? "Restaurar janela" : "Maximizar janela"}
-            title={maximized ? "Restaurar" : "Maximizar"}
+            aria-label={
+              maximized ? t("Restaurar janela") : t("Maximizar janela")
+            }
+            title={maximized ? t("Restaurar") : t("Maximizar")}
             onClick={() => run("maximize")}
           >
             {maximized ? (
@@ -89,8 +93,8 @@ export default function WindowControls({
           <button
             type="button"
             className="window-titlebar-close"
-            aria-label="Fechar janela"
-            title="Fechar"
+            aria-label={t("Fechar janela")}
+            title={t("Fechar")}
             onClick={() => run("close")}
           >
             <X size={17} strokeWidth={1.6} aria-hidden="true" />
