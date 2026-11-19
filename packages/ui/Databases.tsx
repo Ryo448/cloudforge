@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -41,6 +42,7 @@ import postgresqlLogo from "./icons/postgresql.svg";
 import mysqlLogo from "./icons/mysql-icon.svg";
 import "./databases.css";
 import { DatabaseSnapshots, type SnapshotDesktop } from "./DatabaseSnapshots";
+import { PostgresTCPTutorial } from "./PostgresTCPTutorial";
 
 const engines = {
   mongodb: {
@@ -1426,6 +1428,7 @@ export function Databases({
                     desktop={!!allowLANFirewall}
                     request={request}
                     copy={copyValue}
+                    onOpenExternal={onOpenExternal}
                   />
                 )}
                 {connection(database)}
@@ -1745,12 +1748,14 @@ function PostgresTCP({
   desktop,
   request,
   copy,
+  onOpenExternal,
 }: {
   id: string;
   ready: boolean;
   desktop: boolean;
   request: Request;
   copy: (value: string) => Promise<void>;
+  onOpenExternal?: (url: string) => Promise<void>;
 }) {
   type Tunnel = {
     hostname?: string;
@@ -1760,6 +1765,8 @@ function PostgresTCP({
   };
   const [tunnel, setTunnel] = useState<Tunnel>();
   const [dialog, setDialog] = useState(false);
+  const [tutorial, setTutorial] = useState(false);
+  const tutorialButton = useRef<HTMLButtonElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [subdomain, setSubdomain] = useState("postgres");
@@ -1833,6 +1840,7 @@ function PostgresTCP({
             className="button"
             onClick={() => {
               setError("");
+              setTutorial(false);
               setDialog(true);
             }}
           >
@@ -1868,95 +1876,125 @@ function PostgresTCP({
       {dialog && (
         <Modal
           title={
-            hostname ? t("Desativar túnel TCP") : t("Configurar túnel TCP")
+            tutorial
+              ? t("Como configurar o túnel TCP")
+              : hostname
+                ? t("Desativar túnel TCP")
+                : t("Configurar túnel TCP")
           }
           closeDisabled={pending}
           onClose={() => setDialog(false)}
-          className="database-rotation-modal"
+          className={
+            tutorial
+              ? "database-rotation-modal db-tcp-tutorial"
+              : "database-rotation-modal"
+          }
         >
-          <form onSubmit={submit} className="db-tcp-form">
-            {hostname ? (
-              <p className="muted">
-                {t(
-                  "O endereço remoto deixa de encaminhar conexões ao PostgreSQL. O túnel do painel vai reconectar.",
-                )}
-              </p>
-            ) : (
-              <>
+          {tutorial ? (
+            <PostgresTCPTutorial
+              subdomain={subdomain}
+              domain={domain}
+              onOpenExternal={onOpenExternal}
+              onBack={() => {
+                setTutorial(false);
+                requestAnimationFrame(() => tutorialButton.current?.focus());
+              }}
+            />
+          ) : (
+            <form onSubmit={submit} className="db-tcp-form">
+              {hostname ? (
                 <p className="muted">
                   {t(
-                    "Crie um aplicativo auto-hospedado no Cloudflare Access para o subdomínio escolhido e autorize os e-mails que podem entrar.",
+                    "O endereço remoto deixa de encaminhar conexões ao PostgreSQL. O túnel do painel vai reconectar.",
                   )}
                 </p>
-                <label>
-                  {t("Subdomínio")}
-                  <input
-                    required
-                    value={subdomain}
-                    onChange={(e) => setSubdomain(e.target.value)}
-                    maxLength={63}
+              ) : (
+                <>
+                  <p className="muted">
+                    {t(
+                      "Crie um aplicativo auto-hospedado no Cloudflare Access para o subdomínio escolhido e autorize os e-mails que podem entrar.",
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    className="button db-tcp-tutorial-button"
+                    ref={tutorialButton}
                     disabled={pending}
-                  />
-                </label>
-                <label>
-                  {t("Domínio")}
-                  <select
-                    required
-                    value={domain}
-                    onChange={(e) => setDomain(e.target.value)}
-                    disabled={pending}
+                    onClick={() => setTutorial(true)}
                   >
-                    {tunnel?.domains?.map((name) => (
-                      <option key={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {t("Equipe do Cloudflare Access")}
-                  <input
-                    required
-                    value={team}
-                    onChange={(e) => setTeam(e.target.value)}
-                    placeholder="minha-equipe"
-                    autoComplete="off"
-                    spellCheck={false}
-                    disabled={pending}
-                  />
-                </label>
-                <label>
-                  {t("AUD do aplicativo Access")}
-                  <input
-                    required
-                    value={audience}
-                    onChange={(e) => setAudience(e.target.value)}
-                    autoComplete="off"
-                    spellCheck={false}
-                    disabled={pending}
-                  />
-                </label>
-                <p className="muted">
-                  {t(
-                    "Ao salvar, o túnel do painel vai reconectar para carregar a rota TCP.",
-                  )}
-                </p>
-              </>
-            )}
-            <ErrorMessage error={error} />
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="button"
-                disabled={pending}
-                onClick={() => setDialog(false)}
-              >
-                {t("Cancelar")}
-              </button>
-              <button className="button primary" disabled={pending}>
-                {pending && <Spinner />}
-                {hostname ? t("Desativar túnel TCP") : t("Ativar túnel TCP")}
-              </button>
-            </div>
-          </form>
+                    <BookOpen size={16} />
+                    {t("Ver tutorial")}
+                  </button>
+                  <label>
+                    {t("Subdomínio")}
+                    <input
+                      required
+                      value={subdomain}
+                      onChange={(e) => setSubdomain(e.target.value)}
+                      maxLength={63}
+                      disabled={pending}
+                    />
+                  </label>
+                  <label>
+                    {t("Domínio")}
+                    <select
+                      required
+                      value={domain}
+                      onChange={(e) => setDomain(e.target.value)}
+                      disabled={pending}
+                    >
+                      {tunnel?.domains?.map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {t("Equipe do Cloudflare Access")}
+                    <input
+                      required
+                      value={team}
+                      onChange={(e) => setTeam(e.target.value)}
+                      placeholder="minha-equipe"
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={pending}
+                    />
+                  </label>
+                  <label>
+                    {t("AUD do aplicativo Access")}
+                    <input
+                      required
+                      value={audience}
+                      onChange={(e) => setAudience(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={pending}
+                    />
+                  </label>
+                  <p className="muted">
+                    {t(
+                      "Ao salvar, o túnel do painel vai reconectar para carregar a rota TCP.",
+                    )}
+                  </p>
+                </>
+              )}
+              <ErrorMessage error={error} />
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="button"
+                  disabled={pending}
+                  onClick={() => setDialog(false)}
+                >
+                  {t("Cancelar")}
+                </button>
+                <button className="button primary" disabled={pending}>
+                  {pending && <Spinner />}
+                  {hostname ? t("Desativar túnel TCP") : t("Ativar túnel TCP")}
+                </button>
+              </div>
+            </form>
+          )}
         </Modal>
       )}
     </div>

@@ -232,6 +232,59 @@
   margin: 0;
   font-size: 12px;
 }
+.db-tcp-tutorial-button {
+  justify-self: start;
+}
+.database-rotation-modal.db-tcp-tutorial {
+  width: min(620px, calc(100% - 36px));
+}
+.db-tcp-tutorial-steps {
+  display: grid;
+  gap: 18px;
+  max-height: min(61vh, 580px);
+  overflow: auto;
+  list-style: decimal;
+  padding: 4px 14px 4px 24px;
+  margin: 0;
+}
+.db-tcp-tutorial-steps p,
+.db-tcp-tutorial-steps dl {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.db-tcp-tutorial-steps code {
+  overflow-wrap: anywhere;
+}
+.db-tcp-tutorial-steps a {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.db-tcp-tutorial-command {
+  display: block;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--canvas);
+  padding: 9px 12px;
+  font-size: 12px;
+  user-select: all;
+}
+.db-tcp-tutorial-steps dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px 12px;
+}
+.db-tcp-tutorial-steps dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.db-tcp-tutorial-steps summary {
+  cursor: pointer;
+}
 .db-edit {
   display: flex;
   gap: 12px;
