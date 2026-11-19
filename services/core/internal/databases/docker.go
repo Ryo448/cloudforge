@@ -154,22 +154,30 @@ func (d docker) inspectNamed(ctx context.Context, r record, name string) (contai
 		return state, false, errors.New("container encontrado sem identificação válida")
 	}
 	key := fmt.Sprintf("%d/tcp", engines[r.Engine].Port)
-	state.LocalPort = loopbackPort(active, key)
-	configuredPort := loopbackPort(configured, key)
+	bindHost := databaseBindHost(r.Engine)
+	state.LocalPort = publishedPort(active, key, bindHost)
+	configuredPort := publishedPort(configured, key, bindHost)
 	state.LocalConfigured = labels["cloudforge.database.local"] == "1" && mode != "host" && configuredPort != 0
 	state.Local = state.LocalConfigured && (!state.Running || state.LocalPort == configuredPort)
 	state.TLS = labels["cloudforge.database.tls"] == "1"
 	return state, true, nil
 }
 
-func loopbackPort(bindings map[string][]portBinding, key string) int {
+func databaseBindHost(engine string) string {
+	if engine == "postgresql" {
+		return "0.0.0.0"
+	}
+	return localHost
+}
+
+func publishedPort(bindings map[string][]portBinding, key, bindHost string) int {
 	for port, entries := range bindings {
 		if port != key && len(entries) > 0 {
 			return 0
 		}
 	}
 	entries := bindings[key]
-	if len(entries) != 1 || entries[0].HostIP != localHost {
+	if len(entries) != 1 || entries[0].HostIP != bindHost {
 		return 0
 	}
 	port, err := strconv.Atoi(entries[0].HostPort)
@@ -190,7 +198,6 @@ const postgresHBAPath = "/run/cloudforge/pg_hba.conf"
 const postgresHBARules = `local all cfadmin scram-sha-256
 hostssl all cfadmin 127.0.0.1/32 scram-sha-256
 hostssl all cfadmin ::1/128 scram-sha-256
-hostssl postgres,template0,template1 cloudforge all reject
 hostssl all cloudforge all scram-sha-256
 `
 
@@ -362,7 +369,7 @@ func (d docker) create(ctx context.Context, r record) error {
 	}
 	args := []string{"create", "--pull", "never", "--name", name, "--label", "cloudforge.database=" + r.ID,
 		"--label", "cloudforge.database.local=1", "--label", "cloudforge.database.tls=1", "--network", name,
-		"--publish", fmt.Sprintf("%s:%d:%d", localHost, r.ReservedPort, e.Port),
+		"--publish", fmt.Sprintf("%s:%d:%d", databaseBindHost(r.Engine), r.ReservedPort, e.Port),
 		"--mount", "type=volume,source=" + name + ",target=" + e.Data, "--tmpfs", "/run/cloudforge:rw,noexec,nosuid,nodev,mode=0755",
 		"--cpus", "1", "--pids-limit", "256",
 		"--security-opt", "no-new-privileges", "--log-opt", "max-size=10m", "--log-opt", "max-file=2"}

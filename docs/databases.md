@@ -18,6 +18,14 @@ O Cloudforge baixa do Docker Hub a imagem da tecnologia escolhida na primeira cr
 
 O usuário é `cloudforge`. Use o banco `cloudforge` no PostgreSQL, MySQL e MongoDB. No MongoDB, use também `cloudforge` como banco de autenticação. No Redis, use o índice `0` e o usuário ACL `cloudforge`. As quatro engines exigem TLS nas conexões TCP; não é necessário certificado de cliente.
 
+No PostgreSQL, a conta `cloudforge` é superusuária da instância e pode executar comandos como `CREATE DATABASE`. O pgAdmin também pode usar `postgres` como banco de manutenção.
+
+### Conectar ao PostgreSQL pela rede local
+
+No outro computador, use o IPv4 da máquina que executa o Cloudforge como host, a porta que aparece em **Conexão**, o usuário `cloudforge` e a senha da instância. Configure `verify-full` com a CA baixada. Se o IPv4 da máquina hospedeira mudar, reinicie a instância no Cloudforge para incluir o novo endereço no certificado do servidor.
+
+A porta do PostgreSQL fica publicada nas interfaces IPv4 da máquina hospedeira. Se o firewall bloquear a conexão, permita a porta TCP somente para a rede local confiável. No Windows, limite a regra ao perfil **Privado** e à sub-rede local.
+
 ### DBeaver integrado
 
 No Cloudforge Desktop, abra uma instância PostgreSQL ou MySQL e selecione **DBeaver**, logo abaixo de **Visão geral**. Com o banco online e o TLS validado, a aba conecta automaticamente e disponibiliza o navegador de objetos, o editor SQL e a grade de dados. Exporte scripts e resultados que queira guardar antes de sair da aba. A sessão do editor é temporária.
@@ -49,6 +57,8 @@ A porta atribuída permanece a mesma após parar, iniciar ou reiniciar o contain
 ## Atualizar instalações existentes
 
 O Cloudforge emite automaticamente o par de cliente para bancos que já usam TLS, preservando o certificado do servidor e a CA. Bancos em execução ganham suporte a mTLS no próprio container; bancos parados recebem a configuração na próxima inicialização. Para instalações antigas sem TLS, continua valendo a migração original: o Core adequa o container, usando a imagem local, o volume, as redes e as credenciais existentes. Use a porta mostrada na aba **Conexão** e configure a CA no cliente antes de reconectar.
+
+O Core atualizado promove automaticamente a conta `cloudforge` das instâncias PostgreSQL existentes. Para publicar a porta na rede local, ele substitui o container antigo e pode renovar o certificado do servidor. A atualização mantém o volume, a porta, as credenciais, a CA e o par de cliente existente. Instâncias em execução passam por uma breve interrupção. Instâncias paradas são migradas quando iniciadas.
 
 Para configurar o Google Drive e operar backups, consulte [Snapshots dos bancos](snapshots.md).
 

@@ -126,8 +126,17 @@ func TestDockerPostgresAuthentication(t *testing.T) {
 	if active := adminSQL("SHOW hba_file;\n"); !strings.Contains(active, postgresHBAPath) {
 		t.Fatalf("HBA em uso: %s", active)
 	}
-	adminSQL(`CREATE DATABASE "NCT" OWNER cloudforge;
-CREATE DATABASE restricted;
+	const createDatabase = `IFS= read -r PGPASSWORD
+export PGPASSWORD PGSSLMODE=verify-full PGSSLROOTCERT=/run/cloudforge/ca.crt
+exec psql -X -w -h 127.0.0.1 -U cloudforge -d postgres -v ON_ERROR_STOP=1`
+	createAsDefaultUser := func(statement string) error {
+		_, err := m.docker.run(ctx, r, "/bin/sh", strings.NewReader(s.Password+"\n"+statement), "-ec", createDatabase)
+		return err
+	}
+	if err = createAsDefaultUser("CREATE DATABASE \"NCT\";\n"); err != nil {
+		t.Fatal("a conta padrão não conseguiu criar um banco usando a conexão TLS com postgres", err)
+	}
+	adminSQL(`CREATE DATABASE restricted;
 REVOKE CONNECT ON DATABASE restricted FROM PUBLIC;
 \connect NCT
 SET ROLE cloudforge;
@@ -160,6 +169,11 @@ INSERT INTO records VALUES ('preserved');
 		}
 	}
 	read()
+	adminSQL("ALTER ROLE cloudforge NOSUPERUSER NOCREATEDB NOCREATEROLE;\n")
+	expectSQLState(query(Username, s.Password, "restricted", "SELECT 1", &sample), "42501")
+	if err = createAsDefaultUser("CREATE DATABASE restored_privileges;\n"); err == nil {
+		t.Fatal("a conta antiga conseguiu criar um banco antes da promoção")
+	}
 
 	const oldHBA = `local all cfadmin scram-sha-256
 hostssl all cfadmin 127.0.0.1/32 scram-sha-256
@@ -183,14 +197,19 @@ hostssl cloudforge cloudforge all scram-sha-256
 	if err = m.docker.ready(ctx, r, s.TLS, s.Password, port); err != nil {
 		t.Fatalf("a antiga regra deveria aceitar somente o banco padrão: %v", err)
 	}
+	delete(m.ready, r.ID) // Simulate starting an updated Core.
 	apply()
 	if !r.StartedAt.Equal(started) {
 		t.Fatal("a reconciliação reiniciou o PostgreSQL")
 	}
 	read()
+	if err = createAsDefaultUser("CREATE DATABASE restored_privileges;\n"); err != nil {
+		t.Fatal("a conta existente não foi promovida após atualizar o Core", err)
+	}
 	expectSQLState(query(Username, "incorrect", "NCT", "SELECT 1", &sample), "28P01")
-	expectSQLState(query(Username, s.Password, "template1", "SELECT 1", &sample), "28000")
-	expectSQLState(query(Username, s.Password, "restricted", "SELECT 1", &sample), "42501")
+	if err = query(Username, s.Password, "restricted", "SELECT 1", &sample); err != nil {
+		t.Fatal("o superusuário deveria conseguir acessar outro banco da instância", err)
+	}
 	expectSQLState(query("cfadmin", s.Admin, "NCT", "SELECT 1", &sample), "28000")
 	plainConnector, err := pq.NewConnectorConfig(pq.Config{
 		Host: localHost, Port: uint16(port), User: Username, Password: s.Password, Database: "NCT", SSLMode: pq.SSLModeDisable,

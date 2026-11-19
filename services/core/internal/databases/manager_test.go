@@ -454,15 +454,23 @@ exec mysql --protocol=SOCKET -u root -e "ALTER USER 'cloudforge'@'%' REQUIRE SSL
 			}
 			name := containerName(r)
 			cfg := engines[r.Engine]
-			if _, err = m.docker.command(ctx, nil, "create", "--pull", "never", "--name", name,
-				"--label", "cloudforge.database="+r.ID, "--label", "cloudforge.database.local=1", "--network", name,
+			args := []string{"create", "--pull", "never", "--name", name,
+				"--label", "cloudforge.database=" + r.ID, "--label", "cloudforge.database.local=1", "--network", name,
 				"--publish", fmt.Sprintf("127.0.0.1:%d:%d", port, cfg.Port),
-				"--mount", "type=volume,source="+name+",target="+cfg.Data,
-				"--entrypoint", "/bin/sh", cfg.Image, "-c", "sleep 600"); err != nil {
+				"--mount", "type=volume,source=" + name + ",target=" + cfg.Data}
+			if engine == "postgresql" {
+				// The loopback binding alone must trigger migration of an existing TLS container.
+				args = append(args, "--label", "cloudforge.database.tls=1")
+			}
+			args = append(args, "--entrypoint", "/bin/sh", cfg.Image, "-c", "sleep 600")
+			if _, err = m.docker.command(ctx, nil, args...); err != nil {
 				t.Fatal(err)
 			}
 			operate("start")
 			runData(false)
+			if r.Port != port {
+				t.Fatal("a migração alterou a porta publicada")
+			}
 			if r.Engine == "mysql" {
 				const localLogin = `IFS= read -r password
 export MYSQL_PWD="$password"

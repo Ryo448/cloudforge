@@ -468,6 +468,22 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 		runtime.Running = false
 	}
 	if !exists || !runtime.Running {
+		if r.Engine == "postgresql" {
+			addresses, err := postgresLANAddresses()
+			if err != nil {
+				return err
+			}
+			material, err := m.postgresTLSForLAN(*r, s.TLS, addresses)
+			if err != nil {
+				return err
+			}
+			if material != s.TLS {
+				s.TLS = material
+				if err = m.saveSecrets(*r, s); err != nil {
+					return err
+				}
+			}
+		}
 		if runtime, err = m.start(ctx, r, exists); err != nil {
 			return err
 		}
@@ -532,6 +548,11 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 			case <-deadline.Done():
 				return errors.New("não foi possível validar TLS e autenticação na porta local do banco")
 			case <-time.After(2 * time.Second):
+			}
+		}
+		if r.Engine == "postgresql" {
+			if err = m.docker.ensurePostgresAdmin(deadline, *r, s.Admin); err != nil {
+				return err
 			}
 		}
 		if s.PendingPassword != "" {
@@ -620,7 +641,7 @@ func (m *Manager) start(ctx context.Context, r *record, exists bool) (containerS
 
 func (m *Manager) allocatePort(r *record) error {
 	for attempt := 0; attempt < 32; attempt++ {
-		listener, err := net.Listen("tcp4", localHost+":0")
+		listener, err := net.Listen("tcp4", databaseBindHost(r.Engine)+":0")
 		if err != nil {
 			return err
 		}

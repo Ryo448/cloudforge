@@ -16,6 +16,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -123,16 +124,14 @@ func (m *Manager) issueTLS(r record) (*serverTLS, error) {
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now()
-	template := &x509.Certificate{
-		Subject:   pkix.Name{CommonName: containerName(r)},
-		NotBefore: now.Add(-5 * time.Minute), NotAfter: now.AddDate(2, 0, 0),
-		DNSNames: []string{"localhost", containerName(r)}, IPAddresses: []net.IP{net.ParseIP(localHost), net.IPv6loopback},
-		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	var addresses []net.IP
+	if r.Engine == "postgresql" {
+		addresses, err = postgresLANAddresses()
+		if err != nil {
+			return nil, err
+		}
 	}
-	template.NotAfter = minTime(template.NotAfter, issuer.NotAfter)
-	leaf, err := issueCertificate(template, issuer, signer)
+	leaf, err := issueServerTLS(r, issuer, signer, addresses)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +141,66 @@ func (m *Manager) issueTLS(r record) (*serverTLS, error) {
 	}
 	result := &serverTLS{certificate: leaf, CA: ca, Client: client}
 	return result, result.validate(r)
+}
+
+func issueServerTLS(r record, issuer *x509.Certificate, signer *rsa.PrivateKey, addresses []net.IP) (certificate, error) {
+	now := time.Now()
+	template := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: containerName(r)},
+		NotBefore: now.Add(-5 * time.Minute), NotAfter: now.AddDate(2, 0, 0),
+		DNSNames:    []string{"localhost", containerName(r)},
+		IPAddresses: append([]net.IP{net.ParseIP(localHost), net.IPv6loopback}, addresses...),
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	template.NotAfter = minTime(template.NotAfter, issuer.NotAfter)
+	return issueCertificate(template, issuer, signer)
+}
+
+func postgresLANAddresses() ([]net.IP, error) {
+	interfaces, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, errors.New("não foi possível consultar os endereços de rede do PostgreSQL")
+	}
+	var addresses []net.IP
+	for _, address := range interfaces {
+		network, ok := address.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip := network.IP.To4()
+		if ip != nil && (ip.IsGlobalUnicast() || ip.IsLinkLocalUnicast()) {
+			addresses = append(addresses, ip)
+		}
+	}
+	return addresses, nil
+}
+
+func (m *Manager) postgresTLSForLAN(r record, material *serverTLS, addresses []net.IP) (*serverTLS, error) {
+	pair, err := tls.X509KeyPair(material.PEM, material.Key)
+	if err != nil {
+		return nil, err
+	}
+	missingAddress := slices.ContainsFunc(addresses, func(ip net.IP) bool {
+		return pair.Leaf.VerifyHostname(ip.String()) != nil
+	})
+	if !missingAddress {
+		return material, nil
+	}
+	ca, issuer, signer, err := m.tlsSigner()
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(ca, material.CA) {
+		return nil, errors.New("a CA do banco é diferente da CA local")
+	}
+	leaf, err := issueServerTLS(r, issuer, signer, addresses)
+	if err != nil {
+		return nil, err
+	}
+	updated := *material
+	updated.certificate = leaf
+	return &updated, updated.validate(r)
 }
 
 func clientCommonName(r record) string { return containerName(r) + "-client" }

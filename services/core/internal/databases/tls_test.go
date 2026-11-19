@@ -166,3 +166,40 @@ func TestBackfillClientTLS(t *testing.T) {
 		t.Fatal("backfill perdeu ou substituiu um par já emitido", err)
 	}
 }
+
+func TestPostgresTLSAddsLANAddress(t *testing.T) {
+	m := testManager(t)
+	r := record{Instance: Instance{ID: "postgres-lan", Engine: "postgresql"}}
+	ca, issuer, signer, err := m.tlsSigner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := issueServerTLS(r, issuer, signer, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := issueClientTLS(r, issuer, signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := &serverTLS{certificate: leaf, CA: ca, Client: client}
+	addresses := []net.IP{net.ParseIP("192.168.20.5")}
+	updated, err := m.postgresTLSForLAN(r, legacy, addresses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := tls.X509KeyPair(updated.PEM, updated.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = pair.Leaf.VerifyHostname(addresses[0].String()); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(updated.CA, legacy.CA) || updated.Client != legacy.Client {
+		t.Fatal("a atualização do certificado do servidor alterou a CA ou o par de cliente")
+	}
+	again, err := m.postgresTLSForLAN(r, updated, addresses)
+	if err != nil || again != updated {
+		t.Fatal("o mesmo endereço não deveria gerar outro certificado", err)
+	}
+}

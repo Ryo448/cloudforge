@@ -75,6 +75,16 @@ mongodb) exec mongosh --quiet --tls --tlsCAFile /run/cloudforge/ca.crt --host 12
 redis) export REDISCLI_AUTH="$admin"; exec redis-cli --tls --cacert /run/cloudforge/ca.crt -h 127.0.0.1 -p 6379 --user cfadmin -e -x ACL SETUSER cloudforge resetpass;;
 esac`
 
+const postgresAdminPrivileges = "ALTER ROLE cloudforge WITH SUPERUSER CREATEDB CREATEROLE;\n"
+
+func (d docker) ensurePostgresAdmin(ctx context.Context, r record, admin string) error {
+	_, err := d.run(ctx, r, "/bin/sh", strings.NewReader(admin+"\n"+postgresAdminPrivileges), "-ec", manageUser, "manage", r.Engine)
+	if err != nil {
+		return errors.New("não foi possível conceder privilégios administrativos à conta cloudforge")
+	}
+	return nil
+}
+
 func (d docker) setPassword(ctx context.Context, r record, s secret, password string) error {
 	var statement string
 	switch r.Engine {
@@ -86,7 +96,7 @@ func (d docker) setPassword(ctx context.Context, r record, s secret, password st
   REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
   ALTER DATABASE cloudforge OWNER TO cloudforge;
   ALTER SCHEMA public OWNER TO cloudforge;
-  `, password)
+  `, password) + postgresAdminPrivileges
 	case "mysql":
 		statement = fmt.Sprintf(`CREATE USER IF NOT EXISTS 'cloudforge'@'%%' IDENTIFIED BY '%[1]s' REQUIRE SSL;
   ALTER USER 'cloudforge'@'%%' IDENTIFIED BY '%[1]s' REQUIRE SSL;
