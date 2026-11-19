@@ -31,6 +31,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "--postgres-lan-firewall" {
+		if err := databases.ApplyLANFirewallHelper(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--pty-child" {
 		if err := processes.RunPTYChild(); err != nil {
 			fmt.Fprintln(os.Stderr, err)

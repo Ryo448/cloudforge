@@ -77,7 +77,7 @@ type Instance = {
   memoryMb?: number;
   host: string;
   lanHosts?: string[];
-  lanFirewall?: "pending" | "blocked";
+  lanFirewall?: LANFirewall | "listener";
   port: number;
   state: string;
   issue?: string;
@@ -96,7 +96,9 @@ type Catalog = {
     "starting" | "missing" | "unavailable" | "incompatible" | "running";
   memoryLimit: number;
   cpu: number;
+  lanFirewall?: LANFirewall;
 };
+type LANFirewall = "checking" | "consent" | "pending" | "blocked" | "policy";
 type Detail = { database: Instance; metrics: Metric[] };
 type Credentials = { password: string; url: string };
 export type DatabaseSection =
@@ -555,6 +557,7 @@ export function Databases({
   open,
   section,
   select,
+  allowLANFirewall,
   snapshotDesktop,
   onOpenDriveSettings,
   onOpenExternal,
@@ -566,6 +569,7 @@ export function Databases({
   open: (id: string | null) => void;
   section: Section;
   select: (section: Section) => void;
+  allowLANFirewall?: boolean;
   snapshotDesktop?: SnapshotDesktop;
   onOpenDriveSettings?: () => void;
   onOpenExternal?: (url: string) => Promise<void>;
@@ -576,6 +580,9 @@ export function Databases({
   const [cardHistory, setCardHistory] = useState<Record<string, Metric[]>>({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [firewallDialog, setFirewallDialog] = useState(false);
+  const [firewallError, setFirewallError] = useState("");
+  const firewallPrompted = useRef(false);
   const [busy, setBusy] = useState("");
   const [create, setCreate] = useState(false);
   const [created, setCreated] = useState<string>();
@@ -673,6 +680,25 @@ export function Databases({
   const database = id
     ? catalog?.databases.find((db) => db.id === id)
     : undefined;
+
+  const firewallStatus = allowLANFirewall ? catalog?.lanFirewall : undefined;
+  useEffect(() => {
+    if (firewallStatus !== "consent") {
+      firewallPrompted.current = false;
+      return;
+    }
+    if (
+      firewallPrompted.current ||
+      create ||
+      confirm ||
+      credentials ||
+      created ||
+      busy
+    )
+      return;
+    firewallPrompted.current = true;
+    setFirewallDialog(true);
+  }, [firewallStatus, create, confirm, credentials, created, busy]);
   const needsDocker = !!catalog && !catalog.docker;
   async function reveal(db: Instance) {
     if (revealing.current) return;
@@ -736,6 +762,23 @@ export function Databases({
       setNotice("Copiado.");
     } catch (e) {
       setError(displayError(e));
+    }
+  }
+  async function authorizeFirewall() {
+    if (busy) return;
+    setBusy("lan-firewall");
+    setFirewallError("");
+    try {
+      await request("POST", `${base}/lan/firewall`, { confirmed: true });
+      setFirewallDialog(false);
+      setCatalog(
+        (current) => current && { ...current, lanFirewall: "pending" },
+      );
+      refreshRef.current();
+    } catch (e) {
+      setFirewallError(displayError(e));
+    } finally {
+      setBusy("");
     }
   }
   const heading = (
@@ -808,6 +851,25 @@ export function Databases({
 
   return (
     <section className="db-surface">
+      {(firewallStatus === "consent" || firewallStatus === "blocked") && (
+        <div className="notice db-credentials-prompt">
+          <span>
+            {t(
+              "O Cloudforge precisa da sua autorização para configurar o firewall do PostgreSQL.",
+            )}
+          </span>
+          <button
+            className="button"
+            disabled={!!busy}
+            onClick={() => {
+              setFirewallError("");
+              setFirewallDialog(true);
+            }}
+          >
+            {t("Permitir acesso pela rede local")}
+          </button>
+        </div>
+      )}
       <ErrorMessage error={error} />
       {needsDocker && (
         <div className="notice" role="status">
@@ -1303,8 +1365,28 @@ export function Databases({
                     {database.lanFirewall === "blocked" && (
                       <p className="muted" role="status">
                         {t(
-                          "O Windows não permitiu configurar o firewall. Reinicie o Cloudforge para tentar novamente.",
+                          "A alteração do firewall não foi aplicada. Tente novamente no aplicativo do computador hospedeiro.",
                         )}
+                      </p>
+                    )}
+                    {database.lanFirewall === "consent" &&
+                      !allowLANFirewall && (
+                        <p className="muted" role="status">
+                          {t(
+                            "Autorize o acesso pela rede local no aplicativo do computador hospedeiro.",
+                          )}
+                        </p>
+                      )}
+                    {(database.lanFirewall === "policy" ||
+                      database.lanFirewall === "listener") && (
+                      <p className="muted" role="status">
+                        {database.lanFirewall === "policy"
+                          ? t(
+                              "O Cloudforge não conseguiu validar o firewall do Windows.",
+                            )
+                          : t(
+                              "O Cloudforge ainda não conseguiu abrir a porta na rede local. Tentando novamente…",
+                            )}
                       </p>
                     )}
                     {database.lanHosts?.length ? (
@@ -1325,13 +1407,13 @@ export function Databases({
                           ))}
                         </div>
                       </>
-                    ) : (
+                    ) : !database.lanFirewall ? (
                       <p className="muted">
                         {database.state === "running"
                           ? t("Nenhum IPv4 de rede local detectado.")
                           : t("O endereço aparece quando o banco fica online.")}
                       </p>
-                    )}
+                    ) : null}
                   </div>
                 )}
                 {connection(database)}
@@ -1478,6 +1560,46 @@ export function Databases({
             </Modal>
           )}
         </>
+      )}
+      {firewallDialog && allowLANFirewall && (
+        <Modal
+          title={t("Permitir acesso pela rede local")}
+          onClose={() => setFirewallDialog(false)}
+          closeDisabled={!!busy}
+          className="database-rotation-modal"
+        >
+          <p className="muted">
+            {t(
+              "O Cloudforge executará um comando de administrador para liberar, no Firewall do Windows, as portas dos PostgreSQL gerenciados para computadores da mesma sub-rede.",
+            )}
+          </p>
+          <p className="muted">
+            {t(
+              "Depois de permitir, confirme a solicitação do Windows, se aparecer.",
+            )}
+          </p>
+          <ErrorMessage error={firewallError} />
+          <div className="modal-actions">
+            <button
+              className="button"
+              disabled={!!busy}
+              onClick={() => setFirewallDialog(false)}
+            >
+              {t("Cancelar")}
+            </button>
+            <button
+              className="button primary"
+              disabled={
+                !!busy ||
+                (firewallStatus !== "consent" && firewallStatus !== "blocked")
+              }
+              onClick={() => void authorizeFirewall()}
+            >
+              {busy === "lan-firewall" && <Spinner />}
+              {t("Permitir")}
+            </button>
+          </div>
+        </Modal>
       )}
       {create && catalog && (
         <CreateDatabase

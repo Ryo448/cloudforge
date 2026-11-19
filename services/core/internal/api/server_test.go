@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"cloudforge/core/internal/cloudflare"
+	"cloudforge/core/internal/databases"
 	"cloudforge/core/internal/model"
 	"cloudforge/core/internal/persistence"
 	"cloudforge/core/internal/supervisor"
@@ -31,6 +32,28 @@ func fixture(t *testing.T) *Server {
 	t.Cleanup(func() { sup.Shutdown(); store.Close() })
 	return s
 }
+func TestLANFirewallRequiresLocalConfirmation(t *testing.T) {
+	s := fixture(t)
+	s.Databases = databases.New(s.Store.(*persistence.Store), s.Key)
+	for _, tc := range []struct {
+		local bool
+		body  string
+		code  int
+	}{
+		{false, `{"confirmed":true}`, http.StatusNotFound},
+		{true, `{"confirmed":false}`, http.StatusBadRequest},
+		{true, `{"confirmed":true}`, http.StatusConflict},
+	} {
+		r := httptest.NewRequest("POST", "/api/databases/lan/firewall", strings.NewReader(tc.body))
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		s.databaseRoutes(w, r, "owner", tc.local)
+		if w.Code != tc.code {
+			t.Errorf("local=%t, body=%s: HTTP %d, esperado %d", tc.local, tc.body, w.Code, tc.code)
+		}
+	}
+}
+
 func TestLocalCoreLifecycle(t *testing.T) {
 	s := fixture(t)
 	s.BinarySHA256 = "test-binary-sha256"

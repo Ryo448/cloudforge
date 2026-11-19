@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -115,12 +116,29 @@ func TestDockerPostgresAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	port, started := r.Port, *r.StartedAt
-	hosts := m.view(r).LANHosts
+	hosts := m.lanHosts[r.ID]
+	relays := make(map[string]postgresLANRelay)
+	defer func() {
+		for _, relay := range relays {
+			relay.stop()
+		}
+	}()
 	verifyLAN := func(material *serverTLS) {
 		t.Helper()
 		if len(hosts) == 0 {
 			t.Log("nenhum IPv4 de rede local disponível para testar a conexão")
 			return
+		}
+		if runtime.GOOS == "windows" {
+			_, databases, err := m.postgresLANInstances()
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.firewallPorts = []int{port}
+			m.reconcilePostgresLANRelays(ctx, databases, []int{port}, relays)
+			if len(m.view(r).LANHosts) == 0 {
+				t.Fatal("a escuta do Cloudforge não validou a conexão pelo IPv4")
+			}
 		}
 		var lanErr error
 		for _, host := range hosts {

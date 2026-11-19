@@ -164,7 +164,7 @@ func (d docker) inspectNamed(ctx context.Context, r record, name string) (contai
 }
 
 func databaseBindHost(engine string) string {
-	if engine == "postgresql" {
+	if engine == "postgresql" && runtime.GOOS != "windows" {
 		return "0.0.0.0"
 	}
 	return localHost

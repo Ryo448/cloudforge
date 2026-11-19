@@ -201,7 +201,7 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 			write(w, 200, connection)
 			return
 		}
-		s.databaseRoutes(w, r, admin.ID)
+		s.databaseRoutes(w, r, admin.ID, true)
 		return
 	}
 	if path == "api/health" && r.Method == "GET" {
@@ -1001,7 +1001,7 @@ func (s *Server) Public(w http.ResponseWriter, r *http.Request) {
 			fail(w, 429, errors.New("aguarde para executar outra operação"))
 			return
 		}
-		s.databaseRoutes(w, r, session.UserID)
+		s.databaseRoutes(w, r, session.UserID, false)
 		return
 	}
 	if path == "/api/events" && r.Method == "GET" {

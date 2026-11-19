@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -25,129 +26,199 @@ import (
 var postgresFirewallScript string
 
 func (m *Manager) monitorLANFirewall(ctx context.Context) {
-	ruleName := fmt.Sprintf("Cloudforge PostgreSQL LAN %x", m.localKey[:8])
-	ticker := time.NewTicker(5 * time.Second)
+	id := hex.EncodeToString(m.localKey[:8])
+	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
-	var lastPorts []int
-	var nextCheck time.Time
-	attempted := false
-	for {
-		m.mu.Lock()
-		records, err := m.records("")
-		m.mu.Unlock()
-		if err == nil {
-			var ports []int
-			for _, r := range records {
-				if r.Engine == "postgresql" && r.ReservedPort > 0 && r.ReservedPort <= 65535 {
-					ports = append(ports, r.ReservedPort)
-				}
-			}
-			slices.Sort(ports)
-			changed := !slices.Equal(ports, lastPorts)
-			if changed {
-				lastPorts = ports
-				attempted = false
-			}
-			if changed || time.Now().After(nextCheck) {
-				mismatch, err := checkPostgresFirewall(ctx, ruleName, ports, !attempted)
-				if err == nil {
-					attempted = false
-				} else if mismatch {
-					attempted = true
-				}
-				nextCheck = time.Now().Add(time.Minute)
-				m.mu.Lock()
-				if err == nil {
-					m.firewallPorts = ports
-				} else {
-					m.firewallPorts = nil
-					if !m.firewallIssue {
-						log.Printf("bancos: falha ao configurar firewall para PostgreSQL: %v", err)
-					}
-				}
-				m.firewallIssue = err != nil
-				m.mu.Unlock()
-			}
+	relays := make(map[string]postgresLANRelay)
+	defer func() {
+		for _, relay := range relays {
+			relay.stop()
 		}
+	}()
+	var lastPorts, allowed []int
+	var nextCheck time.Time
+	var result <-chan error
+	failed := false
+	for {
+		ports, databases, snapshotErr := m.postgresLANInstances()
+		changed := !slices.Equal(ports, lastPorts)
+		if snapshotErr == nil && result == nil && (changed || time.Now().After(nextCheck)) {
+			if changed {
+				failed = false
+			}
+			lastPorts = ports
+			nextCheck = time.Now().Add(time.Minute)
+			var status string
+			probe, cancel := context.WithTimeout(ctx, 10*time.Second)
+			state, err := readPostgresFirewall(probe, id)
+			cancel()
+			allowed = state.ports
+			switch {
+			case err != nil || state.policy:
+				if len(ports) > 0 {
+					status = "policy"
+				}
+			case !slices.Equal(ports, allowed) || (len(ports) == 0 && state.exists):
+				status = "consent"
+				if failed {
+					status = "blocked"
+				}
+			default:
+				failed = false
+			}
+			m.mu.Lock()
+			m.firewallPorts, m.firewallTarget = allowed, ports
+			if m.firewallStatus != "pending" {
+				m.firewallStatus = status
+			}
+			m.mu.Unlock()
+		}
+		m.reconcilePostgresLANRelays(ctx, databases, allowed, relays)
 		select {
 		case <-ctx.Done():
 			return
+		case approved := <-m.firewallApproval:
+			current, _, err := m.postgresLANInstances()
+			if err != nil || !slices.Equal(approved, current) {
+				m.mu.Lock()
+				m.firewallStatus = "checking"
+				m.mu.Unlock()
+				nextCheck = time.Time{}
+				continue
+			}
+			done := make(chan error, 1)
+			result = done
+			go func() {
+				apply, cancel := context.WithTimeout(ctx, 2*time.Minute)
+				defer cancel()
+				done <- authorizePostgresFirewall(apply, id, approved)
+			}()
+		case err := <-result:
+			result = nil
+			// Treat the attempt as unsuccessful until the next read confirms the rule.
+			failed = true
+			if err != nil && ctx.Err() == nil {
+				log.Printf("bancos: alteração do firewall para PostgreSQL: %v", err)
+			}
+			m.mu.Lock()
+			m.firewallStatus = "checking"
+			m.mu.Unlock()
+			nextCheck = time.Time{}
 		case <-ticker.C:
 		}
 	}
 }
 
-func dockerBackendPath() string {
-	dirs := dockerDesktopDirectories()
-	if cli, err := dockerExecutable(); err == nil {
-		dirs = append(dirs, filepath.Dir(filepath.Dir(filepath.Dir(cli))))
-	}
-	for _, dir := range dirs {
-		path := filepath.Join(dir, "resources", "com.docker.backend.exe")
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			return path
-		}
-	}
-	return ""
+type postgresFirewallState struct {
+	ports  []int
+	exists bool
+	policy bool
 }
 
-func checkPostgresFirewall(ctx context.Context, name string, ports []int, allowPrompt bool) (bool, error) {
-	system, err := windows.GetSystemDirectory()
+func readPostgresFirewall(ctx context.Context, id string) (postgresFirewallState, error) {
+	out, err := runPostgresFirewall(ctx, id, "-", false)
 	if err != nil {
-		return false, err
+		return postgresFirewallState{}, err
 	}
-	powershell := filepath.Join(system, "WindowsPowerShell", "v1.0", "powershell.exe")
-	program := dockerBackendPath()
-	if len(ports) != 0 && program == "" {
-		return false, errors.New("processo do Docker Desktop não encontrado")
+	switch value := strings.TrimSpace(string(out)); value {
+	case "absent":
+		return postgresFirewallState{}, nil
+	case "invalid":
+		return postgresFirewallState{exists: true}, nil
+	case "policy":
+		return postgresFirewallState{policy: true}, nil
+	default:
+		ports, err := firewallPortList(value)
+		return postgresFirewallState{ports: ports, exists: true}, err
 	}
+}
+
+func authorizePostgresFirewall(ctx context.Context, id string, ports []int) error {
 	values := make([]string, 0, len(ports))
 	for _, port := range ports {
 		values = append(values, strconv.Itoa(port))
 	}
-	psQuote := func(value string) string {
-		return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+	argument := strings.Join(values, ",")
+	if argument == "" {
+		argument = "-"
 	}
-	checkScript := "& {\n" + postgresFirewallScript + "\n} " + psQuote(name) + " " + psQuote(strings.Join(values, ",")) + " " + psQuote(program)
-	probe := func() error {
-		check, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		return runFirewallPowerShell(check, powershell, checkScript)
+	if windows.GetCurrentProcessToken().IsElevated() {
+		_, err := runPostgresFirewall(ctx, id, argument, true)
+		return err
 	}
-	err = probe()
-	var exit *exec.ExitError
-	if !errors.As(err, &exit) || exit.ExitCode() != 10 {
-		return false, err
+	core, err := os.Executable()
+	if err != nil {
+		return err
 	}
+	// The GUI Core is the executable shown in UAC. Only this helper gets elevated.
+	script := "$ErrorActionPreference='Stop'; $p = Start-Process -FilePath " + psQuote(core) +
+		" -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ArgumentList '--postgres-lan-firewall'," +
+		psQuote(id) + "," + psQuote(argument) + "; exit $p.ExitCode"
+	_, err = runFirewallPowerShell(ctx, script)
+	return err
+}
 
-	script := checkScript + " -Apply"
-	if !windows.GetCurrentProcessToken().IsElevated() {
-		if !allowPrompt {
-			return true, errors.New("alteração da regra ainda não autorizada")
-		}
-		script = "$ErrorActionPreference='Stop'; $p = Start-Process -FilePath " + psQuote(powershell) +
-			" -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','" +
-			encodedPowerShell(script) + "'; exit $p.ExitCode"
+func ApplyLANFirewallHelper(args []string) error {
+	if len(args) != 2 || len(args[0]) != 16 || !windows.GetCurrentProcessToken().IsElevated() {
+		return errors.New("autorização do Windows necessária")
 	}
-	apply, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	if _, err := hex.DecodeString(args[0]); err != nil {
+		return err
+	}
+	if _, err := firewallPortList(args[1]); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err = runFirewallPowerShell(apply, powershell, script); err != nil {
-		return true, err
+	_, err := runPostgresFirewall(ctx, args[0], args[1], true)
+	return err
+}
+
+func firewallPortList(value string) ([]int, error) {
+	if value == "-" {
+		return nil, nil
 	}
-	return true, probe()
+	var ports []int
+	for _, entry := range strings.Split(value, ",") {
+		port, err := strconv.Atoi(entry)
+		if err != nil || port < 1 || port > 65535 || strconv.Itoa(port) != entry {
+			return nil, errors.New("porta inválida na regra do PostgreSQL")
+		}
+		ports = append(ports, port)
+	}
+	slices.Sort(ports)
+	return slices.Compact(ports), nil
 }
 
-func runFirewallPowerShell(ctx context.Context, executable, script string) error {
-	cmd := exec.CommandContext(ctx, executable, "-NoProfile", "-NonInteractive", "-EncodedCommand", encodedPowerShell(script))
-	processes.ConfigureBackground(cmd)
-	return cmd.Run()
+func runPostgresFirewall(ctx context.Context, id, ports string, apply bool) ([]byte, error) {
+	core, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	name := fmt.Sprintf("Cloudforge PostgreSQL LAN %s", id)
+	script := "& {\n" + postgresFirewallScript + "\n} " + psQuote(name) + " " + psQuote(ports) + " " + psQuote(core)
+	if apply {
+		script += " -Apply"
+	}
+	return runFirewallPowerShell(ctx, script)
 }
 
-func encodedPowerShell(script string) string {
+func psQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func runFirewallPowerShell(ctx context.Context, script string) ([]byte, error) {
+	system, err := windows.GetSystemDirectory()
+	if err != nil {
+		return nil, err
+	}
+	executable := filepath.Join(system, "WindowsPowerShell", "v1.0", "powershell.exe")
 	words := utf16.Encode([]rune(script))
 	raw := make([]byte, 2*len(words))
 	for i, word := range words {
 		binary.LittleEndian.PutUint16(raw[2*i:], word)
 	}
-	return base64.StdEncoding.EncodeToString(raw)
+	cmd := exec.CommandContext(ctx, executable, "-NoProfile", "-NonInteractive", "-EncodedCommand", base64.StdEncoding.EncodeToString(raw))
+	processes.ConfigureBackground(cmd)
+	return cmd.Output()
 }

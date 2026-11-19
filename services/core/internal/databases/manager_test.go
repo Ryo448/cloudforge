@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -454,12 +456,16 @@ exec mysql --protocol=SOCKET -u root -e "ALTER USER 'cloudforge'@'%' REQUIRE SSL
 			}
 			name := containerName(r)
 			cfg := engines[r.Engine]
+			legacyBind := localHost
+			if engine == "postgresql" && runtime.GOOS == "windows" {
+				legacyBind = "0.0.0.0"
+			}
 			args := []string{"create", "--pull", "never", "--name", name,
 				"--label", "cloudforge.database=" + r.ID, "--label", "cloudforge.database.local=1", "--network", name,
-				"--publish", fmt.Sprintf("127.0.0.1:%d:%d", port, cfg.Port),
+				"--publish", fmt.Sprintf("%s:%d:%d", legacyBind, port, cfg.Port),
 				"--mount", "type=volume,source=" + name + ",target=" + cfg.Data}
 			if engine == "postgresql" {
-				// The loopback binding alone must trigger migration of an existing TLS container.
+				// The old host binding alone must trigger migration of a TLS container.
 				args = append(args, "--label", "cloudforge.database.tls=1")
 			}
 			args = append(args, "--entrypoint", "/bin/sh", cfg.Image, "-c", "sleep 600")
@@ -503,6 +509,27 @@ exec mysql --protocol=TCP -h 127.0.0.1 -u cloudforge --ssl-mode=DISABLED --get-s
 				t.Fatal("container permaneceu", err)
 			}
 		})
+	}
+}
+
+func TestLANFirewallQueuesOnlyExplicitApproval(t *testing.T) {
+	m := testManager(t)
+	if err := m.RequestLANFirewall(); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a alteração sem configuração pendente deveria ser recusada: %v", err)
+	}
+	m.firewallStatus, m.firewallTarget = "consent", []int{52345, 52346}
+	if len(m.firewallApproval) != 0 {
+		t.Fatal("verificar a configuração não deveria solicitar elevação")
+	}
+	if err := m.RequestLANFirewall(); err != nil {
+		t.Fatal(err)
+	}
+	m.firewallTarget[0] = 52347
+	if got := <-m.firewallApproval; !slices.Equal(got, []int{52345, 52346}) {
+		t.Fatalf("a aprovação mudou depois de enfileirada: %v", got)
+	}
+	if err := m.RequestLANFirewall(); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a autorização pendente não deveria ser lançada duas vezes: %v", err)
 	}
 }
 

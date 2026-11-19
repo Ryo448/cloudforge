@@ -9,12 +9,35 @@ import (
 	"time"
 )
 
-func (s *Server) databaseRoutes(w http.ResponseWriter, r *http.Request, owner string) {
+func (s *Server) databaseRoutes(w http.ResponseWriter, r *http.Request, owner string, local bool) {
 	if s.Databases == nil {
 		fail(w, 503, errors.New("serviço de bancos de dados indisponível"))
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) == 4 && parts[2] == "lan" && parts[3] == "firewall" {
+		if !local || r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var input struct {
+			Confirmed bool `json:"confirmed"`
+		}
+		if err := decode(w, r, &input); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		if !input.Confirmed {
+			fail(w, 400, errors.New("confirme a alteração do firewall"))
+			return
+		}
+		if err := s.Databases.RequestLANFirewall(); err != nil {
+			databaseError(w, err)
+			return
+		}
+		write(w, http.StatusAccepted, map[string]bool{"ok": true})
+		return
+	}
 	if len(parts) == 2 {
 		switch r.Method {
 		case "GET":
@@ -22,6 +45,9 @@ func (s *Server) databaseRoutes(w http.ResponseWriter, r *http.Request, owner st
 			if err != nil {
 				databaseError(w, err)
 				return
+			}
+			if !local {
+				list.LANFirewall = ""
 			}
 			write(w, 200, list)
 		case "POST":

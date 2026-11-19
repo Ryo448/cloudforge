@@ -22,31 +22,35 @@ var (
 )
 
 type Manager struct {
-	db            *sql.DB
-	vault         persistence.EnvironmentVault
-	localKey      [32]byte
-	docker        docker
-	dockerReady   bool
-	dockerChecked bool
-	dockerStatus  dockerStatus
-	keyMu         sync.Mutex
-	mu            sync.Mutex
-	active        map[string]bool
-	ready         map[string]string
-	latest        map[string]Metric
-	retryAt       map[string]time.Time
-	lanHosts      map[string][]string
-	firewallPorts []int
-	firewallIssue bool
-	jobs          chan struct{}
-	wake          chan struct{}
+	db               *sql.DB
+	vault            persistence.EnvironmentVault
+	localKey         [32]byte
+	docker           docker
+	dockerReady      bool
+	dockerChecked    bool
+	dockerStatus     dockerStatus
+	keyMu            sync.Mutex
+	mu               sync.Mutex
+	active           map[string]bool
+	ready            map[string]string
+	latest           map[string]Metric
+	retryAt          map[string]time.Time
+	lanHosts         map[string][]string
+	lanPublished     map[string][]string
+	firewallPorts    []int
+	firewallTarget   []int
+	firewallStatus   string
+	firewallApproval chan []int
+	jobs             chan struct{}
+	wake             chan struct{}
 }
 
 func New(store *persistence.Store, installationKey string) *Manager {
 	return &Manager{db: store.DB, vault: store.EnvironmentVault,
-		localKey: deriveLocalKey(installationKey),
-		lanHosts: make(map[string][]string),
-		active:   map[string]bool{}, ready: map[string]string{}, latest: map[string]Metric{}, retryAt: map[string]time.Time{}, jobs: make(chan struct{}, 4), wake: make(chan struct{}, 1)}
+		localKey:         deriveLocalKey(installationKey),
+		lanHosts:         make(map[string][]string),
+		firewallApproval: make(chan []int, 1),
+		active:           map[string]bool{}, ready: map[string]string{}, latest: map[string]Metric{}, retryAt: map[string]time.Time{}, jobs: make(chan struct{}, 4), wake: make(chan struct{}, 1)}
 }
 
 type View struct {
@@ -55,13 +59,14 @@ type View struct {
 	DockerStatus dockerStatus `json:"dockerStatus,omitempty"`
 	MemoryLimit  int          `json:"memoryLimit"`
 	CPU          float64      `json:"cpu"`
+	LANFirewall  string       `json:"lanFirewall,omitempty"`
 }
 
 func (m *Manager) List(ctx context.Context, owner string) (View, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	records, err := m.records(owner)
-	view := View{Databases: []Instance{}, Docker: m.dockerReady, DockerStatus: m.dockerStatus, MemoryLimit: memoryLimit, CPU: cpuLimit}
+	view := View{Databases: []Instance{}, Docker: m.dockerReady, DockerStatus: m.dockerStatus, MemoryLimit: memoryLimit, CPU: cpuLimit, LANFirewall: m.firewallStatus}
 	for _, r := range records {
 		view.Databases = append(view.Databases, m.view(r))
 	}
@@ -80,14 +85,35 @@ func (m *Manager) view(r record) Instance {
 	}
 	if r.Engine == "postgresql" && r.State == "running" && r.TLSValidated {
 		r.LANHosts = m.lanHosts[r.ID]
-		if runtime.GOOS == "windows" && !slices.Contains(m.firewallPorts, r.Port) {
-			r.LANFirewall = "pending"
-			if m.firewallIssue {
-				r.LANFirewall = "blocked"
+		if runtime.GOOS == "windows" {
+			r.LANHosts = m.lanPublished[r.ID]
+			if !slices.Contains(m.firewallPorts, r.Port) {
+				r.LANHosts = nil
+				r.LANFirewall = m.firewallStatus
+				if r.LANFirewall == "" {
+					r.LANFirewall = "checking"
+				}
+			} else if len(r.LANHosts) == 0 && len(m.lanHosts[r.ID]) != 0 {
+				r.LANFirewall = "listener"
 			}
 		}
 	}
 	return r.Instance
+}
+
+func (m *Manager) RequestLANFirewall() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.firewallStatus != "consent" && m.firewallStatus != "blocked" {
+		return ErrConflict
+	}
+	select {
+	case m.firewallApproval <- slices.Clone(m.firewallTarget):
+		m.firewallStatus = "pending"
+		return nil
+	default:
+		return ErrConflict
+	}
 }
 
 func (m *Manager) tlsAvailable(r record) bool {
@@ -686,8 +712,13 @@ func (m *Manager) start(ctx context.Context, r *record, exists bool) (containerS
 }
 
 func (m *Manager) allocatePort(r *record) error {
+	bindHost := databaseBindHost(r.Engine)
+	if r.Engine == "postgresql" {
+		// Reserve a port available on both loopback and the LAN adapters.
+		bindHost = "0.0.0.0"
+	}
 	for attempt := 0; attempt < 32; attempt++ {
-		listener, err := net.Listen("tcp4", databaseBindHost(r.Engine)+":0")
+		listener, err := net.Listen("tcp4", bindHost+":0")
 		if err != nil {
 			return err
 		}

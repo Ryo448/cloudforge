@@ -159,11 +159,24 @@ func issueServerTLS(r record, issuer *x509.Certificate, signer *rsa.PrivateKey, 
 }
 
 func postgresLANAddresses() ([]net.IP, error) {
+	networks, err := postgresLANNetworks()
+	if err != nil {
+		return nil, err
+	}
+	addresses := make([]net.IP, 0, len(networks))
+	for _, network := range networks {
+		addresses = append(addresses, network.IP)
+	}
+	slices.SortFunc(addresses, func(a, b net.IP) int { return bytes.Compare(a, b) })
+	return addresses, nil
+}
+
+func postgresLANNetworks() (map[string]*net.IPNet, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, errors.New("não foi possível consultar os endereços de rede do PostgreSQL")
 	}
-	var addresses []net.IP
+	networks := make(map[string]*net.IPNet)
 	for _, adapter := range interfaces {
 		name := strings.ToLower(adapter.Name)
 		// Container and WSL interfaces come and go as workloads start.
@@ -182,13 +195,13 @@ func postgresLANAddresses() ([]net.IP, error) {
 				continue
 			}
 			ip := network.IP.To4()
-			if ip != nil && (ip.IsGlobalUnicast() || ip.IsLinkLocalUnicast()) {
-				addresses = append(addresses, ip)
+			ones, bits := network.Mask.Size()
+			if ip != nil && bits == 32 && ones > 0 && (ip.IsGlobalUnicast() || ip.IsLinkLocalUnicast()) {
+				networks[ip.String()] = &net.IPNet{IP: ip, Mask: network.Mask}
 			}
 		}
 	}
-	slices.SortFunc(addresses, func(a, b net.IP) int { return bytes.Compare(a, b) })
-	return slices.CompactFunc(addresses, net.IP.Equal), nil
+	return networks, nil
 }
 
 func (m *Manager) postgresTLSForLAN(r record, material *serverTLS, addresses []net.IP) (*serverTLS, error) {

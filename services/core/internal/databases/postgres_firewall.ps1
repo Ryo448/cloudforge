@@ -16,25 +16,31 @@ foreach ($entry in $rules) {
     }
 }
 
-if ($Ports -eq '') {
-    if ($null -eq $rule) { exit 0 }
-    if (!$Apply) { exit 10 }
-    $rules.Remove($Name)
-    exit 0
+if ($Apply -and $Ports -eq '-') {
+    if ($null -ne $rule) { $rules.Remove($Name) }
+    return
 }
 
 # NET_FW_MODIFY_STATE_OK. Policy can ignore local rules or block all inbound traffic.
-if ($policy.LocalPolicyModifyState -ne 0) { exit 11 }
+if ($policy.LocalPolicyModifyState -ne 0) {
+    if ($Apply) { exit 11 }
+    'policy'
+    return
+}
 
 $allProfiles = 2147483647
-if ($null -ne $rule -and $rule.Enabled -and $rule.ApplicationName -eq $Program -and
+$valid = $null -ne $rule -and $rule.Enabled -and $rule.ApplicationName -eq $Program -and
     $rule.Direction -eq 1 -and $rule.Action -eq 1 -and $rule.Protocol -eq 6 -and
-    $rule.LocalPorts -eq $Ports -and $rule.LocalAddresses -eq '*' -and
+    $rule.LocalPorts -ne '*' -and $rule.LocalAddresses -eq '*' -and
     $rule.RemotePorts -eq '*' -and $rule.RemoteAddresses -eq 'LocalSubnet' -and
-    $rule.Profiles -eq $allProfiles -and !$rule.EdgeTraversal -and $rule.InterfaceTypes -eq 'All') {
-    exit 0
+    $rule.Profiles -eq $allProfiles -and !$rule.EdgeTraversal -and $rule.InterfaceTypes -eq 'All'
+if (!$Apply) {
+    if ($null -eq $rule) { 'absent' }
+    elseif ($valid) { $rule.LocalPorts }
+    else { 'invalid' }
+    return
 }
-if (!$Apply) { exit 10 }
+if ($valid -and $rule.LocalPorts -eq $Ports) { return }
 
 $isNew = $null -eq $rule
 if ($isNew) {
