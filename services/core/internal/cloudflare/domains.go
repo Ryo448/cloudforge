@@ -182,6 +182,9 @@ func (m *Manager) RouteTo(ctx context.Context, projectID, domain, sub string, po
 	if host == cfg.AdminHost {
 		return model.Route{}, "", errors.New("esse endereço é usado pelo painel")
 	}
+	if m.postgresHostInUse(host) {
+		return model.Route{}, "", errors.New("esse endereço é usado por um túnel PostgreSQL")
+	}
 	project, err := m.Store.Project(projectID)
 	if err != nil {
 		return model.Route{}, "", err
@@ -235,6 +238,9 @@ func (m *Manager) ChangePanel(ctx context.Context, domain, sub string) (string, 
 	zone, host, err := m.destination(old, domain, sub)
 	if err != nil || host == old.AdminHost {
 		return "", err
+	}
+	if m.postgresHostInUse(host) {
+		return "", errors.New("esse endereço é usado por um túnel PostgreSQL")
 	}
 	routes, err := m.Store.Routes()
 	if err != nil {

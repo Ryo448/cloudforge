@@ -219,6 +219,19 @@
 .db-with-action {
   justify-content: space-between;
 }
+.db-tcp-form {
+  display: grid;
+  gap: 12px;
+}
+.db-tcp-form label {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+.db-tcp-form p {
+  margin: 0;
+  font-size: 12px;
+}
 .db-edit {
   display: flex;
   gap: 12px;

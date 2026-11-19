@@ -15,9 +15,16 @@ func listenPostgresLAN(ctx context.Context, network *net.IPNet, port int) (conte
 	if err != nil {
 		return nil, err
 	}
+	target := net.JoinHostPort(localHost, strconv.Itoa(port))
+	return servePostgresRelay(ctx, listener, network.Contains, func(ctx context.Context) (net.Conn, error) {
+		dialer := net.Dialer{Timeout: 5 * time.Second}
+		return dialer.DialContext(ctx, "tcp4", target)
+	}), nil
+}
+
+func servePostgresRelay(ctx context.Context, listener *net.TCPListener, allowed func(net.IP) bool, dial func(context.Context) (net.Conn, error)) context.CancelFunc {
 	ctx, cancel := context.WithCancel(ctx)
 	context.AfterFunc(ctx, func() { _ = listener.Close() })
-	target := net.JoinHostPort(localHost, strconv.Itoa(port))
 	go func() {
 		defer cancel()
 		connections := make(chan struct{}, 128)
@@ -26,7 +33,7 @@ func listenPostgresLAN(ctx context.Context, network *net.IPNet, port int) (conte
 			if err != nil {
 				return
 			}
-			if !network.Contains(client.RemoteAddr().(*net.TCPAddr).IP) {
+			if !allowed(client.RemoteAddr().(*net.TCPAddr).IP) {
 				_ = client.Close()
 				continue
 			}
@@ -34,7 +41,11 @@ func listenPostgresLAN(ctx context.Context, network *net.IPNet, port int) (conte
 			case connections <- struct{}{}:
 				go func() {
 					defer func() { <-connections }()
-					forwardPostgresLAN(ctx, client, target)
+					defer client.Close()
+					upstream, err := dial(ctx)
+					if err == nil {
+						forwardPostgres(ctx, client, upstream.(*net.TCPConn))
+					}
 				}()
 			default:
 				_ = client.Close()
@@ -44,17 +55,10 @@ func listenPostgresLAN(ctx context.Context, network *net.IPNet, port int) (conte
 	return func() {
 		_ = listener.Close()
 		cancel()
-	}, nil
+	}
 }
 
-func forwardPostgresLAN(ctx context.Context, client *net.TCPConn, target string) {
-	defer client.Close()
-	dialer := net.Dialer{Timeout: 5 * time.Second}
-	conn, err := dialer.DialContext(ctx, "tcp4", target)
-	if err != nil {
-		return
-	}
-	upstream := conn.(*net.TCPConn)
+func forwardPostgres(ctx context.Context, client, upstream *net.TCPConn) {
 	defer upstream.Close()
 	stop := context.AfterFunc(ctx, func() {
 		_ = client.Close()
@@ -67,7 +71,7 @@ func forwardPostgresLAN(ctx context.Context, client *net.TCPConn, target string)
 		_, _ = io.Copy(upstream, client)
 		_ = upstream.CloseWrite()
 	}()
-	if _, err = io.Copy(client, upstream); err != nil {
+	if _, err := io.Copy(client, upstream); err != nil {
 		_ = client.Close()
 		_ = upstream.Close()
 	}

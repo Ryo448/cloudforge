@@ -116,6 +116,15 @@ func TestDockerPostgresAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	port, started := r.Port, *r.StartedAt
+	tunnelPort, closeTunnel, err := m.OpenPostgresTunnel(r.Owner, r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeTunnel()
+	var tunneled int
+	if err = queryPostgres(ctx, s.TLS.probeTLSConfig(), localHost, tunnelPort, Username, s.Password, DatabaseName, "SELECT 1", &tunneled); err != nil || tunneled != 1 {
+		t.Fatalf("failed to use PostgreSQL TLS through the dedicated tunnel origin: %v", err)
+	}
 	hosts := m.lanHosts[r.ID]
 	relays := make(map[string]postgresLANRelay)
 	defer func() {

@@ -1416,6 +1416,18 @@ export function Databases({
                     ) : null}
                   </div>
                 )}
+                {database.engine === "postgresql" && (
+                  <PostgresTCP
+                    key={database.id}
+                    id={database.id}
+                    ready={
+                      database.state === "running" && database.tlsValidated
+                    }
+                    desktop={!!allowLANFirewall}
+                    request={request}
+                    copy={copyValue}
+                  />
+                )}
                 {connection(database)}
                 <div className="db-row db-with-action">
                   <div>
@@ -1727,6 +1739,230 @@ function CopyField({
     </div>
   );
 }
+function PostgresTCP({
+  id,
+  ready,
+  desktop,
+  request,
+  copy,
+}: {
+  id: string;
+  ready: boolean;
+  desktop: boolean;
+  request: Request;
+  copy: (value: string) => Promise<void>;
+}) {
+  type Tunnel = {
+    hostname?: string;
+    domains?: string[];
+    defaultDomain?: string;
+    warning?: string;
+  };
+  const [tunnel, setTunnel] = useState<Tunnel>();
+  const [dialog, setDialog] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [subdomain, setSubdomain] = useState("postgres");
+  const [domain, setDomain] = useState("");
+  const [team, setTeam] = useState("");
+  const [audience, setAudience] = useState("");
+  const endpoint = `${base}/${id}/tunnel`;
+  const requestRef = useRef(request);
+  requestRef.current = request;
+  useEffect(() => {
+    let active = true;
+    requestRef.current<Tunnel>("GET", endpoint).then(
+      (result) => {
+        if (active) {
+          setTunnel(result);
+          setDomain(result.defaultDomain ?? "");
+        }
+      },
+      (cause) => {
+        if (active) setError(displayError(cause));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [endpoint]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setError("");
+    try {
+      const result = await request<Tunnel>(
+        tunnel?.hostname ? "DELETE" : "POST",
+        endpoint,
+        tunnel?.hostname ? undefined : { subdomain, domain, team, audience },
+      );
+      setTunnel(result);
+      setDialog(false);
+    } catch (cause) {
+      setError(displayError(cause));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (!desktop && !tunnel?.hostname) return null;
+  const hostname = tunnel?.hostname;
+  const canConfigure = ready && !!tunnel?.domains?.length;
+  const title = t("Acesso remoto via Cloudflare");
+  return (
+    <div className="db-row">
+      <div className="db-with-action">
+        <div>
+          <h3>{title}</h3>
+          {!hostname && tunnel && (
+            <p className="muted">
+              {tunnel.domains?.length
+                ? ready
+                  ? t(
+                      "Conecte o pgAdmin de outra rede com o Cloudflare Access.",
+                    )
+                  : t("Inicie o PostgreSQL para configurar o túnel.")
+                : t("Configure o túnel do painel na seção Cloudflare.")}
+            </p>
+          )}
+        </div>
+        {desktop && (hostname || canConfigure) && (
+          <button
+            className="button"
+            onClick={() => {
+              setError("");
+              setDialog(true);
+            }}
+          >
+            {hostname ? t("Desativar túnel TCP") : t("Configurar túnel TCP")}
+          </button>
+        )}
+      </div>
+      {hostname && (
+        <>
+          <p className="muted">
+            {t(
+              "No PC cliente, execute o comando e entre no Cloudflare Access.",
+            )}
+          </p>
+          <CopyField
+            value={`cloudflared access tcp --hostname ${hostname} --url 127.0.0.1:15432`}
+            label={t("Copiar comando")}
+            copy={copy}
+          />
+          <p className="muted">
+            {t(
+              "No pgAdmin, use 127.0.0.1, porta 15432 e a CA do banco com verify-full.",
+            )}
+          </p>
+        </>
+      )}
+      {tunnel?.warning && (
+        <p className="muted" role="status">
+          {tunnel.warning}
+        </p>
+      )}
+      {!dialog && <ErrorMessage error={error} />}
+      {dialog && (
+        <Modal
+          title={
+            hostname ? t("Desativar túnel TCP") : t("Configurar túnel TCP")
+          }
+          closeDisabled={pending}
+          onClose={() => setDialog(false)}
+          className="database-rotation-modal"
+        >
+          <form onSubmit={submit} className="db-tcp-form">
+            {hostname ? (
+              <p className="muted">
+                {t(
+                  "O endereço remoto deixa de encaminhar conexões ao PostgreSQL. O túnel do painel vai reconectar.",
+                )}
+              </p>
+            ) : (
+              <>
+                <p className="muted">
+                  {t(
+                    "Crie um aplicativo auto-hospedado no Cloudflare Access para o subdomínio escolhido e autorize os e-mails que podem entrar.",
+                  )}
+                </p>
+                <label>
+                  {t("Subdomínio")}
+                  <input
+                    required
+                    value={subdomain}
+                    onChange={(e) => setSubdomain(e.target.value)}
+                    maxLength={63}
+                    disabled={pending}
+                  />
+                </label>
+                <label>
+                  {t("Domínio")}
+                  <select
+                    required
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    disabled={pending}
+                  >
+                    {tunnel?.domains?.map((name) => (
+                      <option key={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t("Equipe do Cloudflare Access")}
+                  <input
+                    required
+                    value={team}
+                    onChange={(e) => setTeam(e.target.value)}
+                    placeholder="minha-equipe"
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={pending}
+                  />
+                </label>
+                <label>
+                  {t("AUD do aplicativo Access")}
+                  <input
+                    required
+                    value={audience}
+                    onChange={(e) => setAudience(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={pending}
+                  />
+                </label>
+                <p className="muted">
+                  {t(
+                    "Ao salvar, o túnel do painel vai reconectar para carregar a rota TCP.",
+                  )}
+                </p>
+              </>
+            )}
+            <ErrorMessage error={error} />
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button"
+                disabled={pending}
+                onClick={() => setDialog(false)}
+              >
+                {t("Cancelar")}
+              </button>
+              <button className="button primary" disabled={pending}>
+                {pending && <Spinner />}
+                {hostname ? t("Desativar túnel TCP") : t("Ativar túnel TCP")}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 function EditField({
   title,
   initial,

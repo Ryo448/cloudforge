@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cloudforge/core/internal/cloudflare"
 	"cloudforge/core/internal/databases"
 	"context"
 	"errors"
@@ -68,6 +69,10 @@ func (s *Server) databaseRoutes(w http.ResponseWriter, r *http.Request, owner st
 		return
 	}
 	id := parts[2]
+	if len(parts) == 4 && parts[3] == "tunnel" {
+		s.databaseTunnel(w, r, owner, id, local)
+		return
+	}
 	switch {
 	case len(parts) == 3 && r.Method == "GET":
 		window := time.Hour
@@ -114,6 +119,53 @@ func (s *Server) databaseRoutes(w http.ResponseWriter, r *http.Request, owner st
 		write(w, 200, map[string]string{"filename": filename, "content": string(content)})
 	default:
 		http.NotFound(w, r)
+	}
+}
+
+func (s *Server) databaseTunnel(w http.ResponseWriter, r *http.Request, owner, id string, local bool) {
+	if !local && r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	database, _, err := s.Databases.Detail(owner, id, 0)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	if database.Engine != "postgresql" || s.Cloud == nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	switch r.Method {
+	case http.MethodGet:
+		write(w, 200, s.Cloud.PostgresTunnel(owner, id, local))
+	case http.MethodPost:
+		var input cloudflare.PostgresInput
+		if err = decode(w, r, &input); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		var view cloudflare.PostgresView
+		err = s.Databases.ConfigurePostgresTunnel(owner, id, func() error {
+			var err error
+			view, err = s.Cloud.AddPostgresTunnel(r.Context(), owner, id, input)
+			return err
+		})
+		if err != nil {
+			databaseError(w, err)
+			return
+		}
+		write(w, 201, view)
+	case http.MethodDelete:
+		view, err := s.Cloud.RemovePostgresTunnel(r.Context(), owner, id)
+		if err != nil {
+			databaseError(w, err)
+			return
+		}
+		write(w, 200, view)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 

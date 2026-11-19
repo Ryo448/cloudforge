@@ -377,6 +377,9 @@ const routes = [
   ["POST", /^\/api\/databases(?:\/[a-f0-9]{32}\/credentials)?$/],
   ["POST", /^\/api\/databases\/lan\/firewall$/],
   ["PATCH", /^\/api\/databases\/[a-f0-9]{32}$/],
+  ["GET", /^\/api\/databases\/[a-f0-9]{32}\/tunnel$/],
+  ["POST", /^\/api\/databases\/[a-f0-9]{32}\/tunnel$/],
+  ["DELETE", /^\/api\/databases\/[a-f0-9]{32}\/tunnel$/],
   [
     "GET",
     /^\/api\/(health|state|projects|sessions|cloudflare\/(domains|zones|status))$/,

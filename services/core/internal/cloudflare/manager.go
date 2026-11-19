@@ -6,6 +6,7 @@ import (
 	"cloudforge/core/internal/persistence"
 	"cloudforge/core/internal/processes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,27 +22,38 @@ import (
 )
 
 type Manager struct {
-	mu           sync.Mutex
-	op           sync.Mutex
-	Store        persistence.Repository
-	Client       *Client
-	DataDir      string
-	Origin       string
-	Installation string
-	cfg          model.CloudConfig
-	state        string
-	lastError    string
-	cancel       context.CancelFunc
-	done         chan struct{}
-	pid          int
-	loginCancel  context.CancelFunc
-	loginError   string
-	runLocalCLI  func(context.Context, ...string) ([]byte, error)
+	OpenPostgresRelay  func(string, string) (int, context.CancelFunc, error)
+	mu                 sync.Mutex
+	op                 sync.Mutex
+	Store              persistence.Repository
+	Client             *Client
+	DataDir            string
+	Origin             string
+	Installation       string
+	cfg                model.CloudConfig
+	state              string
+	lastError          string
+	cancel             context.CancelFunc
+	done               chan struct{}
+	pid                int
+	loginCancel        context.CancelFunc
+	loginError         string
+	runLocalCLI        func(context.Context, ...string) ([]byte, error)
+	postgresTunnels    []PostgresTunnel
+	postgresRelays     map[string]postgresRelay
+	postgresConfigured bool
 }
 
 func New(s persistence.Repository, dir, origin, installation string) *Manager {
 	m := &Manager{Store: s, Client: NewClient(OSVault{installation}), DataDir: dir, Origin: origin, Installation: installation, state: "not-configured"}
 	_ = s.Setting("cloudflare", &m.cfg)
+	if err := s.Setting(postgresSetting, &m.postgresTunnels); err != nil {
+		m.postgresTunnels = nil
+		m.postgresConfigured = !errors.Is(err, sql.ErrNoRows)
+	} else {
+		m.postgresConfigured = true
+	}
+	m.postgresRelays = make(map[string]postgresRelay)
 	return m
 }
 func (m *Manager) Config() model.CloudConfig { m.mu.Lock(); defer m.mu.Unlock(); return m.cfg }
@@ -101,11 +113,12 @@ type journal struct {
 }
 
 func (m *Manager) ingress(ctx context.Context, cfg model.CloudConfig, routes []model.Route) error {
-	rules := []map[string]string{{"hostname": cfg.AdminHost, "service": m.Origin}}
+	rules := []ingressRule{{Hostname: cfg.AdminHost, Service: m.Origin}}
 	for _, r := range routes {
-		rules = append(rules, map[string]string{"hostname": r.Hostname, "service": m.Origin})
+		rules = append(rules, ingressRule{Hostname: r.Hostname, Service: m.Origin})
 	}
-	rules = append(rules, map[string]string{"service": "http_status:404"})
+	rules = append(rules, m.postgresIngress(cfg)...)
+	rules = append(rules, ingressRule{Service: "http_status:404"})
 	return m.Client.Call(ctx, "PUT", "/accounts/"+cfg.AccountID+"/cfd_tunnel/"+cfg.TunnelID+"/configurations", map[string]any{"config": map[string]any{"ingress": rules}}, nil)
 }
 func (m *Manager) dns(ctx context.Context, cfg model.CloudConfig, host string) (model.Route, error) {
@@ -289,7 +302,7 @@ func (m *Manager) routeLegacy(ctx context.Context, projectID, sub string, port i
 	if e != nil {
 		return model.Route{}, e
 	}
-	if host == cfg.AdminHost {
+	if host == cfg.AdminHost || m.postgresHostInUse(host) {
 		return model.Route{}, errors.New("subdomínio reservado para a dashboard")
 	}
 	old, e := m.Store.Routes()
@@ -400,6 +413,7 @@ func (m *Manager) Start() {
 	m.cancel = cancel
 	m.done = make(chan struct{})
 	cfg := m.cfg
+	m.restorePostgresRelays(cfg)
 	m.mu.Unlock()
 	go func() {
 		defer func() { m.mu.Lock(); m.cancel = nil; m.pid = 0; close(m.done); m.mu.Unlock() }()
@@ -415,11 +429,14 @@ func (m *Manager) Start() {
 				if cfg.Mode == "local" {
 					cmd, e = m.localRun(binary, cfg)
 				} else {
-					var token string
-					token, secretError = m.Client.Vault.Get("tunnel-token")
-					e = secretError
-					cmd = exec.Command(binary, "--no-autoupdate", "tunnel", "run")
-					cmd.Env = append(os.Environ(), "TUNNEL_TOKEN="+token)
+					e = m.syncPostgresIngress(ctx)
+					if e == nil {
+						var token string
+						token, secretError = m.Client.Vault.Get("tunnel-token")
+						e = secretError
+						cmd = exec.Command(binary, "--no-autoupdate", "tunnel", "run")
+						cmd.Env = append(os.Environ(), "TUNNEL_TOKEN="+token)
+					}
 				}
 			}
 			if e == nil {
@@ -473,6 +490,16 @@ func (m *Manager) Start() {
 }
 func (m *Manager) Stop() {
 	m.CancelLogin()
+	m.stopConnector()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, relay := range m.postgresRelays {
+		relay.stop()
+		delete(m.postgresRelays, id)
+	}
+}
+
+func (m *Manager) stopConnector() {
 	m.mu.Lock()
 	cancel, done := m.cancel, m.done
 	m.mu.Unlock()

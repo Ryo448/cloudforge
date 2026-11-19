@@ -321,12 +321,23 @@ func (m *Manager) localRun(binary string, cfg model.CloudConfig) (*exec.Cmd, err
 	if !tunnelID.MatchString(cfg.TunnelID) || !validDomain(cfg.Domain) {
 		return nil, errors.New("configuração local do túnel inválida")
 	}
-	// The Core checks the Host against the panel and registered project routes.
-	// Keeping one origin allows authorized zones to change without a restart.
-	contents := fmt.Sprintf("tunnel: %s\ncredentials-file: %s\ningress:\n  - service: %s\n", cfg.TunnelID, strconv.Quote(filepath.ToSlash(m.credentials(cfg.TunnelID))), strconv.Quote(m.Origin))
+	var contents strings.Builder
+	fmt.Fprintf(&contents, "tunnel: %s\ncredentials-file: %s\ningress:\n", cfg.TunnelID, strconv.Quote(filepath.ToSlash(m.credentials(cfg.TunnelID))))
+	for _, rule := range m.postgresIngress(cfg) {
+		fmt.Fprintf(&contents, "  - hostname: %s\n    service: %s\n", strconv.Quote(rule.Hostname), strconv.Quote(rule.Service))
+		if rule.OriginRequest != nil {
+			raw, err := json.Marshal(rule.OriginRequest)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Fprintf(&contents, "    originRequest: %s\n", raw)
+		}
+	}
+	// The Core checks the Host against the panel and registered HTTP projects.
+	fmt.Fprintf(&contents, "  - service: %s\n", strconv.Quote(m.Origin))
 	home := m.localHome()
 	config := filepath.Join(home, "config.yml")
-	if err := os.WriteFile(config, []byte(contents), 0600); err != nil {
+	if err := os.WriteFile(config, []byte(contents.String()), 0600); err != nil {
 		return nil, err
 	}
 	cmd := exec.Command(binary, "--no-autoupdate", "tunnel", "--config", config, "run", cfg.TunnelID)

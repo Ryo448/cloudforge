@@ -28,6 +28,20 @@ No Windows, o aplicativo desktop explica a alteração do firewall e pede sua au
 
 Instâncias existentes são migradas para a nova configuração na mesma porta. O aplicativo volta a pedir autorização se as portas da regra precisarem mudar. Se o IPv4 mudar, o Cloudforge inclui o novo endereço no certificado do servidor automaticamente. A instância pode reiniciar brevemente e a CA continua válida.
 
+### PostgreSQL pelo túnel Cloudflare
+
+No **Cloudflare Zero Trust → Access controls → Applications**, crie um aplicativo auto-hospedado com o subdomínio desejado, por exemplo `postgres.example.com`. Defina uma política **Allow** para os e-mails autorizados e copie a tag **AUD** do aplicativo e o nome da equipe.
+
+No Cloudforge Desktop do hospedeiro, abra **Bancos de dados → PostgreSQL → Conexão → Acesso remoto via Cloudflare**. Configure o subdomínio em um domínio já autorizado pelo Cloudforge, a equipe e o AUD. O Cloudforge usa o túnel do painel, adiciona a rota TCP com validação obrigatória do token do Access no conector e reconecta o túnel para carregar a configuração. Pode haver uma breve interrupção no painel e nos projetos. O PostgreSQL continua usando TLS e senha, e a rota para de encaminhar quando a instância está indisponível.
+
+No outro computador, instale o [cloudflared](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/cloudflared-authentication/arbitrary-tcp/), copie o comando mostrado em **Conexão** e entre com uma conta permitida na política do Access. Por exemplo:
+
+```powershell
+cloudflared access tcp --hostname postgres.example.com --url 127.0.0.1:15432
+```
+
+Mantenha o processo rodando. No pgAdmin ou DBeaver, use host `127.0.0.1`, porta `15432`, usuário e senha do PostgreSQL e a CA existente com `verify-full`. Se a porta estiver ocupada neste computador, altere-a tanto no comando quanto no cliente. Os dois computadores podem estar em redes diferentes. Ao desativar a rota pelo Cloudforge, revise a aplicação e as permissões no Cloudflare Access caso tenham sido criadas só para esse banco.
+
 ### DBeaver integrado
 
 No Cloudforge Desktop, abra uma instância PostgreSQL ou MySQL e selecione **DBeaver**, logo abaixo de **Visão geral**. Com o banco online e o TLS validado, a aba conecta automaticamente e disponibiliza o navegador de objetos, o editor SQL e a grade de dados. Exporte scripts e resultados que queira guardar antes de sair da aba. A sessão do editor é temporária.

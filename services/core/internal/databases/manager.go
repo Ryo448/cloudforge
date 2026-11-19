@@ -22,27 +22,28 @@ var (
 )
 
 type Manager struct {
-	db               *sql.DB
-	vault            persistence.EnvironmentVault
-	localKey         [32]byte
-	docker           docker
-	dockerReady      bool
-	dockerChecked    bool
-	dockerStatus     dockerStatus
-	keyMu            sync.Mutex
-	mu               sync.Mutex
-	active           map[string]bool
-	ready            map[string]string
-	latest           map[string]Metric
-	retryAt          map[string]time.Time
-	lanHosts         map[string][]string
-	lanPublished     map[string][]string
-	firewallPorts    []int
-	firewallTarget   []int
-	firewallStatus   string
-	firewallApproval chan []int
-	jobs             chan struct{}
-	wake             chan struct{}
+	RemovePostgresTunnel func(context.Context, string, string) error
+	db                   *sql.DB
+	vault                persistence.EnvironmentVault
+	localKey             [32]byte
+	docker               docker
+	dockerReady          bool
+	dockerChecked        bool
+	dockerStatus         dockerStatus
+	keyMu                sync.Mutex
+	mu                   sync.Mutex
+	active               map[string]bool
+	ready                map[string]string
+	latest               map[string]Metric
+	retryAt              map[string]time.Time
+	lanHosts             map[string][]string
+	lanPublished         map[string][]string
+	firewallPorts        []int
+	firewallTarget       []int
+	firewallStatus       string
+	firewallApproval     chan []int
+	jobs                 chan struct{}
+	wake                 chan struct{}
 }
 
 func New(store *persistence.Store, installationKey string) *Manager {
@@ -426,6 +427,11 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 	if r.Action == "delete" {
 		if err := m.docker.remove(ctx, *r); err != nil {
 			return err
+		}
+		if r.Engine == "postgresql" && m.RemovePostgresTunnel != nil {
+			if err := m.RemovePostgresTunnel(ctx, r.Owner, r.ID); err != nil {
+				return err
+			}
 		}
 		m.mu.Lock()
 		defer m.mu.Unlock()
