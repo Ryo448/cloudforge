@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func (m *Manager) ConfigurePostgresTunnel(owner, id string, publish func() error) error {
+func (m *Manager) ConfigureDatabaseTunnel(owner, id string, publish func() error) error {
 	m.mu.Lock()
 	r, err := m.get(owner, id)
 	if err != nil {
@@ -19,9 +19,9 @@ func (m *Manager) ConfigurePostgresTunnel(owner, id string, publish func() error
 		m.mu.Unlock()
 		return ErrConflict
 	}
-	if r.Engine != "postgresql" || r.State != "running" || !m.tlsAvailable(r) {
+	if r.State != "running" || !m.tlsAvailable(r) {
 		m.mu.Unlock()
-		return errors.New("inicie o PostgreSQL e aguarde a validação do TLS")
+		return errors.New("inicie o banco e aguarde a validação do TLS")
 	}
 	m.active[id] = true
 	m.mu.Unlock()
@@ -33,22 +33,22 @@ func (m *Manager) ConfigurePostgresTunnel(owner, id string, publish func() error
 	return publish()
 }
 
-// OpenPostgresTunnel gives cloudflared a private port dedicated to one managed instance.
-func (m *Manager) OpenPostgresTunnel(owner, id string) (int, context.CancelFunc, error) {
+// OpenDatabaseTunnel gives cloudflared a private port dedicated to one managed instance.
+func (m *Manager) OpenDatabaseTunnel(owner, id string) (int, context.CancelFunc, error) {
 	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		return 0, nil, err
 	}
-	stop := servePostgresRelay(context.Background(), listener, net.IP.IsLoopback, func(ctx context.Context) (net.Conn, error) {
-		return m.dialPostgresTunnel(ctx, owner, id)
+	stop := serveDatabaseRelay(context.Background(), listener, net.IP.IsLoopback, func(ctx context.Context) (net.Conn, error) {
+		return m.dialDatabaseTunnel(ctx, owner, id)
 	})
 	return listener.Addr().(*net.TCPAddr).Port, stop, nil
 }
 
-func (m *Manager) dialPostgresTunnel(ctx context.Context, owner, id string) (net.Conn, error) {
+func (m *Manager) dialDatabaseTunnel(ctx context.Context, owner, id string) (net.Conn, error) {
 	m.mu.Lock()
 	r, err := m.get(owner, id)
-	if err != nil || r.Engine != "postgresql" || r.State != "running" || !m.tlsAvailable(r) || r.Port < 1 || r.Port != r.ReservedPort {
+	if err != nil || r.State != "running" || !m.tlsAvailable(r) || r.Port < 1 || r.Port != r.ReservedPort {
 		m.mu.Unlock()
 		return nil, ErrUnavailable
 	}

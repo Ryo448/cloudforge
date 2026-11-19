@@ -42,7 +42,7 @@ import postgresqlLogo from "./icons/postgresql.svg";
 import mysqlLogo from "./icons/mysql-icon.svg";
 import "./databases.css";
 import { DatabaseSnapshots, type SnapshotDesktop } from "./DatabaseSnapshots";
-import { PostgresTCPTutorial } from "./PostgresTCPTutorial";
+import { DatabaseTCPTutorial } from "./DatabaseTCPTutorial";
 
 const engines = {
   mongodb: {
@@ -857,7 +857,7 @@ export function Databases({
         <div className="notice db-credentials-prompt">
           <span>
             {t(
-              "O Cloudforge precisa da sua autorização para configurar o firewall do PostgreSQL.",
+              "O Cloudforge precisa da sua autorização para configurar o firewall dos bancos de dados.",
             )}
           </span>
           <button
@@ -1354,83 +1354,77 @@ export function Databases({
                     />
                   </div>
                 </div>
-                {database.engine === "postgresql" && (
-                  <div className="db-row">
-                    <h3>{t("Acesso pela rede local")}</h3>
-                    {database.lanFirewall === "pending" && (
-                      <p className="muted" role="status">
-                        {t(
-                          "Preparando o firewall. Se o Windows pedir, autorize a alteração.",
-                        )}
-                      </p>
-                    )}
-                    {database.lanFirewall === "blocked" && (
-                      <p className="muted" role="status">
-                        {t(
-                          "A alteração do firewall não foi aplicada. Tente novamente no aplicativo do computador hospedeiro.",
-                        )}
-                      </p>
-                    )}
-                    {database.lanFirewall === "consent" &&
-                      !allowLANFirewall && (
-                        <p className="muted" role="status">
-                          {t(
-                            "Autorize o acesso pela rede local no aplicativo do computador hospedeiro.",
-                          )}
-                        </p>
+                <div className="db-row">
+                  <h3>{t("Acesso pela rede local")}</h3>
+                  {database.lanFirewall === "pending" && (
+                    <p className="muted" role="status">
+                      {t(
+                        "Preparando o firewall. Se o Windows pedir, autorize a alteração.",
                       )}
-                    {(database.lanFirewall === "policy" ||
-                      database.lanFirewall === "listener") && (
-                      <p className="muted" role="status">
-                        {database.lanFirewall === "policy"
-                          ? t(
-                              "O Cloudforge não conseguiu validar o firewall do Windows.",
-                            )
-                          : t(
-                              "O Cloudforge ainda não conseguiu abrir a porta na rede local. Tentando novamente…",
-                            )}
-                      </p>
-                    )}
-                    {database.lanHosts?.length ? (
-                      <>
-                        <p className="muted">
-                          {t(
-                            "Em outro computador da rede, use um destes endereços com a porta acima.",
+                    </p>
+                  )}
+                  {database.lanFirewall === "blocked" && (
+                    <p className="muted" role="status">
+                      {t(
+                        "A alteração do firewall não foi aplicada. Tente novamente no aplicativo do computador hospedeiro.",
+                      )}
+                    </p>
+                  )}
+                  {database.lanFirewall === "consent" && !allowLANFirewall && (
+                    <p className="muted" role="status">
+                      {t(
+                        "Autorize o acesso pela rede local no aplicativo do computador hospedeiro.",
+                      )}
+                    </p>
+                  )}
+                  {(database.lanFirewall === "policy" ||
+                    database.lanFirewall === "listener") && (
+                    <p className="muted" role="status">
+                      {database.lanFirewall === "policy"
+                        ? t(
+                            "O Cloudforge não conseguiu validar o firewall do Windows.",
+                          )
+                        : t(
+                            "O Cloudforge ainda não conseguiu abrir a porta na rede local. Tentando novamente…",
                           )}
-                        </p>
-                        <div className="db-endpoints">
-                          {database.lanHosts.map((host) => (
-                            <CopyField
-                              key={host}
-                              value={host}
-                              label={`${t("Copiar host")} ${host}`}
-                              copy={copyValue}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    ) : !database.lanFirewall ? (
+                    </p>
+                  )}
+                  {database.lanHosts?.length ? (
+                    <>
                       <p className="muted">
-                        {database.state === "running"
-                          ? t("Nenhum IPv4 de rede local detectado.")
-                          : t("O endereço aparece quando o banco fica online.")}
+                        {t(
+                          "Em outro computador da rede, use um destes endereços com a porta acima.",
+                        )}
                       </p>
-                    ) : null}
-                  </div>
-                )}
-                {database.engine === "postgresql" && (
-                  <PostgresTCP
-                    key={database.id}
-                    id={database.id}
-                    ready={
-                      database.state === "running" && database.tlsValidated
-                    }
-                    desktop={!!allowLANFirewall}
-                    request={request}
-                    copy={copyValue}
-                    onOpenExternal={onOpenExternal}
-                  />
-                )}
+                      <div className="db-endpoints">
+                        {database.lanHosts.map((host) => (
+                          <CopyField
+                            key={host}
+                            value={host}
+                            label={`${t("Copiar host")} ${host}`}
+                            copy={copyValue}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  ) : !database.lanFirewall ? (
+                    <p className="muted">
+                      {database.state === "running"
+                        ? t("Nenhum IPv4 de rede local detectado.")
+                        : t("O endereço aparece quando o banco fica online.")}
+                    </p>
+                  ) : null}
+                </div>
+                <DatabaseTCP
+                  key={database.id}
+                  id={database.id}
+                  engine={database.engine}
+                  ready={database.state === "running" && database.tlsValidated}
+                  desktop={!!allowLANFirewall}
+                  request={request}
+                  copy={copyValue}
+                  onOpenExternal={onOpenExternal}
+                />
                 {connection(database)}
                 <div className="db-row db-with-action">
                   <div>
@@ -1585,7 +1579,7 @@ export function Databases({
         >
           <p className="muted">
             {t(
-              "O Cloudforge executará um comando de administrador para liberar, no Firewall do Windows, as portas dos PostgreSQL gerenciados para computadores da mesma sub-rede.",
+              "O Cloudforge executará um comando de administrador para liberar, no Firewall do Windows, as portas dos bancos de dados gerenciados para computadores da mesma sub-rede.",
             )}
           </p>
           <p className="muted">
@@ -1742,8 +1736,9 @@ function CopyField({
     </div>
   );
 }
-function PostgresTCP({
+function DatabaseTCP({
   id,
+  engine,
   ready,
   desktop,
   request,
@@ -1751,6 +1746,7 @@ function PostgresTCP({
   onOpenExternal,
 }: {
   id: string;
+  engine: Engine;
   ready: boolean;
   desktop: boolean;
   request: Request;
@@ -1769,7 +1765,9 @@ function PostgresTCP({
   const tutorialButton = useRef<HTMLButtonElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const [subdomain, setSubdomain] = useState("postgres");
+  const [subdomain, setSubdomain] = useState(
+    engine === "postgresql" ? "postgres" : engine,
+  );
   const [domain, setDomain] = useState("");
   const [team, setTeam] = useState("");
   const [audience, setAudience] = useState("");
@@ -1828,9 +1826,9 @@ function PostgresTCP({
               {tunnel.domains?.length
                 ? ready
                   ? t(
-                      "Conecte o pgAdmin de outra rede com o Cloudflare Access.",
+                      "Conecte seu cliente de banco de outra rede com o Cloudflare Access.",
                     )
-                  : t("Inicie o PostgreSQL para configurar o túnel.")
+                  : t("Inicie o banco para configurar o túnel.")
                 : t("Configure o túnel do painel na seção Cloudflare.")}
             </p>
           )}
@@ -1852,19 +1850,23 @@ function PostgresTCP({
         <>
           <p className="muted">
             {t(
-              "No PC cliente, execute o comando e entre no Cloudflare Access.",
+              "No PC cliente, adicione este domínio em Configurações → Conexões TCP.",
             )}
           </p>
-          <CopyField
-            value={`cloudflared access tcp --hostname ${hostname} --url 127.0.0.1:15432`}
-            label={t("Copiar comando")}
-            copy={copy}
-          />
+          <CopyField value={hostname} label={t("Copiar host")} copy={copy} />
           <p className="muted">
             {t(
-              "No pgAdmin, use 127.0.0.1, porta 15432 e a CA do banco com verify-full.",
+              "No cliente do banco, use 127.0.0.1, a porta local escolhida e a CA do banco para verificar o TLS.",
             )}
           </p>
+          <details>
+            <summary>{t("Comando para terminal")}</summary>
+            <CopyField
+              value={`cloudflared access tcp --hostname ${hostname} --url 127.0.0.1:15432`}
+              label={t("Copiar comando")}
+              copy={copy}
+            />
+          </details>
         </>
       )}
       {tunnel?.warning && (
@@ -1891,7 +1893,8 @@ function PostgresTCP({
           }
         >
           {tutorial ? (
-            <PostgresTCPTutorial
+            <DatabaseTCPTutorial
+              engine={engine}
               subdomain={subdomain}
               domain={domain}
               onOpenExternal={onOpenExternal}
@@ -1905,7 +1908,7 @@ function PostgresTCP({
               {hostname ? (
                 <p className="muted">
                   {t(
-                    "O endereço remoto deixa de encaminhar conexões ao PostgreSQL. O túnel do painel vai reconectar.",
+                    "O endereço remoto deixa de encaminhar conexões ao banco. O túnel do painel vai reconectar.",
                   )}
                 </p>
               ) : (

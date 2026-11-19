@@ -6,112 +6,286 @@
   flex-shrink: 0;
   margin-right: 18px;
   padding: 8px 12px;
-  border: 1px solid var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, #2c1b12);
   border-radius: 7px;
-  background: var(--raised);
-  color: var(--accent);
+  background: #2c1b12;
+  color: var(--accent-hover);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: background 150ms;
 }
+
 .app-update-button:hover {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--accent) 10%, #2c1b12);
 }
+
 .app-update-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+
 .app-update-modal {
   -webkit-app-region: no-drag;
-  width: min(480px, calc(100vw - 32px));
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: auto;
+  border-color: #323846;
+  background: #13171e;
 }
+
+.app-update-modal .modal-head {
+  position: static;
+  margin: 0;
+  padding: 15px 28px;
+  border-bottom: 1px solid var(--border);
+  background: #101319;
+}
+
+.app-update-modal .modal-head .brand {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.app-update-modal .modal-head .brand-mark {
+  width: 32px;
+  height: 32px;
+}
+
+.app-update-modal .modal-head .brand-wordmark {
+  display: inline;
+  font-size: 22px;
+}
+
 .app-update-content {
   display: grid;
   gap: 20px;
+  padding: 27px 28px 25px;
 }
-.app-update-content p {
+
+.app-update-overview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px 22px;
+}
+
+.app-update-status {
+  flex: 1 1 270px;
+}
+
+.app-update-status h2 {
   margin: 0;
-  white-space: normal;
+  font-family: "Poppins", "IBM Plex Sans", sans-serif;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.23;
+  letter-spacing: -0.025em;
 }
-.app-update-intro {
-  color: inherit;
-  font-size: 12px;
+
+.app-update-status p,
+.app-update-content > p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
   line-height: 1.65;
 }
+
 .app-update-versions {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 16px 0;
-  border-block: 1px solid var(--border);
+  gap: 14px;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #101319;
 }
+
 .app-update-versions span {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
   color: var(--muted);
 }
+
 .app-update-versions strong {
   color: #f1f3f7;
   font-size: 17px;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-.app-update-notice {
+
+.app-update-versions svg {
+  flex-shrink: 0;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
 }
-.app-update-unsaved {
+
+.app-update-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  color: var(--muted);
+}
+
+.app-update-stages li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.app-update-stages li[aria-current="step"] {
+  border-color: color-mix(in srgb, var(--accent) 48%, #2c1b12);
+  background: #2c1b12;
+  color: color-mix(in srgb, var(--accent) 55%, #f1f3f7);
+  font-weight: 600;
+}
+
+.app-update-stages li[data-complete] {
+  color: #dce2ec;
+}
+
+.app-update-stages li[data-complete] svg {
+  color: var(--accent);
+}
+
+.app-update-stages svg {
+  flex-shrink: 0;
+}
+
+.app-update-content .app-update-notice {
+  margin: 0;
+}
+
+.app-update-content .app-update-unsaved {
+  margin: 0;
   color: var(--amber);
 }
+
 .app-update-download {
   display: grid;
-  gap: 10px;
+  gap: 13px;
+  padding: 17px 18px 18px;
+  border-radius: 8px;
+  background: #0b0d11;
 }
-.app-update-progress-label,
+
+.app-update-progress-label {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px 16px;
+}
+
+.app-update-progress-label strong {
+  font-size: 42px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+.app-update-progress-label small {
+  margin-left: 2px;
+  color: var(--accent-hover);
+  font-size: 22px;
+}
+
+.app-update-connecting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
 .app-update-transfer {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-variant-numeric: tabular-nums;
-}
-.app-update-progress-label {
-  color: inherit;
-}
-.app-update-transfer {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 14px;
   color: var(--muted);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
+
+.app-update-transfer span + span {
+  color: #dce2ec;
+}
+
 .app-update-download progress {
   appearance: none;
   width: 100%;
-  height: 8px;
+  height: 9px;
   border: 0;
   border-radius: 6px;
   overflow: hidden;
-  background: var(--raised);
+  background: #232834;
   accent-color: var(--accent);
 }
+
 .app-update-download progress::-webkit-progress-bar {
-  background: var(--raised);
+  background: #232834;
 }
+
 .app-update-download progress::-webkit-progress-value {
   background: var(--accent);
   border-radius: 6px;
   transition: width 180ms ease-out;
 }
+
+.app-update-download progress:indeterminate {
+  appearance: auto;
+}
+
 .app-update-modal .modal-actions {
+  position: static;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 24px;
+  margin: 0;
+  padding: 15px 28px;
+  border-top: 1px solid var(--border);
+  background: #101319;
 }
+
 @media (max-width: 1150px) {
   .window-titlebar:has(.app-update-button) .host-chip {
     display: none;
   }
 }
+
+@media (max-width: 520px) {
+  .app-update-modal .modal-head,
+  .app-update-content,
+  .app-update-modal .modal-actions {
+    padding-inline: 16px;
+  }
+
+  .app-update-status h2 {
+    font-size: 22px;
+  }
+
+  .app-update-stages li {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 8px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-update-download progress::-webkit-progress-value {
     transition: none;

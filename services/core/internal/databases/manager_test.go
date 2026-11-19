@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -340,6 +339,32 @@ func TestDockerDatabases(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			tunnelPort, stopTunnel, err := m.OpenDatabaseTunnel(r.Owner, r.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(stopTunnel)
+			probe, err := dialTLS(ctx, r, original.TLS, tunnelPort)
+			if err != nil {
+				t.Fatalf("TLS pela origem privada do túnel: %v", err)
+			}
+			_ = probe.Close()
+			stopTunnel()
+			if len(m.lanHosts[r.ID]) != 0 {
+				ports, databases, err := m.databaseLANInstances()
+				if err != nil {
+					t.Fatal(err)
+				}
+				relays := make(map[string]databaseLANRelay)
+				m.firewallPorts = ports
+				m.reconcileDatabaseLANRelays(ctx, databases, ports, relays)
+				for _, relay := range relays {
+					relay.stop()
+				}
+				if len(m.view(r).LANHosts) == 0 {
+					t.Fatal("a escuta de rede não validou nenhum IPv4 com TLS")
+				}
+			}
 			operate := func(action string) {
 				t.Helper()
 				if _, err := m.Change("test", r.ID, Change{Action: action, Confirmation: r.Name}); err != nil {
@@ -457,7 +482,7 @@ exec mysql --protocol=SOCKET -u root -e "ALTER USER 'cloudforge'@'%' REQUIRE SSL
 			name := containerName(r)
 			cfg := engines[r.Engine]
 			legacyBind := localHost
-			if engine == "postgresql" && runtime.GOOS == "windows" {
+			if engine == "postgresql" {
 				legacyBind = "0.0.0.0"
 			}
 			args := []string{"create", "--pull", "never", "--name", name,

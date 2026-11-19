@@ -18,29 +18,33 @@ O Cloudforge baixa do Docker Hub a imagem da tecnologia escolhida na primeira cr
 
 O usuário é `cloudforge`. Use o banco `cloudforge` no PostgreSQL, MySQL e MongoDB. No MongoDB, use também `cloudforge` como banco de autenticação. No Redis, use o índice `0` e o usuário ACL `cloudforge`. As quatro engines exigem TLS nas conexões TCP; não é necessário certificado de cliente.
 
-No PostgreSQL, a conta `cloudforge` é superusuária da instância e pode executar comandos como `CREATE DATABASE`. O pgAdmin também pode usar `postgres` como banco de manutenção.
+No PostgreSQL, a conta `cloudforge` é superusuária da instância e pode executar comandos como `CREATE DATABASE`.
 
-### Conectar ao PostgreSQL pela rede local
+### Conectar pela rede local
 
-Em **Conexão → Acesso pela rede local**, copie o IPv4 detectado pelo Cloudforge. No outro computador, use esse endereço, a porta exibida no painel, o usuário `cloudforge` e a senha da instância. Configure `verify-full` com a CA baixada.
+Em **Conexão → Acesso pela rede local**, copie o IPv4 do hospedeiro na mesma sub-rede do computador cliente. Abra a conexão com esse endereço, a porta exibida no painel, o usuário `cloudforge` e a senha da instância. Configure o TLS com a CA baixada e as opções do seu banco na tabela abaixo.
 
-No Windows, o aplicativo desktop explica a alteração do firewall e pede sua autorização. Ao escolher **Permitir**, confirme também a solicitação do Windows, se aparecer. O comando é executado em segundo plano e configura uma regra limitada às portas TCP dos PostgreSQL registrados e à sub-rede local. O próprio Cloudforge recebe a conexão pela rede, encaminha o tráfego TLS ao PostgreSQL e só exibe o endereço depois de validar esse caminho.
+No Windows, o aplicativo desktop explica a alteração do firewall e pede sua autorização. Ao escolher **Permitir**, confirme também a solicitação do Windows, se aparecer. A regra é limitada às portas TCP dos bancos registrados e à sub-rede local. O Cloudforge encaminha o tráfego TLS para o banco e exibe o endereço depois de validar esse caminho no hospedeiro. No Linux, o Cloudforge abre o encaminhador e respeita as regras do firewall do sistema.
 
 Instâncias existentes são migradas para a nova configuração na mesma porta. O aplicativo volta a pedir autorização se as portas da regra precisarem mudar. Se o IPv4 mudar, o Cloudforge inclui o novo endereço no certificado do servidor automaticamente. A instância pode reiniciar brevemente e a CA continua válida.
 
-### PostgreSQL pelo túnel Cloudflare
+### Conectar pelo túnel Cloudflare
 
 No **Cloudflare Zero Trust → Access controls → Applications**, crie um aplicativo auto-hospedado com o subdomínio desejado, por exemplo `postgres.example.com`. Defina uma política **Allow** para os e-mails autorizados e copie a tag **AUD** do aplicativo e o nome da equipe.
 
-No Cloudforge Desktop do hospedeiro, abra **Bancos de dados → PostgreSQL → Conexão → Acesso remoto via Cloudflare**. Configure o subdomínio em um domínio já autorizado pelo Cloudforge, a equipe e o AUD. O Cloudforge usa o túnel do painel, adiciona a rota TCP com validação obrigatória do token do Access no conector e reconecta o túnel para carregar a configuração. Pode haver uma breve interrupção no painel e nos projetos. O PostgreSQL continua usando TLS e senha, e a rota para de encaminhar quando a instância está indisponível.
+No Cloudforge Desktop do hospedeiro, abra **Bancos de dados**, selecione a instância e abra **Conexão → Acesso remoto via Cloudflare → Configurar túnel TCP**. O botão **Ver tutorial** abre o guia no próprio formulário. Configure o subdomínio em um domínio já autorizado pelo Cloudforge, a equipe e o AUD. O Cloudforge usa o túnel do painel e valida o token do Access no conector. Ao carregar a rota, o túnel reconecta e pode interromper brevemente o painel e os projetos. O banco continua usando TLS e senha, e a rota para de encaminhar quando a instância está indisponível.
 
-No outro computador, instale o [cloudflared](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/cloudflared-authentication/arbitrary-tcp/), copie o comando mostrado em **Conexão** e entre com uma conta permitida na política do Access. Por exemplo:
+No computador cliente, inclusive em outra rede, abra **Configurações → Conexões TCP → Adicionar conexão** no Cloudforge Desktop. Informe o domínio do Access e uma porta local livre, como `15432`. Aguarde o status **Escutando**. Cadastre outras conexões com portas locais diferentes. O Cloudforge mantém cada conexão ativa de forma independente e reabre as conexões ativas ao iniciar novamente.
+
+No DBeaver, crie uma conexão com o driver do banco, use o host `127.0.0.1` e a porta local escolhida, informe o usuário e a senha da instância e configure o TLS com sua CA. Ao testar a conexão, conclua o login no navegador se o Cloudflare Access solicitar e teste novamente. O DBeaver Community inclui PostgreSQL e MySQL. Para MongoDB e Redis, use o DBeaver PRO ou um cliente próprio, como MongoDB Compass ou Redis Insight.
+
+Em um computador sem Cloudforge Desktop, instale o [cloudflared](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/cloudflared-authentication/arbitrary-tcp/) e mantenha o comando mostrado em **Conexão → Comando para terminal** em execução. Por exemplo:
 
 ```powershell
 cloudflared access tcp --hostname postgres.example.com --url 127.0.0.1:15432
 ```
 
-Mantenha o processo rodando. No pgAdmin ou DBeaver, use host `127.0.0.1`, porta `15432`, usuário e senha do PostgreSQL e a CA existente com `verify-full`. Se a porta estiver ocupada neste computador, altere-a tanto no comando quanto no cliente. Os dois computadores podem estar em redes diferentes. Ao desativar a rota pelo Cloudforge, revise a aplicação e as permissões no Cloudflare Access caso tenham sido criadas só para esse banco.
+Ao desativar a rota pelo Cloudforge, revise a aplicação e as permissões no Cloudflare Access caso tenham sido criadas só para esse banco.
 
 ### DBeaver integrado
 
@@ -74,7 +78,7 @@ A porta atribuída permanece a mesma após parar, iniciar ou reiniciar o contain
 
 O Cloudforge emite automaticamente o par de cliente para bancos que já usam TLS, preservando o certificado do servidor e a CA. Bancos em execução ganham suporte a mTLS no próprio container; bancos parados recebem a configuração na próxima inicialização. Para instalações antigas sem TLS, continua valendo a migração original: o Core adequa o container, usando a imagem local, o volume, as redes e as credenciais existentes. Use a porta mostrada na aba **Conexão** e configure a CA no cliente antes de reconectar.
 
-O Core atualizado promove automaticamente a conta `cloudforge` das instâncias PostgreSQL existentes. Para publicar a porta na rede local, ele substitui o container antigo e pode renovar o certificado do servidor. A atualização mantém o volume, a porta, as credenciais, a CA e o par de cliente existente. Instâncias em execução passam por uma breve interrupção. Instâncias paradas são migradas quando iniciadas.
+O Core atualizado promove automaticamente a conta `cloudforge` das instâncias PostgreSQL existentes. Para habilitar o acesso pela rede local em todos os motores, o Core ajusta a publicação da porta legada quando necessário e pode renovar o certificado do servidor para incluir os endereços LAN. Preserva o volume, a porta, as credenciais, a CA e o par de cliente existente. Instâncias em execução podem passar por uma breve interrupção. Instâncias paradas são migradas quando iniciadas.
 
 Para configurar o Google Drive e operar backups, consulte [Snapshots dos bancos](snapshots.md).
 

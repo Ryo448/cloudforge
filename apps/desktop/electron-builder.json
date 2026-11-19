@@ -45,10 +45,12 @@
   },
   "linux": { "target": "AppImage", "category": "Development" },
   "nsis": {
+    "include": "apps/desktop/installer.nsh",
     "artifactName": "Cloudforge-Setup-${version}.${ext}",
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "installerIcon": "assets/icon/icon.ico",
+    "installerSidebar": "assets/installer/sidebar.bmp",
     "uninstallerIcon": "assets/icon/icon.ico"
   }
 }

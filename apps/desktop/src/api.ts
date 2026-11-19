@@ -3,8 +3,18 @@ import type { Snapshot } from "../../../packages/shared-types";
 import type { SnapshotDesktop } from "../../../packages/ui/DatabaseSnapshots";
 export interface UpdateState {
   status:
-    "idle" | "checking" | "available" | "downloading" | "installing" | "error";
+    | "idle"
+    | "checking"
+    | "available"
+    | "downloading"
+    | "installing"
+    | "restarting"
+    | "installed"
+    | "restart-failed"
+    | "interrupted"
+    | "error";
   currentVersion: string;
+  previousVersion?: string;
   version?: string;
   releaseNotes?: string;
   error?: string;
@@ -17,6 +27,7 @@ interface Bridge extends SnapshotDesktop {
   setLocale: (locale: Locale) => Promise<void>;
   updateState: () => Promise<UpdateState>;
   installUpdate: () => Promise<UpdateState>;
+  dismissUpdate: () => Promise<void>;
   onUpdateState: (callback: (state: UpdateState) => void) => () => void;
   openDBeaver: (
     session: string,

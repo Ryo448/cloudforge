@@ -127,29 +127,29 @@ func (s *Server) databaseTunnel(w http.ResponseWriter, r *http.Request, owner, i
 		http.NotFound(w, r)
 		return
 	}
-	database, _, err := s.Databases.Detail(owner, id, 0)
+	_, _, err := s.Databases.Detail(owner, id, 0)
 	if err != nil {
 		databaseError(w, err)
 		return
 	}
-	if database.Engine != "postgresql" || s.Cloud == nil {
+	if s.Cloud == nil {
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	switch r.Method {
 	case http.MethodGet:
-		write(w, 200, s.Cloud.PostgresTunnel(owner, id, local))
+		write(w, 200, s.Cloud.DatabaseTunnel(owner, id, local))
 	case http.MethodPost:
-		var input cloudflare.PostgresInput
+		var input cloudflare.DatabaseTunnelInput
 		if err = decode(w, r, &input); err != nil {
 			fail(w, 400, err)
 			return
 		}
-		var view cloudflare.PostgresView
-		err = s.Databases.ConfigurePostgresTunnel(owner, id, func() error {
+		var view cloudflare.DatabaseTunnelView
+		err = s.Databases.ConfigureDatabaseTunnel(owner, id, func() error {
 			var err error
-			view, err = s.Cloud.AddPostgresTunnel(r.Context(), owner, id, input)
+			view, err = s.Cloud.AddDatabaseTunnel(r.Context(), owner, id, input)
 			return err
 		})
 		if err != nil {
@@ -158,7 +158,7 @@ func (s *Server) databaseTunnel(w http.ResponseWriter, r *http.Request, owner, i
 		}
 		write(w, 201, view)
 	case http.MethodDelete:
-		view, err := s.Cloud.RemovePostgresTunnel(r.Context(), owner, id)
+		view, err := s.Cloud.RemoveDatabaseTunnel(r.Context(), owner, id)
 		if err != nil {
 			databaseError(w, err)
 			return

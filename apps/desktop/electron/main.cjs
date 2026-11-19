@@ -14,7 +14,7 @@ const { StringDecoder } = require("node:string_decoder");
 const WebSocket = require("ws");
 const { pathToFileURL } = require("node:url");
 const { createCoreManager } = require("./core-lifecycle.cjs");
-const { createUpdater } = require("./updater.cjs");
+const { createUpdater, startWindowsInstaller } = require("./updater.cjs");
 const { dialogs, systemLanguageArguments } = require("./locales.cjs");
 const { autoUpdater } = require("electron-updater");
 const {
@@ -56,6 +56,8 @@ const coreManager = createCoreManager({
     key = undefined;
   },
 });
+const pendingUpdatePath = path.join(profileDir, "pending-update.json");
+let installerStarted = false;
 const updates = createUpdater({
   updater: autoUpdater,
   currentVersion: appVersion,
@@ -79,6 +81,27 @@ const updates = createUpdater({
     await ensureCore();
     connectEvents();
   },
+  pending: {
+    load: async () => JSON.parse(await fs.readFile(pendingUpdatePath, "utf8")),
+    save: async (update) => {
+      const temp = `${pendingUpdatePath}.tmp`;
+      try {
+        await fs.writeFile(temp, JSON.stringify(update));
+        await fs.rename(temp, pendingUpdatePath);
+      } finally {
+        await fs.rm(temp, { force: true }).catch(() => {});
+      }
+    },
+    clear: () => fs.rm(pendingUpdatePath, { force: true }),
+  },
+  launchInstaller:
+    process.platform === "win32"
+      ? async (file) => {
+          await startWindowsInstaller(file);
+          installerStarted = true;
+          app.quit();
+        }
+      : undefined,
 });
 const terminalSessions = new Map();
 let pickedSnapshot;
@@ -97,12 +120,10 @@ if (!app.requestSingleInstanceLock()) {
     window?.focus();
   });
   app.whenReady().then(async () => {
-    try {
-      await ensureCore();
-    } catch (error) {
-      console.error("Core:", error.message);
-    }
-    createWindow();
+    const restarting = await updates.resume(process.argv.includes("--updated"));
+    if (restarting) createWindow();
+    await ensureCore().catch((error) => console.error("Core:", error.message));
+    if (!restarting) createWindow();
     connectEvents();
     updates.start();
   });
@@ -251,11 +272,14 @@ function terminalSession(event) {
   return session;
 }
 async function ensureCore() {
+  updates.restarting();
   try {
     await coreManager.ensure();
     coreStartupError = undefined;
+    await updates.finishRestart();
   } catch (error) {
     coreStartupError = error;
+    await updates.finishRestart(error);
     throw error;
   }
 }
@@ -301,6 +325,14 @@ function createWindow() {
     (_wc, _permission, callback) => callback(false),
   );
   window.on("close", (event) => {
+    if (
+      process.platform === "win32" &&
+      updates.state().status === "installing" &&
+      !installerStarted
+    ) {
+      event.preventDefault();
+      return;
+    }
     if (!hasDBeaver()) return;
     event.preventDefault();
     const target = window;
@@ -349,6 +381,10 @@ ipcMain.handle("update:install", (event) => {
   checkSender(event);
   return updates.install();
 });
+ipcMain.handle("update:dismiss", (event) => {
+  checkSender(event);
+  return updates.dismiss();
+});
 ipcMain.handle("window:is-maximized", (event) =>
   controlledWindow(event).isMaximized(),
 );
@@ -380,6 +416,10 @@ const routes = [
   ["GET", /^\/api\/databases\/[a-f0-9]{32}\/tunnel$/],
   ["POST", /^\/api\/databases\/[a-f0-9]{32}\/tunnel$/],
   ["DELETE", /^\/api\/databases\/[a-f0-9]{32}\/tunnel$/],
+  ["GET", /^\/api\/access-tcp$/],
+  ["POST", /^\/api\/access-tcp$/],
+  ["PATCH", /^\/api\/access-tcp\/[A-Za-z0-9_-]{22}$/],
+  ["DELETE", /^\/api\/access-tcp\/[A-Za-z0-9_-]{22}$/],
   [
     "GET",
     /^\/api\/(health|state|projects|sessions|cloudflare\/(domains|zones|status))$/,

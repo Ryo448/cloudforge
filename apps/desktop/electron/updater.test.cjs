@@ -1,7 +1,11 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
-const { createUpdater, CHECK_INTERVAL } = require("./updater.cjs");
+const {
+  createUpdater,
+  startWindowsInstaller,
+  CHECK_INTERVAL,
+} = require("./updater.cjs");
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 function fixture(overrides = {}) {
   const calls = [];
@@ -68,7 +72,7 @@ test("confirmed update reports progress, stops core and opens installer once", a
     "check",
     "download",
     "stop-core",
-    ["install", true, true],
+    ["install", false, true],
   ]);
   assert.equal(f.states.find((s) => s.percent === 42).transferred, 42);
 });
@@ -138,6 +142,93 @@ test("confirmation waits for an ongoing release check before downloading", async
     "check",
     "download",
     "stop-core",
-    ["install", true, true],
+    ["install", false, true],
   ]);
+});
+
+test("Windows installer starts visibly and is handed off only after spawn", async () => {
+  const child = new EventEmitter();
+  let detached = false;
+  child.unref = () => {
+    detached = true;
+  };
+  const start = startWindowsInstaller("verified.exe", (file, args, options) => {
+    assert.equal(file, "verified.exe");
+    assert.deepEqual(args, ["--updated", "--force-run"]);
+    assert.equal(options.detached, true);
+    return child;
+  });
+  assert.equal(detached, false);
+  child.emit("spawn");
+  await start;
+  assert.equal(detached, true);
+});
+
+test("an installer launch failure clears the handoff and restarts the current Core", async () => {
+  const pending = { save: async () => {}, clear: async () => {} };
+  const f = fixture({
+    pending,
+    launchInstaller: async (file) => {
+      assert.equal(file, "installer.exe");
+      throw new Error("installer blocked");
+    },
+  });
+  pending.save = async (value) => f.calls.push(value);
+  pending.clear = async () => f.calls.push("clear");
+  f.controller.start();
+  await tick();
+  await f.controller.install();
+  assert.deepEqual(f.calls, [
+    "check",
+    "download",
+    "stop-core",
+    { fromVersion: "2.1.2", version: "2.2.0" },
+    "clear",
+    "recover",
+  ]);
+  assert.equal(f.controller.state().error, "installer blocked");
+});
+
+test("the new version confirms installation only after its Core succeeds", async () => {
+  const pending = {
+    load: async () => ({ fromVersion: "2.1.2", version: "2.2.0" }),
+    clear: async () => {
+      pending.cleared = true;
+    },
+  };
+  const { controller, calls } = fixture({ pending, currentVersion: "2.2.0" });
+  assert.equal(await controller.resume(true), true);
+  controller.start();
+  assert.equal(controller.state().status, "restarting");
+  await controller.finishRestart(new Error("Core unavailable"));
+  assert.equal(controller.state().status, "restart-failed");
+  assert.equal(pending.cleared, undefined);
+  controller.restarting();
+  await controller.finishRestart();
+  assert.equal(controller.state().status, "installed");
+  assert.equal(controller.state().previousVersion, "2.1.2");
+  assert.equal(pending.cleared, true);
+  assert.deepEqual(calls, []);
+  await controller.dismiss();
+  await tick();
+  assert.deepEqual(calls, ["check"]);
+});
+
+test("legacy and interrupted updates identify the actual running version", async () => {
+  const legacy = fixture({ currentVersion: "2.2.0" });
+  assert.equal(await legacy.controller.resume(true), true);
+  assert.equal(legacy.controller.state().version, "2.2.0");
+  assert.equal(legacy.controller.state().previousVersion, undefined);
+  const pending = {
+    load: async () => ({ fromVersion: "2.1.2", version: "2.2.0" }),
+    clear: async () => {
+      pending.cleared = true;
+    },
+  };
+  const old = fixture({ pending });
+  assert.equal(await old.controller.resume(false), false);
+  assert.equal(old.controller.state().status, "interrupted");
+  assert.equal(old.controller.state().currentVersion, "2.1.2");
+  await old.controller.dismiss();
+  assert.equal(pending.cleared, true);
 });

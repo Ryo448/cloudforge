@@ -135,6 +135,7 @@ export function ErrorMessage({ error }: { error: string }) {
 }
 export function Modal({
   title,
+  header,
   onClose,
   children,
   wide = false,
@@ -142,6 +143,7 @@ export function Modal({
   closeDisabled = false,
 }: {
   title: string;
+  header?: ReactNode;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
@@ -165,7 +167,7 @@ export function Modal({
       }}
     >
       <div className="modal-head">
-        <h2>{title}</h2>
+        {header ?? <h2>{title}</h2>}
         <button
           className="icon-button"
           onClick={onClose}

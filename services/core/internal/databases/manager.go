@@ -22,7 +22,7 @@ var (
 )
 
 type Manager struct {
-	RemovePostgresTunnel func(context.Context, string, string) error
+	RemoveDatabaseTunnel func(context.Context, string, string) error
 	db                   *sql.DB
 	vault                persistence.EnvironmentVault
 	localKey             [32]byte
@@ -84,19 +84,16 @@ func (m *Manager) view(r record) Instance {
 	if sample, ok := m.latest[r.ID]; ok && r.State == "running" {
 		r.Latest = &sample
 	}
-	if r.Engine == "postgresql" && r.State == "running" && r.TLSValidated {
-		r.LANHosts = m.lanHosts[r.ID]
-		if runtime.GOOS == "windows" {
-			r.LANHosts = m.lanPublished[r.ID]
-			if !slices.Contains(m.firewallPorts, r.Port) {
-				r.LANHosts = nil
-				r.LANFirewall = m.firewallStatus
-				if r.LANFirewall == "" {
-					r.LANFirewall = "checking"
-				}
-			} else if len(r.LANHosts) == 0 && len(m.lanHosts[r.ID]) != 0 {
-				r.LANFirewall = "listener"
+	if r.State == "running" && r.TLSValidated {
+		r.LANHosts = m.lanPublished[r.ID]
+		if runtime.GOOS == "windows" && !slices.Contains(m.firewallPorts, r.Port) {
+			r.LANHosts = nil
+			r.LANFirewall = m.firewallStatus
+			if r.LANFirewall == "" {
+				r.LANFirewall = "checking"
 			}
+		} else if len(r.LANHosts) == 0 && len(m.lanHosts[r.ID]) != 0 {
+			r.LANFirewall = "listener"
 		}
 	}
 	return r.Instance
@@ -288,14 +285,12 @@ func (m *Manager) Run(ctx context.Context) {
 		m.monitorDocker(ctx)
 	}()
 	defer func() { stopMonitor(); <-monitorDone }()
-	if runtime.GOOS == "windows" {
-		firewallDone := make(chan struct{})
-		go func() {
-			defer close(firewallDone)
-			m.monitorLANFirewall(ctx)
-		}()
-		defer func() { stopMonitor(); <-firewallDone }()
-	}
+	lanDone := make(chan struct{})
+	go func() {
+		defer close(lanDone)
+		m.monitorDatabaseLAN(ctx)
+	}()
+	defer func() { stopMonitor(); <-lanDone }()
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -428,8 +423,8 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 		if err := m.docker.remove(ctx, *r); err != nil {
 			return err
 		}
-		if r.Engine == "postgresql" && m.RemovePostgresTunnel != nil {
-			if err := m.RemovePostgresTunnel(ctx, r.Owner, r.ID); err != nil {
+		if m.RemoveDatabaseTunnel != nil {
+			if err := m.RemoveDatabaseTunnel(ctx, r.Owner, r.ID); err != nil {
 				return err
 			}
 		}
@@ -497,40 +492,37 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 	if err = s.TLS.validate(*r); err != nil {
 		return err
 	}
-	var lanHosts []string
-	if r.Engine == "postgresql" {
-		addresses, err := postgresLANAddresses()
-		if err != nil {
-			return err
-		}
-		material, err := m.postgresTLSForLAN(*r, s.TLS, addresses)
-		if err != nil {
-			return err
-		}
-		if material != s.TLS {
-			// The server reads its private key and certificate from tmpfs on start.
-			// Stop before committing the replacement so retries use a consistent pair.
-			if exists && runtime.Running {
-				if err = m.docker.lifecycle(ctx, *r, "stop", "--time", "15"); err != nil {
-					return err
-				}
-				runtime.Running = false
-			}
-			m.mu.Lock()
-			current, err := m.secrets(*r)
-			if err == nil {
-				current.TLS = material
-				err = m.saveSecrets(*r, current)
-			}
-			m.mu.Unlock()
-			if err != nil {
+	addresses, err := databaseLANAddresses()
+	if err != nil {
+		return err
+	}
+	material, err := m.tlsForLAN(*r, s.TLS, addresses)
+	if err != nil {
+		return err
+	}
+	if material != s.TLS {
+		// Stop before replacing the key and certificate loaded into tmpfs at startup.
+		if exists && runtime.Running {
+			if err = m.docker.lifecycle(ctx, *r, "stop", "--time", "15"); err != nil {
 				return err
 			}
-			s = current
+			runtime.Running = false
 		}
-		for _, address := range addresses {
-			lanHosts = append(lanHosts, address.String())
+		m.mu.Lock()
+		current, err := m.secrets(*r)
+		if err == nil {
+			current.TLS = material
+			err = m.saveSecrets(*r, current)
 		}
+		m.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		s = current
+	}
+	var lanHosts []string
+	for _, address := range addresses {
+		lanHosts = append(lanHosts, address.String())
 	}
 	if _, attached := runtime.Networks[containerName(*r)]; exists && r.Engine == "postgresql" && runtime.LocalConfigured && runtime.TLS && !attached {
 		// Docker can keep forwarding to the previous endpoint after a live
@@ -680,9 +672,7 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 		return err
 	}
 	r.CredentialsPending = current.Reveal
-	if r.Engine == "postgresql" {
-		m.lanHosts[r.ID] = lanHosts
-	}
+	m.lanHosts[r.ID] = lanHosts
 	return m.save(*r)
 }
 
@@ -718,13 +708,9 @@ func (m *Manager) start(ctx context.Context, r *record, exists bool) (containerS
 }
 
 func (m *Manager) allocatePort(r *record) error {
-	bindHost := databaseBindHost(r.Engine)
-	if r.Engine == "postgresql" {
-		// Reserve a port available on both loopback and the LAN adapters.
-		bindHost = "0.0.0.0"
-	}
+	// Reserve a port available on both loopback and the LAN adapters.
 	for attempt := 0; attempt < 32; attempt++ {
-		listener, err := net.Listen("tcp4", bindHost+":0")
+		listener, err := net.Listen("tcp4", "0.0.0.0:0")
 		if err != nil {
 			return err
 		}

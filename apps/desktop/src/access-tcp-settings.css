@@ -1,0 +1,22 @@
+.access-tcp-settings .section-heading {
+  flex-wrap: wrap;
+}
+.access-tcp-row {
+  flex-wrap: wrap;
+}
+.access-tcp-endpoint {
+  min-width: 0;
+}
+.access-tcp-endpoint strong {
+  overflow-wrap: anywhere;
+}
+.access-tcp-address,
+.access-tcp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.access-tcp-address {
+  margin-top: 4px;
+}

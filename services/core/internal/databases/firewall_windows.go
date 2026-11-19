@@ -25,11 +25,11 @@ import (
 //go:embed postgres_firewall.ps1
 var postgresFirewallScript string
 
-func (m *Manager) monitorLANFirewall(ctx context.Context) {
+func (m *Manager) monitorDatabaseLAN(ctx context.Context) {
 	id := hex.EncodeToString(m.localKey[:8])
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
-	relays := make(map[string]postgresLANRelay)
+	relays := make(map[string]databaseLANRelay)
 	defer func() {
 		for _, relay := range relays {
 			relay.stop()
@@ -40,7 +40,7 @@ func (m *Manager) monitorLANFirewall(ctx context.Context) {
 	var result <-chan error
 	failed := false
 	for {
-		ports, databases, snapshotErr := m.postgresLANInstances()
+		ports, databases, snapshotErr := m.databaseLANInstances()
 		changed := !slices.Equal(ports, lastPorts)
 		if snapshotErr == nil && result == nil && (changed || time.Now().After(nextCheck)) {
 			if changed {
@@ -73,12 +73,12 @@ func (m *Manager) monitorLANFirewall(ctx context.Context) {
 			}
 			m.mu.Unlock()
 		}
-		m.reconcilePostgresLANRelays(ctx, databases, allowed, relays)
+		m.reconcileDatabaseLANRelays(ctx, databases, allowed, relays)
 		select {
 		case <-ctx.Done():
 			return
 		case approved := <-m.firewallApproval:
-			current, _, err := m.postgresLANInstances()
+			current, _, err := m.databaseLANInstances()
 			if err != nil || !slices.Equal(approved, current) {
 				m.mu.Lock()
 				m.firewallStatus = "checking"
@@ -98,7 +98,7 @@ func (m *Manager) monitorLANFirewall(ctx context.Context) {
 			// Treat the attempt as unsuccessful until the next read confirms the rule.
 			failed = true
 			if err != nil && ctx.Err() == nil {
-				log.Printf("bancos: alteração do firewall para PostgreSQL: %v", err)
+				log.Printf("bancos: alteração do firewall: %v", err)
 			}
 			m.mu.Lock()
 			m.firewallStatus = "checking"
@@ -182,7 +182,7 @@ func firewallPortList(value string) ([]int, error) {
 	for _, entry := range strings.Split(value, ",") {
 		port, err := strconv.Atoi(entry)
 		if err != nil || port < 1 || port > 65535 || strconv.Itoa(port) != entry {
-			return nil, errors.New("porta inválida na regra do PostgreSQL")
+			return nil, errors.New("porta inválida na regra de bancos de dados")
 		}
 		ports = append(ports, port)
 	}
@@ -195,6 +195,7 @@ func runPostgresFirewall(ctx context.Context, id, ports string, apply bool) ([]b
 	if err != nil {
 		return nil, err
 	}
+	// Update the original rule in place for installations that already allowed PostgreSQL.
 	name := fmt.Sprintf("Cloudforge PostgreSQL LAN %s", id)
 	script := "& {\n" + postgresFirewallScript + "\n} " + psQuote(name) + " " + psQuote(ports) + " " + psQuote(core)
 	if apply {

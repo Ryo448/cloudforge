@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("cloudforge", {
   setLocale: (locale) => ipcRenderer.invoke("locale:set", locale),
   updateState: () => ipcRenderer.invoke("update:state"),
   installUpdate: () => ipcRenderer.invoke("update:install"),
+  dismissUpdate: () => ipcRenderer.invoke("update:dismiss"),
   onUpdateState: (callback) => {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on("update:state", listener);

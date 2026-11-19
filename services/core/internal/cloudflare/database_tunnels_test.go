@@ -16,7 +16,7 @@ import (
 	"testing"
 )
 
-func TestPostgresTunnelRequiresAccessAndPreservesHTTPIngress(t *testing.T) {
+func TestDatabaseTunnelRequiresAccessAndPreservesHTTPIngress(t *testing.T) {
 	const account = "0123456789abcdef0123456789abcdef"
 	const zone = "abcdef0123456789abcdef0123456789"
 	const id = "12345678-1234-4234-8234-123456789abc"
@@ -58,7 +58,7 @@ func TestPostgresTunnelRequiresAccessAndPreservesHTTPIngress(t *testing.T) {
 		return nil, nil
 	}
 	relayOpened, relayClosed := false, false
-	m.OpenPostgresRelay = func(owner, database string) (int, context.CancelFunc, error) {
+	m.OpenDatabaseRelay = func(owner, database string) (int, context.CancelFunc, error) {
 		if owner != "owner" || database != "database" {
 			t.Fatalf("wrong relay destination: %q, %q", owner, database)
 		}
@@ -66,23 +66,23 @@ func TestPostgresTunnelRequiresAccessAndPreservesHTTPIngress(t *testing.T) {
 		return 41235, func() { relayClosed = true }, nil
 	}
 	aud := strings.Repeat("a", 64)
-	input := PostgresInput{Domain: "example.com", Subdomain: "postgres", Team: "example.cloudflareaccess.com"}
-	if _, err := m.AddPostgresTunnel(ctx, "owner", "database", input); err == nil || relayOpened {
+	input := DatabaseTunnelInput{Domain: "example.com", Subdomain: "postgres", Team: "example.cloudflareaccess.com"}
+	if _, err := m.AddDatabaseTunnel(ctx, "owner", "database", input); err == nil || relayOpened {
 		t.Fatal("publication without AUD must fail before opening a relay")
 	}
 	input.Audience = aud
-	view, err := m.AddPostgresTunnel(ctx, "owner", "database", input)
+	view, err := m.AddDatabaseTunnel(ctx, "owner", "database", input)
 	m.stopConnector()
 	if err != nil || view.Hostname != "postgres.example.com" || !relayOpened {
 		t.Fatalf("could not configure PostgreSQL: %+v %v", view, err)
 	}
-	if got := m.PostgresTunnel("other", "database", false); got.Hostname != "" {
+	if got := m.DatabaseTunnel("other", "database", false); got.Hostname != "" {
 		t.Fatal("route disclosed to another owner")
 	}
 	reopened := New(store, dir, m.Origin, m.Installation)
-	reopened.OpenPostgresRelay = m.OpenPostgresRelay
-	reopened.restorePostgresRelays(cfg)
-	if got := reopened.PostgresTunnel("owner", "database", false); got.Hostname != view.Hostname {
+	reopened.OpenDatabaseRelay = m.OpenDatabaseRelay
+	reopened.restoreDatabaseRelays(cfg)
+	if got := reopened.DatabaseTunnel("owner", "database", false); got.Hostname != view.Hostname {
 		t.Fatal("route was not persisted")
 	}
 	if _, err = reopened.localRun("unused", cfg); err != nil {
@@ -133,10 +133,10 @@ func TestPostgresTunnelRequiresAccessAndPreservesHTTPIngress(t *testing.T) {
 	}))
 	defer dns.Close()
 	m.Client = &Client{BaseURL: dns.URL, HTTP: dns.Client()}
-	if _, err = m.RemovePostgresTunnel(ctx, "owner", "database"); err != nil || !relayClosed {
+	if _, err = m.RemoveDatabaseTunnel(ctx, "owner", "database"); err != nil || !relayClosed {
 		t.Fatalf("could not disable the PostgreSQL route: %v", err)
 	}
-	if rules := m.postgresIngress(cfg); len(rules) != 0 {
+	if rules := m.databaseTunnelIngress(cfg); len(rules) != 0 {
 		t.Fatalf("disabled route maintained its ingress: %+v", rules)
 	}
 }

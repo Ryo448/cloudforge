@@ -184,7 +184,7 @@ func TestPostgresTLSAddsLANAddress(t *testing.T) {
 	}
 	legacy := &serverTLS{certificate: leaf, CA: ca, Client: client}
 	addresses := []net.IP{net.ParseIP("192.168.20.5")}
-	updated, err := m.postgresTLSForLAN(r, legacy, addresses)
+	updated, err := m.tlsForLAN(r, legacy, addresses)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestPostgresTLSAddsLANAddress(t *testing.T) {
 	if !bytes.Equal(updated.CA, legacy.CA) || updated.Client != legacy.Client {
 		t.Fatal("a atualização do certificado do servidor alterou a CA ou o par de cliente")
 	}
-	again, err := m.postgresTLSForLAN(r, updated, addresses)
+	again, err := m.tlsForLAN(r, updated, addresses)
 	if err != nil || again != updated {
 		t.Fatal("o mesmo endereço não deveria gerar outro certificado", err)
 	}

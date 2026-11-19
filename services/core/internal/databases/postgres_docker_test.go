@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -116,7 +115,7 @@ func TestDockerPostgresAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	port, started := r.Port, *r.StartedAt
-	tunnelPort, closeTunnel, err := m.OpenPostgresTunnel(r.Owner, r.ID)
+	tunnelPort, closeTunnel, err := m.OpenDatabaseTunnel(r.Owner, r.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +125,7 @@ func TestDockerPostgresAuthentication(t *testing.T) {
 		t.Fatalf("failed to use PostgreSQL TLS through the dedicated tunnel origin: %v", err)
 	}
 	hosts := m.lanHosts[r.ID]
-	relays := make(map[string]postgresLANRelay)
+	relays := make(map[string]databaseLANRelay)
 	defer func() {
 		for _, relay := range relays {
 			relay.stop()
@@ -138,16 +137,14 @@ func TestDockerPostgresAuthentication(t *testing.T) {
 			t.Log("nenhum IPv4 de rede local disponível para testar a conexão")
 			return
 		}
-		if runtime.GOOS == "windows" {
-			_, databases, err := m.postgresLANInstances()
-			if err != nil {
-				t.Fatal(err)
-			}
-			m.firewallPorts = []int{port}
-			m.reconcilePostgresLANRelays(ctx, databases, []int{port}, relays)
-			if len(m.view(r).LANHosts) == 0 {
-				t.Fatal("a escuta do Cloudforge não validou a conexão pelo IPv4")
-			}
+		ports, databases, err := m.databaseLANInstances()
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.firewallPorts = ports
+		m.reconcileDatabaseLANRelays(ctx, databases, ports, relays)
+		if len(m.view(r).LANHosts) == 0 {
+			t.Fatal("a escuta do Cloudforge não validou a conexão pelo IPv4")
 		}
 		var lanErr error
 		for _, host := range hosts {

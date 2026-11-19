@@ -170,6 +170,10 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := strings.Trim(r.URL.Path, "/")
+	if path == "api/access-tcp" || strings.HasPrefix(path, "api/access-tcp/") {
+		s.accessTCPRoutes(w, r, strings.Split(path, "/"))
+		return
+	}
 	if path == "api/snapshots/drive" || strings.HasPrefix(path, "api/snapshots/drive/") ||
 		(strings.HasPrefix(path, "api/databases/") && (strings.HasSuffix(path, "/snapshots") || strings.Contains(path, "/snapshots/"))) {
 		admin, err := s.Store.Admin()

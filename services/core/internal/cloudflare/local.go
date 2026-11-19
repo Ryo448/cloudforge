@@ -323,7 +323,7 @@ func (m *Manager) localRun(binary string, cfg model.CloudConfig) (*exec.Cmd, err
 	}
 	var contents strings.Builder
 	fmt.Fprintf(&contents, "tunnel: %s\ncredentials-file: %s\ningress:\n", cfg.TunnelID, strconv.Quote(filepath.ToSlash(m.credentials(cfg.TunnelID))))
-	for _, rule := range m.postgresIngress(cfg) {
+	for _, rule := range m.databaseTunnelIngress(cfg) {
 		fmt.Fprintf(&contents, "  - hostname: %s\n    service: %s\n", strconv.Quote(rule.Hostname), strconv.Quote(rule.Service))
 		if rule.OriginRequest != nil {
 			raw, err := json.Marshal(rule.OriginRequest)

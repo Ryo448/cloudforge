@@ -1,6 +1,6 @@
 {
   "name": "cloudforge",
-  "version": "2.1.9",
+  "version": "2.2.0",
   "license": "MIT",
   "private": true,
   "type": "module",

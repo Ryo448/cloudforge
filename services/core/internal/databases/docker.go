@@ -154,20 +154,12 @@ func (d docker) inspectNamed(ctx context.Context, r record, name string) (contai
 		return state, false, errors.New("container encontrado sem identificação válida")
 	}
 	key := fmt.Sprintf("%d/tcp", engines[r.Engine].Port)
-	bindHost := databaseBindHost(r.Engine)
-	state.LocalPort = publishedPort(active, key, bindHost)
-	configuredPort := publishedPort(configured, key, bindHost)
+	state.LocalPort = publishedPort(active, key, localHost)
+	configuredPort := publishedPort(configured, key, localHost)
 	state.LocalConfigured = labels["cloudforge.database.local"] == "1" && mode != "host" && configuredPort != 0
 	state.Local = state.LocalConfigured && (!state.Running || state.LocalPort == configuredPort)
 	state.TLS = labels["cloudforge.database.tls"] == "1"
 	return state, true, nil
-}
-
-func databaseBindHost(engine string) string {
-	if engine == "postgresql" && runtime.GOOS != "windows" {
-		return "0.0.0.0"
-	}
-	return localHost
 }
 
 func publishedPort(bindings map[string][]portBinding, key, bindHost string) int {
@@ -369,7 +361,7 @@ func (d docker) create(ctx context.Context, r record) error {
 	}
 	args := []string{"create", "--pull", "never", "--name", name, "--label", "cloudforge.database=" + r.ID,
 		"--label", "cloudforge.database.local=1", "--label", "cloudforge.database.tls=1", "--network", name,
-		"--publish", fmt.Sprintf("%s:%d:%d", databaseBindHost(r.Engine), r.ReservedPort, e.Port),
+		"--publish", fmt.Sprintf("%s:%d:%d", localHost, r.ReservedPort, e.Port),
 		"--mount", "type=volume,source=" + name + ",target=" + e.Data, "--tmpfs", "/run/cloudforge:rw,noexec,nosuid,nodev,mode=0755",
 		"--cpus", "1", "--pids-limit", "256",
 		"--security-opt", "no-new-privileges", "--log-opt", "max-size=10m", "--log-opt", "max-file=2"}

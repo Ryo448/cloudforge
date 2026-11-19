@@ -135,8 +135,8 @@ func run() error {
 	defer cancel()
 	server.Shutdown = cancel
 	server.Databases = databases.New(s, key)
-	cf.OpenPostgresRelay = server.Databases.OpenPostgresTunnel
-	server.Databases.RemovePostgresTunnel = cf.DeletePostgresTunnel
+	cf.OpenDatabaseRelay = server.Databases.OpenDatabaseTunnel
+	server.Databases.RemoveDatabaseTunnel = cf.DeleteDatabaseTunnel
 	server.Autostart = func(enabled bool) error { return autostart.Configure(enabled, *data, *web) }
 	server.AutostartEnabled = autostart.Enabled
 	adminListener, e := net.Listen("tcp", *adminAddr)
@@ -155,6 +155,8 @@ func run() error {
 	defer sup.Shutdown()
 	defer cf.Stop()
 	cf.Start()
+	defer cf.AccessTCP.Close()
+	cf.AccessTCP.Restore()
 	dbDone := make(chan struct{})
 	go func() { defer close(dbDone); server.Databases.Run(ctx) }()
 	defer func() { cancel(); <-dbDone }()

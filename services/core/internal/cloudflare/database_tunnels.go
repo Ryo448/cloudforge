@@ -11,18 +11,19 @@ import (
 	"time"
 )
 
-const postgresSetting = "cloudflare_postgres"
+// Preserve routes from releases that published only PostgreSQL.
+const databaseTunnelSetting = "cloudflare_postgres"
 
 var accessAudience = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
-type PostgresInput struct {
+type DatabaseTunnelInput struct {
 	Domain    string `json:"domain"`
 	Subdomain string `json:"subdomain"`
 	Team      string `json:"team"`
 	Audience  string `json:"audience"`
 }
 
-type PostgresTunnel struct {
+type DatabaseTunnel struct {
 	Owner      string `json:"owner"`
 	DatabaseID string `json:"databaseId"`
 	TunnelID   string `json:"tunnelId"`
@@ -33,28 +34,28 @@ type PostgresTunnel struct {
 	RecordID   string `json:"recordId,omitempty"`
 }
 
-type PostgresView struct {
+type DatabaseTunnelView struct {
 	Hostname      string   `json:"hostname,omitempty"`
 	Domains       []string `json:"domains,omitempty"`
 	DefaultDomain string   `json:"defaultDomain,omitempty"`
 	Warning       string   `json:"warning,omitempty"`
 }
 
-type postgresRelay struct {
+type databaseRelay struct {
 	port int
 	stop context.CancelFunc
 }
 
-func (m *Manager) PostgresTunnel(owner, id string, local bool) PostgresView {
+func (m *Manager) DatabaseTunnel(owner, id string, local bool) DatabaseTunnelView {
 	cfg := m.Config()
-	view := PostgresView{}
+	view := DatabaseTunnelView{}
 	if local && cfg.TunnelID != "" {
 		view.Domains = m.Domains()
 		view.DefaultDomain = cfg.Domain
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, item := range m.postgresTunnels {
+	for _, item := range m.databaseTunnels {
 		if item.Owner == owner && item.DatabaseID == id && item.TunnelID == cfg.TunnelID && validDomain(item.Hostname) {
 			view.Hostname = item.Hostname
 			break
@@ -63,51 +64,51 @@ func (m *Manager) PostgresTunnel(owner, id string, local bool) PostgresView {
 	return view
 }
 
-func (m *Manager) postgresHostInUse(host string) bool {
+func (m *Manager) databaseTunnelHostInUse(host string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return slices.ContainsFunc(m.postgresTunnels, func(item PostgresTunnel) bool { return item.Hostname == host })
+	return slices.ContainsFunc(m.databaseTunnels, func(item DatabaseTunnel) bool { return item.Hostname == host })
 }
 
-func (m *Manager) AddPostgresTunnel(ctx context.Context, owner, id string, in PostgresInput) (PostgresView, error) {
+func (m *Manager) AddDatabaseTunnel(ctx context.Context, owner, id string, in DatabaseTunnelInput) (DatabaseTunnelView, error) {
 	if !m.op.TryLock() {
-		return PostgresView{}, errors.New("operação Cloudflare em andamento")
+		return DatabaseTunnelView{}, errors.New("operação Cloudflare em andamento")
 	}
 	defer m.op.Unlock()
 	if err := m.noPending(); err != nil {
-		return PostgresView{}, err
+		return DatabaseTunnelView{}, err
 	}
 	cfg := m.Config()
 	zone, host, err := m.destination(cfg, in.Domain, in.Subdomain)
 	if err != nil {
-		return PostgresView{}, err
+		return DatabaseTunnelView{}, err
 	}
 	team := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(in.Team)), ".cloudflareaccess.com")
 	aud := strings.ToLower(strings.TrimSpace(in.Audience))
 	if !label.MatchString(team) || !accessAudience.MatchString(aud) {
-		return PostgresView{}, errors.New("informe a equipe e o AUD do aplicativo Cloudflare Access")
+		return DatabaseTunnelView{}, errors.New("informe a equipe e o AUD do aplicativo Cloudflare Access")
 	}
-	if existing := m.PostgresTunnel(owner, id, false); existing.Hostname != "" {
-		return PostgresView{}, errors.New("desative a rota TCP existente antes de cadastrar outra")
+	if existing := m.DatabaseTunnel(owner, id, false); existing.Hostname != "" {
+		return DatabaseTunnelView{}, errors.New("desative a rota TCP existente antes de cadastrar outra")
 	}
-	if host == cfg.AdminHost || m.postgresHostInUse(host) {
-		return PostgresView{}, errors.New("esse endereço já está em uso no Cloudforge")
+	if host == cfg.AdminHost || m.databaseTunnelHostInUse(host) {
+		return DatabaseTunnelView{}, errors.New("esse endereço já está em uso no Cloudforge")
 	}
 	routes, err := m.Store.Routes()
 	if err != nil {
-		return PostgresView{}, err
+		return DatabaseTunnelView{}, err
 	}
 	for _, route := range routes {
 		if route.Hostname == host {
-			return PostgresView{}, errors.New("esse endereço já está em uso no Cloudforge")
+			return DatabaseTunnelView{}, errors.New("esse endereço já está em uso no Cloudforge")
 		}
 	}
-	if m.OpenPostgresRelay == nil {
-		return PostgresView{}, errors.New("serviço de túnel PostgreSQL indisponível")
+	if m.OpenDatabaseRelay == nil {
+		return DatabaseTunnelView{}, errors.New("serviço de túnel do banco indisponível")
 	}
-	port, stop, err := m.OpenPostgresRelay(owner, id)
+	port, stop, err := m.OpenDatabaseRelay(owner, id)
 	if err != nil {
-		return PostgresView{}, err
+		return DatabaseTunnelView{}, err
 	}
 	keep := false
 	defer func() {
@@ -117,7 +118,7 @@ func (m *Manager) AddPostgresTunnel(ctx context.Context, owner, id string, in Po
 	}()
 	target := cfg
 	target.ZoneID = zone
-	item := PostgresTunnel{Owner: owner, DatabaseID: id, TunnelID: cfg.TunnelID, ZoneID: zone, Hostname: host, Team: team, Audience: aud}
+	item := DatabaseTunnel{Owner: owner, DatabaseID: id, TunnelID: cfg.TunnelID, ZoneID: zone, Hostname: host, Team: team, Audience: aud}
 	if cfg.Mode == "local" {
 		err = m.localDNS(ctx, target, host)
 	} else {
@@ -126,88 +127,88 @@ func (m *Manager) AddPostgresTunnel(ctx context.Context, owner, id string, in Po
 		item.RecordID = route.DNSRecordID
 	}
 	if err != nil {
-		return PostgresView{}, err
+		return DatabaseTunnelView{}, err
 	}
 	m.mu.Lock()
-	next := append(slices.Clone(m.postgresTunnels), item)
-	err = m.Store.Set(postgresSetting, next)
+	next := append(slices.Clone(m.databaseTunnels), item)
+	err = m.Store.Set(databaseTunnelSetting, next)
 	if err == nil {
-		m.postgresTunnels, m.postgresConfigured = next, true
-		m.postgresRelays[id] = postgresRelay{port, stop}
+		m.databaseTunnels, m.databaseTunnelConfigured = next, true
+		m.databaseRelays[id] = databaseRelay{port, stop}
 		keep = true
 	}
 	m.mu.Unlock()
 	if err != nil {
 		_ = m.retireDNS(ctx, cfg, item.dnsRoute())
-		return PostgresView{}, err
+		return DatabaseTunnelView{}, err
 	}
 	m.stopConnector()
 	m.Start()
-	return m.PostgresTunnel(owner, id, true), nil
+	return m.DatabaseTunnel(owner, id, true), nil
 }
 
-func (m *Manager) RemovePostgresTunnel(ctx context.Context, owner, id string) (PostgresView, error) {
-	if m.PostgresTunnel(owner, id, false).Hostname == "" {
-		return m.PostgresTunnel(owner, id, true), nil
+func (m *Manager) RemoveDatabaseTunnel(ctx context.Context, owner, id string) (DatabaseTunnelView, error) {
+	if m.DatabaseTunnel(owner, id, false).Hostname == "" {
+		return m.DatabaseTunnel(owner, id, true), nil
 	}
 	if !m.op.TryLock() {
-		return PostgresView{}, errors.New("operação Cloudflare em andamento")
+		return DatabaseTunnelView{}, errors.New("operação Cloudflare em andamento")
 	}
 	defer m.op.Unlock()
 	cfg := m.Config()
 	m.mu.Lock()
-	index := slices.IndexFunc(m.postgresTunnels, func(item PostgresTunnel) bool {
+	index := slices.IndexFunc(m.databaseTunnels, func(item DatabaseTunnel) bool {
 		return item.Owner == owner && item.DatabaseID == id && item.TunnelID == cfg.TunnelID
 	})
 	if index < 0 {
 		m.mu.Unlock()
-		return m.PostgresTunnel(owner, id, true), nil
+		return m.DatabaseTunnel(owner, id, true), nil
 	}
-	item := m.postgresTunnels[index]
-	next := slices.Delete(slices.Clone(m.postgresTunnels), index, index+1)
-	err := m.Store.Set(postgresSetting, next)
+	item := m.databaseTunnels[index]
+	next := slices.Delete(slices.Clone(m.databaseTunnels), index, index+1)
+	err := m.Store.Set(databaseTunnelSetting, next)
 	if err == nil {
-		m.postgresTunnels, m.postgresConfigured = next, true
+		m.databaseTunnels, m.databaseTunnelConfigured = next, true
 	}
 	m.mu.Unlock()
 	if err != nil {
-		return PostgresView{}, err
+		return DatabaseTunnelView{}, err
 	}
 	// Disconnect the old connector before releasing the private port in its ingress.
 	m.stopConnector()
 	m.mu.Lock()
-	relay := m.postgresRelays[id]
-	delete(m.postgresRelays, id)
+	relay := m.databaseRelays[id]
+	delete(m.databaseRelays, id)
 	m.mu.Unlock()
 	if relay.stop != nil {
 		relay.stop()
 	}
 	m.Start()
-	view := m.PostgresTunnel(owner, id, true)
+	view := m.DatabaseTunnel(owner, id, true)
 	view.Warning = m.retireDNS(ctx, cfg, item.dnsRoute())
 	return view, nil
 }
 
-func (m *Manager) DeletePostgresTunnel(ctx context.Context, owner, id string) error {
-	_, err := m.RemovePostgresTunnel(ctx, owner, id)
+func (m *Manager) DeleteDatabaseTunnel(ctx context.Context, owner, id string) error {
+	_, err := m.RemoveDatabaseTunnel(ctx, owner, id)
 	return err
 }
 
-func (item PostgresTunnel) dnsRoute() model.Route {
+func (item DatabaseTunnel) dnsRoute() model.Route {
 	return model.Route{ZoneID: item.ZoneID, Hostname: item.Hostname, DNSRecordID: item.RecordID}
 }
 
-func (m *Manager) restorePostgresRelays(cfg model.CloudConfig) {
-	if m.OpenPostgresRelay == nil {
+func (m *Manager) restoreDatabaseRelays(cfg model.CloudConfig) {
+	if m.OpenDatabaseRelay == nil {
 		return
 	}
-	for _, item := range m.postgresTunnels {
-		if item.TunnelID != cfg.TunnelID || m.postgresRelays[item.DatabaseID].port != 0 {
+	for _, item := range m.databaseTunnels {
+		if item.TunnelID != cfg.TunnelID || m.databaseRelays[item.DatabaseID].port != 0 {
 			continue
 		}
-		port, stop, err := m.OpenPostgresRelay(item.Owner, item.DatabaseID)
+		port, stop, err := m.OpenDatabaseRelay(item.Owner, item.DatabaseID)
 		if err == nil {
-			m.postgresRelays[item.DatabaseID] = postgresRelay{port, stop}
+			m.databaseRelays[item.DatabaseID] = databaseRelay{port, stop}
 		}
 	}
 }
@@ -218,15 +219,15 @@ type ingressRule struct {
 	OriginRequest map[string]any `json:"originRequest,omitempty"`
 }
 
-func (m *Manager) postgresIngress(cfg model.CloudConfig) []ingressRule {
+func (m *Manager) databaseTunnelIngress(cfg model.CloudConfig) []ingressRule {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var rules []ingressRule
-	for _, item := range m.postgresTunnels {
+	for _, item := range m.databaseTunnels {
 		if item.TunnelID != cfg.TunnelID || !validDomain(item.Hostname) {
 			continue
 		}
-		port := m.postgresRelays[item.DatabaseID].port
+		port := m.databaseRelays[item.DatabaseID].port
 		if port < 1 || port > 65535 || !label.MatchString(item.Team) || !accessAudience.MatchString(item.Audience) {
 			rules = append(rules, ingressRule{Hostname: item.Hostname, Service: "http_status:503"})
 			continue
@@ -238,9 +239,9 @@ func (m *Manager) postgresIngress(cfg model.CloudConfig) []ingressRule {
 	return rules
 }
 
-func (m *Manager) syncPostgresIngress(ctx context.Context) error {
+func (m *Manager) syncDatabaseTunnelIngress(ctx context.Context) error {
 	m.mu.Lock()
-	configured := m.postgresConfigured
+	configured := m.databaseTunnelConfigured
 	m.mu.Unlock()
 	if !configured {
 		return nil

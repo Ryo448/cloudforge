@@ -5,6 +5,7 @@ import type { Session, Snapshot } from "../../../packages/shared-types";
 import { bytes, ErrorMessage, Modal, Spinner } from "../../../packages/ui";
 import { api, message } from "./api";
 import { GoogleDriveSettings } from "./GoogleDriveSettings";
+import { AccessTCPSettings } from "./AccessTCPSettings";
 
 export function SettingsPage({
   state,
@@ -105,6 +106,7 @@ export function SettingsPage({
           <ShieldCheck size={21} />
         </div>
       </section>
+      <AccessTCPSettings />
       <GoogleDriveSettings focusOnMount={focusGoogleDrive} />
       <section className="settings-section">
         <h2>{t("Conta administrativa")}</h2>

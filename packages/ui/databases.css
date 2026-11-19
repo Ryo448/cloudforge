@@ -263,16 +263,6 @@
   color: var(--accent);
   text-decoration: underline;
 }
-.db-tcp-tutorial-command {
-  display: block;
-  margin-top: 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--canvas);
-  padding: 9px 12px;
-  font-size: 12px;
-  user-select: all;
-}
 .db-tcp-tutorial-steps dl {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

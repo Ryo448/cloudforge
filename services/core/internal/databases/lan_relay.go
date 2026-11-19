@@ -9,20 +9,20 @@ import (
 	"time"
 )
 
-// The external listener forwards the PostgreSQL protocol without terminating TLS.
-func listenPostgresLAN(ctx context.Context, network *net.IPNet, port int) (context.CancelFunc, error) {
+// The external listener forwards each database protocol without terminating TLS.
+func listenDatabaseLAN(ctx context.Context, network *net.IPNet, port int) (context.CancelFunc, error) {
 	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: network.IP, Port: port})
 	if err != nil {
 		return nil, err
 	}
 	target := net.JoinHostPort(localHost, strconv.Itoa(port))
-	return servePostgresRelay(ctx, listener, network.Contains, func(ctx context.Context) (net.Conn, error) {
+	return serveDatabaseRelay(ctx, listener, network.Contains, func(ctx context.Context) (net.Conn, error) {
 		dialer := net.Dialer{Timeout: 5 * time.Second}
 		return dialer.DialContext(ctx, "tcp4", target)
 	}), nil
 }
 
-func servePostgresRelay(ctx context.Context, listener *net.TCPListener, allowed func(net.IP) bool, dial func(context.Context) (net.Conn, error)) context.CancelFunc {
+func serveDatabaseRelay(ctx context.Context, listener *net.TCPListener, allowed func(net.IP) bool, dial func(context.Context) (net.Conn, error)) context.CancelFunc {
 	ctx, cancel := context.WithCancel(ctx)
 	context.AfterFunc(ctx, func() { _ = listener.Close() })
 	go func() {
@@ -44,7 +44,7 @@ func servePostgresRelay(ctx context.Context, listener *net.TCPListener, allowed 
 					defer client.Close()
 					upstream, err := dial(ctx)
 					if err == nil {
-						forwardPostgres(ctx, client, upstream.(*net.TCPConn))
+						forwardDatabase(ctx, client, upstream.(*net.TCPConn))
 					}
 				}()
 			default:
@@ -58,7 +58,7 @@ func servePostgresRelay(ctx context.Context, listener *net.TCPListener, allowed 
 	}
 }
 
-func forwardPostgres(ctx context.Context, client, upstream *net.TCPConn) {
+func forwardDatabase(ctx context.Context, client, upstream *net.TCPConn) {
 	defer upstream.Close()
 	stop := context.AfterFunc(ctx, func() {
 		_ = client.Close()
@@ -79,13 +79,13 @@ func forwardPostgres(ctx context.Context, client, upstream *net.TCPConn) {
 	<-sent
 }
 
-type postgresLANInstance struct {
+type databaseLANInstance struct {
 	record
 	stamp string
 	hosts []string
 }
 
-func (m *Manager) postgresLANInstances() ([]int, []postgresLANInstance, error) {
+func (m *Manager) databaseLANInstances() ([]int, []databaseLANInstance, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	records, err := m.records("")
@@ -93,28 +93,28 @@ func (m *Manager) postgresLANInstances() ([]int, []postgresLANInstance, error) {
 		return nil, nil, err
 	}
 	var ports []int
-	var databases []postgresLANInstance
+	var databases []databaseLANInstance
 	for _, r := range records {
-		if r.Engine != "postgresql" || r.ReservedPort < 1 || r.ReservedPort > 65535 {
+		if r.ReservedPort < 1 || r.ReservedPort > 65535 {
 			continue
 		}
 		ports = append(ports, r.ReservedPort)
 		if r.State == "running" && r.Desired == "running" && m.dockerReady && m.tlsAvailable(r) {
-			databases = append(databases, postgresLANInstance{r, m.ready[r.ID], m.lanHosts[r.ID]})
+			databases = append(databases, databaseLANInstance{r, m.ready[r.ID], m.lanHosts[r.ID]})
 		}
 	}
 	slices.Sort(ports)
 	return ports, databases, nil
 }
 
-type postgresLANRelay struct {
+type databaseLANRelay struct {
 	stop  context.CancelFunc
 	stamp string
 	scope string
 }
 
-func (m *Manager) reconcilePostgresLANRelays(ctx context.Context, databases []postgresLANInstance, ports []int, relays map[string]postgresLANRelay) {
-	networks, _ := postgresLANNetworks()
+func (m *Manager) reconcileDatabaseLANRelays(ctx context.Context, databases []databaseLANInstance, ports []int, relays map[string]databaseLANRelay) {
+	networks, _ := databaseLANNetworks()
 	published := make(map[string][]string)
 	active := make(map[string]bool)
 	for _, db := range databases {
@@ -142,18 +142,17 @@ func (m *Manager) reconcilePostgresLANRelays(ctx context.Context, databases []po
 						break
 					}
 				}
-				stop, err := listenPostgresLAN(ctx, network, db.Port)
+				stop, err := listenDatabaseLAN(ctx, network, db.Port)
 				if err != nil {
 					continue
 				}
-				config := credentials.TLS.probeTLSConfig()
-				config.ServerName = host
-				var authenticated int
-				if err = queryPostgres(ctx, config, host, db.Port, Username, credentials.Password, DatabaseName, "SELECT 1", &authenticated); err != nil || authenticated != 1 {
+				probe, err := dialDatabaseTLSAt(ctx, db.record, credentials.TLS, host, db.Port, nil)
+				if err != nil {
 					stop()
 					continue
 				}
-				relays[key] = postgresLANRelay{stop, db.stamp, network.String()}
+				_ = probe.Close()
+				relays[key] = databaseLANRelay{stop, db.stamp, network.String()}
 			}
 			active[key] = true
 			published[db.ID] = append(published[db.ID], host)

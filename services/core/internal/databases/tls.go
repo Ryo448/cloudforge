@@ -125,12 +125,9 @@ func (m *Manager) issueTLS(r record) (*serverTLS, error) {
 	if err != nil {
 		return nil, err
 	}
-	var addresses []net.IP
-	if r.Engine == "postgresql" {
-		addresses, err = postgresLANAddresses()
-		if err != nil {
-			return nil, err
-		}
+	addresses, err := databaseLANAddresses()
+	if err != nil {
+		return nil, err
 	}
 	leaf, err := issueServerTLS(r, issuer, signer, addresses)
 	if err != nil {
@@ -158,8 +155,8 @@ func issueServerTLS(r record, issuer *x509.Certificate, signer *rsa.PrivateKey, 
 	return issueCertificate(template, issuer, signer)
 }
 
-func postgresLANAddresses() ([]net.IP, error) {
-	networks, err := postgresLANNetworks()
+func databaseLANAddresses() ([]net.IP, error) {
+	networks, err := databaseLANNetworks()
 	if err != nil {
 		return nil, err
 	}
@@ -171,10 +168,10 @@ func postgresLANAddresses() ([]net.IP, error) {
 	return addresses, nil
 }
 
-func postgresLANNetworks() (map[string]*net.IPNet, error) {
+func databaseLANNetworks() (map[string]*net.IPNet, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return nil, errors.New("não foi possível consultar os endereços de rede do PostgreSQL")
+		return nil, errors.New("não foi possível consultar os endereços de rede do banco")
 	}
 	networks := make(map[string]*net.IPNet)
 	for _, adapter := range interfaces {
@@ -204,7 +201,7 @@ func postgresLANNetworks() (map[string]*net.IPNet, error) {
 	return networks, nil
 }
 
-func (m *Manager) postgresTLSForLAN(r record, material *serverTLS, addresses []net.IP) (*serverTLS, error) {
+func (m *Manager) tlsForLAN(r record, material *serverTLS, addresses []net.IP) (*serverTLS, error) {
 	pair, err := tls.X509KeyPair(material.PEM, material.Key)
 	if err != nil {
 		return nil, err
@@ -338,10 +335,14 @@ func dialTLS(ctx context.Context, r record, s *serverTLS, port int) (*tls.Conn, 
 }
 
 func dialDatabaseTLS(ctx context.Context, r record, s *serverTLS, port int, client *tls.Certificate) (*tls.Conn, error) {
+	return dialDatabaseTLSAt(ctx, r, s, localHost, port, client)
+}
+
+func dialDatabaseTLSAt(ctx context.Context, r record, s *serverTLS, host string, port int, client *tls.Certificate) (*tls.Conn, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var dialer net.Dialer
-	conn, err := dialer.DialContext(ctx, "tcp4", net.JoinHostPort(localHost, strconv.Itoa(port)))
+	conn, err := dialer.DialContext(ctx, "tcp4", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
 	}
@@ -352,6 +353,7 @@ func dialDatabaseTLS(ctx context.Context, r record, s *serverTLS, port int, clie
 		return nil, err
 	}
 	config := s.probeTLSConfig()
+	config.ServerName = host
 	requested := false
 	if client != nil {
 		// TLS 1.2 completes only after the server has verified the client
