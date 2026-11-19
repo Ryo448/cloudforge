@@ -18,6 +18,7 @@ import (
 	"net"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -158,22 +159,36 @@ func issueServerTLS(r record, issuer *x509.Certificate, signer *rsa.PrivateKey, 
 }
 
 func postgresLANAddresses() ([]net.IP, error) {
-	interfaces, err := net.InterfaceAddrs()
+	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, errors.New("não foi possível consultar os endereços de rede do PostgreSQL")
 	}
 	var addresses []net.IP
-	for _, address := range interfaces {
-		network, ok := address.(*net.IPNet)
-		if !ok {
+	for _, adapter := range interfaces {
+		name := strings.ToLower(adapter.Name)
+		// Container and WSL interfaces come and go as workloads start.
+		dockerBridge := strings.HasPrefix(name, "br-") && len(name) == 15
+		if adapter.Flags&net.FlagUp == 0 || adapter.Flags&(net.FlagLoopback|net.FlagPointToPoint) != 0 ||
+			name == "docker0" || dockerBridge || strings.HasPrefix(name, "vethernet (wsl") || name == "vethernet (default switch)" {
 			continue
 		}
-		ip := network.IP.To4()
-		if ip != nil && (ip.IsGlobalUnicast() || ip.IsLinkLocalUnicast()) {
-			addresses = append(addresses, ip)
+		assigned, err := adapter.Addrs()
+		if err != nil {
+			continue // An interface can disappear between enumeration and lookup.
+		}
+		for _, address := range assigned {
+			network, ok := address.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ip := network.IP.To4()
+			if ip != nil && (ip.IsGlobalUnicast() || ip.IsLinkLocalUnicast()) {
+				addresses = append(addresses, ip)
+			}
 		}
 	}
-	return addresses, nil
+	slices.SortFunc(addresses, func(a, b net.IP) int { return bytes.Compare(a, b) })
+	return slices.CompactFunc(addresses, net.IP.Equal), nil
 }
 
 func (m *Manager) postgresTLSForLAN(r record, material *serverTLS, addresses []net.IP) (*serverTLS, error) {

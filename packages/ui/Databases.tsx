@@ -76,6 +76,8 @@ type Instance = {
   engine: Engine;
   memoryMb?: number;
   host: string;
+  lanHosts?: string[];
+  lanFirewall?: "pending" | "blocked";
   port: number;
   state: string;
   issue?: string;
@@ -1243,9 +1245,7 @@ export function Databases({
             <>
               {heading(
                 t("Conexão"),
-                t(
-                  "Conecte seu cliente de banco na máquina que executa o Cloudforge.",
-                ),
+                t("Use os dados abaixo no seu cliente de banco."),
               )}
               <div className="project-card">
                 <div className="db-row db-endpoints">
@@ -1290,6 +1290,50 @@ export function Databases({
                     />
                   </div>
                 </div>
+                {database.engine === "postgresql" && (
+                  <div className="db-row">
+                    <h3>{t("Acesso pela rede local")}</h3>
+                    {database.lanFirewall === "pending" && (
+                      <p className="muted" role="status">
+                        {t(
+                          "Preparando o firewall. Se o Windows pedir, autorize a alteração.",
+                        )}
+                      </p>
+                    )}
+                    {database.lanFirewall === "blocked" && (
+                      <p className="muted" role="status">
+                        {t(
+                          "O Windows não permitiu configurar o firewall. Reinicie o Cloudforge para tentar novamente.",
+                        )}
+                      </p>
+                    )}
+                    {database.lanHosts?.length ? (
+                      <>
+                        <p className="muted">
+                          {t(
+                            "Em outro computador da rede, use um destes endereços com a porta acima.",
+                          )}
+                        </p>
+                        <div className="db-endpoints">
+                          {database.lanHosts.map((host) => (
+                            <CopyField
+                              key={host}
+                              value={host}
+                              label={`${t("Copiar host")} ${host}`}
+                              copy={copyValue}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="muted">
+                        {database.state === "running"
+                          ? t("Nenhum IPv4 de rede local detectado.")
+                          : t("O endereço aparece quando o banco fica online.")}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {connection(database)}
                 <div className="db-row db-with-action">
                   <div>

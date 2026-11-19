@@ -46,6 +46,8 @@ type Instance struct {
 	Engine             string     `json:"engine"`
 	MemoryMB           *int       `json:"memoryMb,omitempty"`
 	Host               string     `json:"host"`
+	LANHosts           []string   `json:"lanHosts,omitempty"`
+	LANFirewall        string     `json:"lanFirewall,omitempty"`
 	Port               int        `json:"port"`
 	State              string     `json:"state"`
 	Issue              string     `json:"issue,omitempty"`

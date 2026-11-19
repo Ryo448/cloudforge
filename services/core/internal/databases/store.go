@@ -31,6 +31,8 @@ type stored struct {
 func (r record) encode() ([]byte, error) {
 	view := r.Instance
 	view.Latest = nil
+	view.LANHosts = nil
+	view.LANFirewall = ""
 	view.CanRotateTLS = false
 	view.URL = view.connection("")
 	return json.Marshal(stored{view, r.Desired, r.Action})

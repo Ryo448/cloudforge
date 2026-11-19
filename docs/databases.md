@@ -22,9 +22,9 @@ No PostgreSQL, a conta `cloudforge` é superusuária da instância e pode execut
 
 ### Conectar ao PostgreSQL pela rede local
 
-No outro computador, use o IPv4 da máquina que executa o Cloudforge como host, a porta que aparece em **Conexão**, o usuário `cloudforge` e a senha da instância. Configure `verify-full` com a CA baixada. Se o IPv4 da máquina hospedeira mudar, reinicie a instância no Cloudforge para incluir o novo endereço no certificado do servidor.
+Em **Conexão → Acesso pela rede local**, copie o IPv4 detectado pelo Cloudforge. No outro computador, use esse endereço, a porta exibida no painel, o usuário `cloudforge` e a senha da instância. Configure `verify-full` com a CA baixada.
 
-A porta do PostgreSQL fica publicada nas interfaces IPv4 da máquina hospedeira. Se o firewall bloquear a conexão, permita a porta TCP somente para a rede local confiável. No Windows, limite a regra ao perfil **Privado** e à sub-rede local.
+No Windows, o Cloudforge configura automaticamente uma regra de entrada para o Docker Desktop, limitada às portas TCP dos PostgreSQL registrados e à sub-rede local. Confirme a solicitação de administrador do Windows quando ela aparecer. O Core atualiza a regra ao criar ou excluir bancos, inclusive para instalações existentes. Se o IPv4 mudar, o Cloudforge inclui o novo endereço no certificado do servidor automaticamente. A instância pode reiniciar brevemente e a CA continua válida.
 
 ### DBeaver integrado
 

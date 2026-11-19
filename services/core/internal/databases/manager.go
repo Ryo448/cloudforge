@@ -7,6 +7,8 @@ import (
 	"errors"
 	"log"
 	"net"
+	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -33,6 +35,9 @@ type Manager struct {
 	ready         map[string]string
 	latest        map[string]Metric
 	retryAt       map[string]time.Time
+	lanHosts      map[string][]string
+	firewallPorts []int
+	firewallIssue bool
 	jobs          chan struct{}
 	wake          chan struct{}
 }
@@ -40,6 +45,7 @@ type Manager struct {
 func New(store *persistence.Store, installationKey string) *Manager {
 	return &Manager{db: store.DB, vault: store.EnvironmentVault,
 		localKey: deriveLocalKey(installationKey),
+		lanHosts: make(map[string][]string),
 		active:   map[string]bool{}, ready: map[string]string{}, latest: map[string]Metric{}, retryAt: map[string]time.Time{}, jobs: make(chan struct{}, 4), wake: make(chan struct{}, 1)}
 }
 
@@ -71,6 +77,15 @@ func (m *Manager) view(r record) Instance {
 	}
 	if sample, ok := m.latest[r.ID]; ok && r.State == "running" {
 		r.Latest = &sample
+	}
+	if r.Engine == "postgresql" && r.State == "running" && r.TLSValidated {
+		r.LANHosts = m.lanHosts[r.ID]
+		if runtime.GOOS == "windows" && !slices.Contains(m.firewallPorts, r.Port) {
+			r.LANFirewall = "pending"
+			if m.firewallIssue {
+				r.LANFirewall = "blocked"
+			}
+		}
 	}
 	return r.Instance
 }
@@ -246,6 +261,14 @@ func (m *Manager) Run(ctx context.Context) {
 		m.monitorDocker(ctx)
 	}()
 	defer func() { stopMonitor(); <-monitorDone }()
+	if runtime.GOOS == "windows" {
+		firewallDone := make(chan struct{})
+		go func() {
+			defer close(firewallDone)
+			m.monitorLANFirewall(ctx)
+		}()
+		defer func() { stopMonitor(); <-firewallDone }()
+	}
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -382,6 +405,7 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 		defer m.mu.Unlock()
 		delete(m.latest, r.ID)
 		delete(m.ready, r.ID)
+		delete(m.lanHosts, r.ID)
 		_, err := m.db.Exec("DELETE FROM hosted_databases WHERE id=?", r.ID)
 		return err
 	}
@@ -441,6 +465,41 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 	if err = s.TLS.validate(*r); err != nil {
 		return err
 	}
+	var lanHosts []string
+	if r.Engine == "postgresql" {
+		addresses, err := postgresLANAddresses()
+		if err != nil {
+			return err
+		}
+		material, err := m.postgresTLSForLAN(*r, s.TLS, addresses)
+		if err != nil {
+			return err
+		}
+		if material != s.TLS {
+			// The server reads its private key and certificate from tmpfs on start.
+			// Stop before committing the replacement so retries use a consistent pair.
+			if exists && runtime.Running {
+				if err = m.docker.lifecycle(ctx, *r, "stop", "--time", "15"); err != nil {
+					return err
+				}
+				runtime.Running = false
+			}
+			m.mu.Lock()
+			current, err := m.secrets(*r)
+			if err == nil {
+				current.TLS = material
+				err = m.saveSecrets(*r, current)
+			}
+			m.mu.Unlock()
+			if err != nil {
+				return err
+			}
+			s = current
+		}
+		for _, address := range addresses {
+			lanHosts = append(lanHosts, address.String())
+		}
+	}
 	if _, attached := runtime.Networks[containerName(*r)]; exists && r.Engine == "postgresql" && runtime.LocalConfigured && runtime.TLS && !attached {
 		// Docker can keep forwarding to the previous endpoint after a live
 		// network change. Stop before reattaching if the port is unreachable.
@@ -468,22 +527,6 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 		runtime.Running = false
 	}
 	if !exists || !runtime.Running {
-		if r.Engine == "postgresql" {
-			addresses, err := postgresLANAddresses()
-			if err != nil {
-				return err
-			}
-			material, err := m.postgresTLSForLAN(*r, s.TLS, addresses)
-			if err != nil {
-				return err
-			}
-			if material != s.TLS {
-				s.TLS = material
-				if err = m.saveSecrets(*r, s); err != nil {
-					return err
-				}
-			}
-		}
 		if runtime, err = m.start(ctx, r, exists); err != nil {
 			return err
 		}
@@ -605,6 +648,9 @@ func (m *Manager) reconcile(ctx context.Context, r *record) error {
 		return err
 	}
 	r.CredentialsPending = current.Reveal
+	if r.Engine == "postgresql" {
+		m.lanHosts[r.ID] = lanHosts
+	}
 	return m.save(*r)
 }
 

@@ -115,6 +115,27 @@ func TestDockerPostgresAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	port, started := r.Port, *r.StartedAt
+	hosts := m.view(r).LANHosts
+	verifyLAN := func(material *serverTLS) {
+		t.Helper()
+		if len(hosts) == 0 {
+			t.Log("nenhum IPv4 de rede local disponível para testar a conexão")
+			return
+		}
+		var lanErr error
+		for _, host := range hosts {
+			config := material.probeTLSConfig()
+			config.ServerName = host
+			var connected int
+			lanErr = queryPostgres(ctx, config, host, port, Username, s.Password, DatabaseName, "SELECT 1", &connected)
+			if lanErr == nil && connected == 1 {
+				t.Log("conexão TLS verificada pelo IPv4 da rede local")
+				return
+			}
+		}
+		t.Fatalf("falha na conexão TLS pelos IPv4 da rede local: %v", lanErr)
+	}
+	verifyLAN(s.TLS)
 	adminSQL := func(statement string) string {
 		t.Helper()
 		out, err := m.docker.run(ctx, r, "/bin/sh", strings.NewReader(s.Admin+"\n"+statement), "-ec", manageUser, "manage", r.Engine)
@@ -151,7 +172,7 @@ INSERT INTO records VALUES ('preserved');
 			return err
 		}
 		config.Certificates = append(config.Certificates, pair)
-		return queryPostgres(ctx, config, port, user, password, database, statement, dest...)
+		return queryPostgres(ctx, config, localHost, port, user, password, database, statement, dest...)
 	}
 	read := func() {
 		t.Helper()
@@ -282,5 +303,33 @@ hostssl cloudforge cloudforge all scram-sha-256
 		!bytes.Equal(current.TLS.PEM, s.TLS.PEM) || !bytes.Equal(current.TLS.CA, s.TLS.CA) ||
 		!bytes.Equal(current.TLS.Client.PEM, s.TLS.Client.PEM) || !bytes.Equal(current.TLS.Client.Key, s.TLS.Client.Key) {
 		t.Fatalf("a recuperação alterou porta, credenciais ou certificados: %v", err)
+	}
+
+	if len(hosts) != 0 {
+		// Simulate a certificate issued before the host received its current IPv4.
+		_, issuer, signer, err := m.tlsSigner()
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaf, err := issueServerTLS(r, issuer, signer, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := *current.TLS
+		old.certificate = leaf
+		current.TLS = &old
+		if err = m.saveSecrets(r, current); err != nil {
+			t.Fatal(err)
+		}
+		started = *r.StartedAt
+		apply()
+		updated, err := m.secrets(r)
+		if err != nil || !r.StartedAt.After(started) || r.Port != port || updated.Password != s.Password ||
+			!bytes.Equal(updated.TLS.CA, old.CA) || !bytes.Equal(updated.TLS.Client.Key, old.Client.Key) {
+			t.Fatalf("a renovação automática não preservou porta, credenciais e identidade do cliente: %v", err)
+		}
+		verifyLAN(updated.TLS)
+		s = updated
+		read()
 	}
 }

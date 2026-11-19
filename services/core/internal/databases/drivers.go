@@ -124,7 +124,7 @@ func passwordHash(password string) [32]byte {
 	return sha256.Sum256([]byte(password))
 }
 
-func queryPostgres(ctx context.Context, config *tls.Config, port int, user, password, database, query string, dest ...any) error {
+func queryPostgres(ctx context.Context, config *tls.Config, host string, port int, user, password, database, query string, dest ...any) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	// The registration lasts only for this query and is unique to its TLS config.
@@ -134,7 +134,7 @@ func queryPostgres(ctx context.Context, config *tls.Config, port int, user, pass
 	}
 	defer pq.RegisterTLSConfig(key, nil)
 	connector, err := pq.NewConnectorConfig(pq.Config{
-		Host: localHost, Port: uint16(port), User: user, Password: password, Database: database,
+		Host: host, Port: uint16(port), User: user, Password: password, Database: database,
 		SSLMode: pq.SSLMode(key), ConnectTimeout: 5 * time.Second,
 	})
 	if err != nil {
@@ -148,7 +148,7 @@ func queryPostgres(ctx context.Context, config *tls.Config, port int, user, pass
 func (d docker) ready(ctx context.Context, r record, material *serverTLS, password string, localPort int) error {
 	if r.Engine == "postgresql" {
 		var authenticated int
-		err := queryPostgres(ctx, material.probeTLSConfig(), localPort, Username, password, DatabaseName, "SELECT 1", &authenticated)
+		err := queryPostgres(ctx, material.probeTLSConfig(), localHost, localPort, Username, password, DatabaseName, "SELECT 1", &authenticated)
 		var pgErr *pq.Error
 		if errors.As(err, &pgErr) && pgErr.Code == "28P01" {
 			return errPasswordRejected
