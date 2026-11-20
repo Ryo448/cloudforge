@@ -12,6 +12,7 @@ import (
 	"golang.org/x/crypto/argon2"
 	"strings"
 	"time"
+	"unicode"
 )
 
 func Token() string {
@@ -62,10 +63,22 @@ type Session = persistence.SessionRecord
 
 func New(s persistence.AuthRepository) *Auth { dummy, _ := Hash(Token()); return &Auth{s, dummy} }
 func (a *Auth) Ready() bool                  { ready, e := a.Store.HasUsers(); return ready && e == nil }
-func (a *Auth) Bootstrap(username, password string) error {
+func validateUsername(username string) (string, error) {
 	username = strings.TrimSpace(username)
 	if len(username) < 3 || len(username) > 64 {
-		return errors.New("nome de usuário deve ter entre 3 e 64 caracteres")
+		return "", errors.New("nome de usuário deve ter entre 3 e 64 caracteres")
+	}
+	for _, r := range username {
+		if unicode.IsControl(r) {
+			return "", errors.New("nome de usuário contém caracteres inválidos")
+		}
+	}
+	return username, nil
+}
+func (a *Auth) Bootstrap(username, password string) error {
+	username, e := validateUsername(username)
+	if e != nil {
+		return e
 	}
 	hash, e := Hash(password)
 	if e != nil {
@@ -89,18 +102,39 @@ func (a *Auth) Login(username, password, device string) (string, string, error) 
 	if e != nil {
 		return "", "", e
 	}
-	return a.issue(user.ID, device)
+	return a.issue("", user.ID, user.Username, user.AuthEpoch, device)
 }
-func newSession(userID, device string) (Session, string, string) {
+func (a *Auth) IssueFederated(issuerNodeID, userID, username string, authEpoch int64, device string) (string, string, error) {
+	if issuerNodeID == "" || userID == "" {
+		return "", "", errors.New("identidade federada inválida")
+	}
+	return a.issue(issuerNodeID, userID, username, authEpoch, device)
+}
+func newSession(issuerNodeID, userID, username string, authEpoch int64, device string) (Session, string, string) {
 	token, csrf := Token(), Token()
 	if len(device) > 256 {
 		device = device[:256]
 	}
+	if authEpoch <= 0 {
+		authEpoch = 1
+	}
 	now := time.Now().Unix()
-	return Session{ID: ID(), UserID: userID, TokenHash: Digest(token), CSRFHash: Digest(csrf), CreatedAt: now, ExpiresAt: now + 30*86400, Device: device}, token, csrf
+	return Session{
+		ID:              ID(),
+		IssuerNodeID:    issuerNodeID,
+		UserID:          userID,
+		Username:        username,
+		TokenHash:       Digest(token),
+		CSRFHash:        Digest(csrf),
+		CreatedAt:       now,
+		ExpiresAt:       now + 30*86400,
+		Device:          device,
+		AuthEpoch:       authEpoch,
+		LastOriginCheck: now,
+	}, token, csrf
 }
-func (a *Auth) issue(userID, device string) (string, string, error) {
-	session, token, csrf := newSession(userID, device)
+func (a *Auth) issue(issuerNodeID, userID, username string, authEpoch int64, device string) (string, string, error) {
+	session, token, csrf := newSession(issuerNodeID, userID, username, authEpoch, device)
 	return token, csrf, a.Store.CreateSession(session)
 }
 func (a *Auth) Session(token string) (Session, error) { return a.Store.LookupSession(Digest(token)) }
@@ -113,22 +147,74 @@ func (a *Auth) Renew(token, device string) (string, string, error) {
 	if e != nil {
 		return "", "", e
 	}
-	session, next, csrf := newSession(old.UserID, device)
+	session, next, csrf := newSession(old.IssuerNodeID, old.UserID, old.Username, old.AuthEpoch, device)
+	session.LastOriginCheck = old.LastOriginCheck
 	return next, csrf, a.Store.RotateSession(old.ID, session)
 }
 func (a *Auth) Sessions() ([]Session, error) { return a.Store.ListSessions() }
 func (a *Auth) Revoke(id string) error       { return a.Store.RevokeSession(id) }
-func (a *Auth) ChangePassword(current, next string) error {
+func (a *Auth) RevokeIssuer(issuerNodeID string) error {
+	return a.Store.RevokeSessionsByIssuer(issuerNodeID)
+}
+func (a *Auth) RevokePrincipal(issuerNodeID, userID string) error {
+	return a.Store.RevokeSessionsByPrincipal(issuerNodeID, userID)
+}
+func (a *Auth) RevokeBelowEpoch(issuerNodeID, userID string, minEpoch int64) error {
+	return a.Store.RevokeSessionsByEpoch(issuerNodeID, userID, minEpoch)
+}
+func (a *Auth) TouchOriginCheck(sessionID string, checkedAt int64) error {
+	return a.Store.UpdateSessionOriginCheck(sessionID, checkedAt)
+}
+func (a *Auth) ChangeUsername(currentPassword, nextUsername string) error {
+	_, _, _, err := a.ChangeUsernameEpoch(currentPassword, nextUsername)
+	return err
+}
+func (a *Auth) ChangeUsernameEpoch(currentPassword, nextUsername string) (string, string, int64, error) {
 	user, e := a.Store.Admin()
 	if e != nil {
-		return e
+		return "", "", 0, e
+	}
+	if !Verify(user.PasswordHash, currentPassword) {
+		return "", "", 0, errors.New("senha atual inválida")
+	}
+	username, e := validateUsername(nextUsername)
+	if e != nil {
+		return "", "", 0, e
+	}
+	if username == user.Username {
+		return "", "", 0, errors.New("o novo nome de usuário deve ser diferente do atual")
+	}
+	if e = a.Store.SetUsernameAndRevoke(user.ID, username); e != nil {
+		return "", "", 0, e
+	}
+	updated, err := a.Store.UserByID(user.ID)
+	if err != nil {
+		return user.ID, username, user.AuthEpoch + 1, nil
+	}
+	return updated.ID, updated.Username, updated.AuthEpoch, nil
+}
+func (a *Auth) ChangePassword(current, next string) error {
+	_, _, err := a.ChangePasswordEpoch(current, next)
+	return err
+}
+func (a *Auth) ChangePasswordEpoch(current, next string) (string, int64, error) {
+	user, e := a.Store.Admin()
+	if e != nil {
+		return "", 0, e
 	}
 	if !Verify(user.PasswordHash, current) {
-		return errors.New("senha atual inválida")
+		return "", 0, errors.New("senha atual inválida")
 	}
 	hash, e := Hash(next)
 	if e != nil {
-		return e
+		return "", 0, e
 	}
-	return a.Store.SetPasswordAndRevoke(user.ID, hash)
+	if e = a.Store.SetPasswordAndRevoke(user.ID, hash); e != nil {
+		return "", 0, e
+	}
+	updated, err := a.Store.UserByID(user.ID)
+	if err != nil {
+		return user.ID, user.AuthEpoch + 1, nil
+	}
+	return updated.ID, updated.AuthEpoch, nil
 }

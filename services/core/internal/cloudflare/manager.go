@@ -40,6 +40,8 @@ type Manager struct {
 	loginCancel              context.CancelFunc
 	loginError               string
 	runLocalCLI              func(context.Context, ...string) ([]byte, error)
+	localMetricsAddr         string
+	checkLocalTunnel         func(context.Context, model.CloudConfig) (bool, error)
 	databaseTunnels          []DatabaseTunnel
 	databaseRelays           map[string]databaseRelay
 	databaseTunnelConfigured bool
@@ -65,9 +67,12 @@ func (m *Manager) Status(ctx context.Context) map[string]any {
 	m.mu.Unlock()
 	connected := false
 	if cfg.Mode == "local" && pid > 0 {
-		connected = m.checkHTTPS(ctx, cfg.AdminHost) == nil
+		ok, _ := m.localTunnelConnected(ctx, cfg)
+		connected = ok
 		if connected {
 			state = "connected"
+		} else {
+			state = "connecting"
 		}
 	} else if cfg.TunnelID != "" && cfg.Mode != "local" {
 		var conns []map[string]any
@@ -83,7 +88,21 @@ func (m *Manager) Status(ctx context.Context) map[string]any {
 		cancel()
 	}
 	pending, _ := m.Store.PendingOperations()
-	return map[string]any{"configuration": cfg, "status": state, "connected": connected, "pid": pid, "lastError": last, "pendingOperations": pending, "browser": m.BrowserStatus()}
+	panelPublished := !cfg.PanelDisabled && cfg.AdminHost != ""
+	return map[string]any{
+		"configuration":       cfg,
+		"status":              state,
+		"connected":           connected,
+		"tunnelHealthy":       connected,
+		"panelPublished":      panelPublished,
+		"panelCleanupPending": cfg.PanelCleanupError != "",
+		"panelCleanupError":   cfg.PanelCleanupError,
+		"retiredAdminHost":    cfg.RetiredAdminHost,
+		"pid":                 pid,
+		"lastError":           last,
+		"pendingOperations":   pending,
+		"browser":             m.BrowserStatus(),
+	}
 }
 
 var label = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -115,7 +134,10 @@ type journal struct {
 }
 
 func (m *Manager) ingress(ctx context.Context, cfg model.CloudConfig, routes []model.Route) error {
-	rules := []ingressRule{{Hostname: cfg.AdminHost, Service: m.Origin}}
+	rules := []ingressRule{}
+	if !cfg.PanelDisabled && cfg.AdminHost != "" {
+		rules = append(rules, ingressRule{Hostname: cfg.AdminHost, Service: m.Origin})
+	}
 	for _, r := range routes {
 		rules = append(rules, ingressRule{Hostname: r.Hostname, Service: m.Origin})
 	}
@@ -304,7 +326,7 @@ func (m *Manager) routeLegacy(ctx context.Context, projectID, sub string, port i
 	if e != nil {
 		return model.Route{}, e
 	}
-	if host == cfg.AdminHost || m.databaseTunnelHostInUse(host) {
+	if (cfg.AdminHost != "" && host == cfg.AdminHost) || (cfg.RetiredAdminHost != "" && cfg.PanelCleanupError != "" && host == cfg.RetiredAdminHost) || m.databaseTunnelHostInUse(host) {
 		return model.Route{}, errors.New("subdomínio reservado para a dashboard")
 	}
 	old, e := m.Store.Routes()
@@ -418,7 +440,14 @@ func (m *Manager) Start() {
 	m.restoreDatabaseRelays(cfg)
 	m.mu.Unlock()
 	go func() {
-		defer func() { m.mu.Lock(); m.cancel = nil; m.pid = 0; close(m.done); m.mu.Unlock() }()
+		defer func() {
+			m.mu.Lock()
+			m.cancel = nil
+			m.pid = 0
+			m.localMetricsAddr = ""
+			close(m.done)
+			m.mu.Unlock()
+		}()
 		attempt := 0
 		for {
 			if ctx.Err() != nil {
@@ -524,6 +553,12 @@ func (m *Manager) Recover(ctx context.Context) error {
 		if !strings.HasPrefix(kind, "cloudflare-") {
 			continue
 		}
+		if kind == panelCleanupOpKind {
+			if err := m.retryPanelCleanupLocked(ctx); err != nil {
+				return err
+			}
+			continue
+		}
 		raw, ok := op["payload"].(json.RawMessage)
 		if !ok {
 			return errors.New("diário de recuperação inválido")
@@ -608,7 +643,8 @@ func (m *Manager) noPending() error {
 		return e
 	}
 	for _, op := range pending {
-		if strings.HasPrefix(op["kind"].(string), "cloudflare-") {
+		kind, _ := op["kind"].(string)
+		if strings.HasPrefix(kind, "cloudflare-") && kind != panelCleanupOpKind {
 			return errors.New("há uma operação Cloudflare incompleta; use Recuperar operações antes de continuar")
 		}
 	}
@@ -632,18 +668,22 @@ func (m *Manager) cleanup(ctx context.Context, routes []model.Route, tunnelID st
 }
 func (m *Manager) PublicURL() string {
 	cfg := m.Config()
-	if cfg.AdminHost == "" {
+	if cfg.PanelDisabled || cfg.AdminHost == "" {
 		return ""
 	}
 	return "https://" + cfg.AdminHost
 }
 func (m *Manager) Verify(ctx context.Context) error {
-	if cfg := m.Config(); cfg.Mode == "local" {
-		return m.checkHTTPS(ctx, cfg.AdminHost)
-	}
+	cfg := m.Config()
 	status := m.Status(ctx)
 	if status["connected"] != true {
 		return errors.New("túnel configurado, mas ainda sem conexão ativa; aguarde e verifique novamente")
+	}
+	if cfg.PanelDisabled || cfg.AdminHost == "" {
+		return nil
+	}
+	if cfg.Mode == "local" {
+		return m.checkHTTPS(ctx, cfg.AdminHost)
 	}
 	req, e := http.NewRequestWithContext(ctx, "GET", m.PublicURL()+"/api/health", nil)
 	if e != nil {

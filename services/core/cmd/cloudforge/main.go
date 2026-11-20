@@ -168,6 +168,10 @@ func run() error {
 		defer snapshotService.Close()
 	}
 	go server.Monitor(ctx)
+	if server.Cluster != nil {
+		server.Cluster.Start(ctx)
+		defer server.Cluster.Stop()
+	}
 	go func() {
 		repairCtx, stop := context.WithTimeout(ctx, 60*time.Second)
 		defer stop()

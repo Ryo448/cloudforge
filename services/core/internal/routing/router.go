@@ -30,7 +30,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		host = h
 	}
 	cfg := r.Cloud.Config()
-	if host == cfg.AdminHost || (r.Development && (host == "127.0.0.1" || host == "localhost")) {
+	if cfg.PanelDisabled {
+		if cfg.RetiredAdminHost != "" && host == cfg.RetiredAdminHost {
+			r.showError(w, req, "not-found")
+			return
+		}
+	} else if (cfg.AdminHost != "" && host == cfg.AdminHost) || (r.Development && (host == "127.0.0.1" || host == "localhost")) {
 		r.Dashboard.ServeHTTP(w, req)
 		return
 	}

@@ -38,7 +38,7 @@ const profileDir = path.join(dataDir, "electron");
 require("node:fs").mkdirSync(profileDir, { recursive: true });
 app.setPath("userData", profileDir);
 const address = "http://127.0.0.1:28931";
-const coreAPIVersion = 8;
+const coreAPIVersion = 10;
 const appVersion = require("../package.json").version;
 const coreManager = createCoreManager({
   binary: path.join(
@@ -422,12 +422,17 @@ const routes = [
   ["DELETE", /^\/api\/access-tcp\/[A-Za-z0-9_-]{22}$/],
   [
     "GET",
-    /^\/api\/(health|state|projects|sessions|cloudflare\/(domains|zones|status))$/,
+    /^\/api\/(health|state|projects|sessions|cloudflare\/(domains|zones|status)|cluster\/(status|audit))$/,
   ],
   [
     "POST",
-    /^\/api\/(setup|projects|projects\/inspect|password|autostart|cloudflare\/(login|cancel-login|provision|verify|recover|panel-domain))$/,
+    /^\/api\/(setup|projects|projects\/inspect|username|password|autostart|cloudflare\/(login|cancel-login|provision|verify|recover|panel-domain|retry-panel-cleanup|republish-panel)|cluster\/(primary\/enable|invites|link|unlink-cancel))$/,
   ],
+  ["PATCH", /^\/api\/cluster\/profile$/],
+  ["POST", /^\/api\/cluster\/nodes\/[A-Za-z0-9_-]+\/(approve|reject)$/],
+  ["PATCH", /^\/api\/cluster\/nodes\/[A-Za-z0-9_-]+$/],
+  ["DELETE", /^\/api\/cluster\/nodes\/[A-Za-z0-9_-]+$/],
+  ["PUT", /^\/api\/cluster\/grants$/],
   ["GET", /^\/api\/projects\/[A-Za-z0-9_-]+\/(logs|files|file)(\?[^#]*)?$/],
   ["PUT", /^\/api\/projects\/[A-Za-z0-9_-]+\/file$/],
   [

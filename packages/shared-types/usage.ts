@@ -2,22 +2,27 @@ import type { Execution, UsageSample } from "./index";
 
 type ProjectWithUsage = {
   id: string;
+  nodeId?: string;
   execution: Pick<Execution, "actualState" | "startedAt" | "cpu" | "memory">;
   usageHistory?: UsageSample[];
 };
 
 const windowMs = 120_000;
 
+function projectKey(project: Pick<ProjectWithUsage, "id" | "nodeId">) {
+  return `${project.nodeId || "local"}:${project.id}`;
+}
+
 export function mergeProjectUsage<T extends ProjectWithUsage>(
   previous: T[] | null | undefined,
   incoming: T[],
 ): T[] {
   const oldProjects = new Map(
-    previous?.map((project) => [project.id, project]),
+    previous?.map((project) => [projectKey(project), project]),
   );
   const now = Date.now();
   return incoming.map((project) => {
-    const old = oldProjects.get(project.id);
+    const old = oldProjects.get(projectKey(project));
     const previousHistory =
       old?.execution.startedAt === project.execution.startedAt
         ? (old?.usageHistory?.filter(

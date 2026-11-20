@@ -1,11 +1,13 @@
-import { t } from "./i18n";
+import { getLocale, t } from "./i18n";
 import { useId, useState } from "react";
 import {
   ArrowUpRight,
   ChevronRight,
   Cpu,
   MemoryStick,
+  Server,
   Timer,
+  WifiOff,
 } from "lucide-react";
 import type { RemoteProject, UsageSample } from "../shared-types";
 import pythonLogo from "../../assets/runtime/python.png";
@@ -210,10 +212,18 @@ export function ProjectCard({
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
-  const { execution, hostname } = project;
+  const { execution, hostname, nodeName, nodeOnline, nodeLastSeenAt } = project;
+  const hostOffline = nodeOnline === false;
   const runtime = project.runtime === "node" ? "Node.js" : "Python";
   const domain = hostname ? `https://${hostname}` : "";
+  const lastSeenLabel = nodeLastSeenAt
+    ? new Date(nodeLastSeenAt * 1000).toLocaleString(getLocale(), {
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : "";
   async function run(action: string) {
+    if (hostOffline) return;
     setConfirm("");
     setError("");
     setBusy(true);
@@ -228,7 +238,10 @@ export function ProjectCard({
     }
   }
   return (
-    <article className="project-card" aria-labelledby={title}>
+    <article
+      className={hostOffline ? "project-card is-host-offline" : "project-card"}
+      aria-labelledby={title}
+    >
       <div className="project-card-header">
         <RuntimeLogo runtime={project.runtime} />
         <div className="project-card-identity">
@@ -246,10 +259,36 @@ export function ProjectCard({
               project.name
             )}
           </h2>
-          <span className="muted">{runtime}</span>
+          <div className="project-card-subline">
+            <span className="muted">{runtime}</span>
+            {nodeName && (
+              <span
+                className={
+                  hostOffline ? "host-badge offline" : "host-badge online"
+                }
+                title={nodeName}
+              >
+                <Server size={11} aria-hidden="true" />
+                {nodeName}
+              </span>
+            )}
+          </div>
         </div>
         {busy && <Spinner />}
       </div>
+      {hostOffline && (
+        <div className="host-offline-banner" role="status">
+          <WifiOff size={13} aria-hidden="true" />
+          <span>
+            {lastSeenLabel
+              ? t(
+                  "Computador offline · último estado conhecido em {0}. Ações bloqueadas até reconectar.",
+                  lastSeenLabel,
+                )
+              : t("Computador offline. Ações bloqueadas até reconectar.")}
+          </span>
+        </div>
+      )}
       <div className="project-card-chart-header">
         {domain && (
           <a
@@ -306,7 +345,7 @@ export function ProjectCard({
         <ErrorMessage error={error || execution.lastError} />
         <Actions
           state={execution.actualState}
-          busy={busy}
+          busy={busy || hostOffline}
           onAction={(action) =>
             action === "start" ? void run(action) : setConfirm(action)
           }

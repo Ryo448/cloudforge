@@ -91,7 +91,7 @@ func (m *Manager) AddDatabaseTunnel(ctx context.Context, owner, id string, in Da
 	if existing := m.DatabaseTunnel(owner, id, false); existing.Hostname != "" {
 		return DatabaseTunnelView{}, errors.New("desative a rota TCP existente antes de cadastrar outra")
 	}
-	if host == cfg.AdminHost || m.databaseTunnelHostInUse(host) {
+	if (cfg.AdminHost != "" && host == cfg.AdminHost) || (cfg.RetiredAdminHost != "" && cfg.PanelCleanupError != "" && host == cfg.RetiredAdminHost) || m.databaseTunnelHostInUse(host) {
 		return DatabaseTunnelView{}, errors.New("esse endereço já está em uso no Cloudforge")
 	}
 	routes, err := m.Store.Routes()

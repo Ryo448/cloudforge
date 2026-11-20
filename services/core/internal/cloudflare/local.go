@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -211,7 +212,7 @@ func (m *Manager) localCLIWithCert(ctx context.Context, path string, args ...str
 	cmd := exec.CommandContext(ctx, binary, append([]string{"tunnel", "--origincert", path}, args...)...)
 	cmd.Dir, cmd.Env = home, connectorEnv(home)
 	processes.Configure(cmd)
-	if args[0] == "list" {
+	if args[0] == "list" || args[0] == "info" {
 		// cloudflared writes JSON to stdout and diagnostic messages to stderr.
 		return cmd.Output()
 	}
@@ -317,6 +318,16 @@ func (m *Manager) ProvisionLocal(ctx context.Context, domain, sub string) (model
 	return cfg, nil
 }
 
+func reserveLoopbackAddr() (string, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+	return addr, nil
+}
+
 func (m *Manager) localRun(binary string, cfg model.CloudConfig) (*exec.Cmd, error) {
 	if !tunnelID.MatchString(cfg.TunnelID) || !validDomain(cfg.Domain) {
 		return nil, errors.New("configuração local do túnel inválida")
@@ -333,16 +344,83 @@ func (m *Manager) localRun(binary string, cfg model.CloudConfig) (*exec.Cmd, err
 			fmt.Fprintf(&contents, "    originRequest: %s\n", raw)
 		}
 	}
-	// The Core checks the Host against the panel and registered HTTP projects.
+	// Explicitly block a retired panel hostname at the tunnel ingress when the panel is unpublished.
+	if cfg.PanelDisabled && cfg.RetiredAdminHost != "" && validDomain(cfg.RetiredAdminHost) {
+		fmt.Fprintf(&contents, "  - hostname: %s\n    service: \"http_status:404\"\n", strconv.Quote(cfg.RetiredAdminHost))
+	}
+	// The Core checks the Host against the panel (when published) and registered HTTP projects.
 	fmt.Fprintf(&contents, "  - service: %s\n", strconv.Quote(m.Origin))
 	home := m.localHome()
 	config := filepath.Join(home, "config.yml")
 	if err := os.WriteFile(config, []byte(contents.String()), 0600); err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(binary, "--no-autoupdate", "tunnel", "--config", config, "run", cfg.TunnelID)
+	args := []string{"--no-autoupdate", "tunnel"}
+	if addr, err := reserveLoopbackAddr(); err == nil {
+		m.mu.Lock()
+		m.localMetricsAddr = addr
+		m.mu.Unlock()
+		args = append(args, "--metrics", addr)
+	}
+	args = append(args, "--config", config, "run", cfg.TunnelID)
+	cmd := exec.Command(binary, args...)
 	cmd.Dir, cmd.Env = home, connectorEnv(home)
 	return cmd, nil
+}
+
+var loopbackHealthClient = &http.Client{
+	Timeout:   2 * time.Second,
+	Transport: &http.Transport{Proxy: nil},
+}
+
+func (m *Manager) localTunnelConnected(ctx context.Context, cfg model.CloudConfig) (bool, error) {
+	m.mu.Lock()
+	hook := m.checkLocalTunnel
+	metricsAddr := m.localMetricsAddr
+	m.mu.Unlock()
+	if hook != nil {
+		return hook(ctx, cfg)
+	}
+	if metricsAddr != "" {
+		checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		req, err := http.NewRequestWithContext(checkCtx, http.MethodGet, "http://"+metricsAddr+"/ready", nil)
+		if err == nil {
+			res, doErr := loopbackHealthClient.Do(req)
+			cancel()
+			if doErr == nil {
+				defer res.Body.Close()
+				if res.StatusCode == http.StatusOK {
+					var ready struct {
+						ReadyConnections *int `json:"readyConnections"`
+					}
+					if json.NewDecoder(io.LimitReader(res.Body, 4096)).Decode(&ready) == nil && ready.ReadyConnections != nil {
+						return *ready.ReadyConnections > 0, nil
+					}
+					return true, nil
+				}
+				return false, nil
+			}
+		} else {
+			cancel()
+		}
+	}
+	// Fallback: inspect active connector sessions via cloudflared CLI without probing AdminHost.
+	if cfg.TunnelID == "" {
+		return false, nil
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	output, err := m.localCLI(checkCtx, "info", "--output", "json", cfg.TunnelID)
+	if err != nil {
+		return false, err
+	}
+	var info struct {
+		Conns []any `json:"conns"`
+	}
+	if json.Unmarshal(output, &info) != nil {
+		return false, errors.New("resposta inesperada ao verificar conexões do túnel")
+	}
+	return len(info.Conns) > 0, nil
 }
 
 func (m *Manager) checkHTTPS(ctx context.Context, host string) error {

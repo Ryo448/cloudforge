@@ -69,13 +69,18 @@ type Route struct {
 	DNSRecordID string `json:"dnsRecordId"`
 }
 type CloudConfig struct {
-	Mode      string `json:"mode,omitempty"`
-	AccountID string `json:"accountId"`
-	ZoneID    string `json:"zoneId"`
-	Domain    string `json:"domain"`
-	AdminHost string `json:"adminHost"`
-	TunnelID  string `json:"tunnelId"`
-	Name      string `json:"name"`
+	Mode               string `json:"mode,omitempty"`
+	AccountID          string `json:"accountId"`
+	ZoneID             string `json:"zoneId"`
+	Domain             string `json:"domain"`
+	AdminHost          string `json:"adminHost"`
+	TunnelID           string `json:"tunnelId"`
+	Name               string `json:"name"`
+	PanelDisabled      bool   `json:"panelDisabled,omitempty"`
+	RetiredAdminHost   string `json:"retiredAdminHost,omitempty"`
+	RetiredAdminZoneID string `json:"retiredAdminZoneId,omitempty"`
+	RetiredAdminRecord string `json:"retiredAdminRecordId,omitempty"`
+	PanelCleanupError  string `json:"panelCleanupError,omitempty"`
 }
 type Log struct {
 	Seq     uint64    `json:"seq"`

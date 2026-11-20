@@ -19,10 +19,12 @@ import {
   Network,
   Plus,
   Search,
+  Server,
   ShieldCheck,
   Settings2,
   SlidersHorizontal,
   TriangleAlert,
+  WifiOff,
 } from "lucide-react";
 import {
   Actions,
@@ -75,6 +77,10 @@ type Metric = {
 };
 type Instance = {
   id: string;
+  nodeId?: string;
+  nodeName?: string;
+  nodeOnline?: boolean;
+  nodeLastSeenAt?: number;
   name: string;
   engine: Engine;
   memoryMb?: number;
@@ -92,8 +98,18 @@ type Instance = {
   canRotateTls?: boolean;
   latest?: Metric;
 };
+type CatalogNode = {
+  nodeId: string;
+  nodeName: string;
+  isPrimary: boolean;
+  online: boolean;
+  docker: boolean;
+  dockerStatus?: string;
+  lastSeenAt: number;
+};
 type Catalog = {
   databases: Instance[];
+  nodes?: CatalogNode[];
   docker: boolean;
   dockerStatus?:
     "starting" | "missing" | "unavailable" | "incompatible" | "running";
@@ -111,8 +127,27 @@ export type DBeaverDatabase = Pick<
   "id" | "name" | "engine" | "state" | "tlsValidated"
 >;
 type Section = DatabaseSection;
-type Request = <T>(method: string, path: string, body?: unknown) => Promise<T>;
+type Request = <T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  headers?: Record<string, string>,
+) => Promise<T>;
 const base = "/api/databases";
+const dbKey = (db: Pick<Instance, "id" | "nodeId">, multiNode?: boolean) =>
+  multiNode && db.nodeId ? `${db.nodeId}:${db.id}` : db.id;
+const dbPath = (
+  db: Pick<Instance, "id" | "nodeId">,
+  multiNode?: boolean,
+  suffix = "",
+) =>
+  multiNode && db.nodeId
+    ? `/api/nodes/${encodeURIComponent(db.nodeId)}/databases/${db.id}${suffix}`
+    : `${base}/${db.id}${suffix}`;
+const newOperationId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID().replaceAll("-", "")
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
 const dockerInstallGuides = [
   ["Windows", "https://docs.docker.com/desktop/setup/install/windows-install/"],
   ["Linux", "https://docs.docker.com/engine/install/"],
@@ -136,15 +171,26 @@ const displayState = (state: string) =>
 function CertificateDownload({
   database,
   request,
+  multiNode,
+  disabled,
 }: {
   database: Instance;
   request: Request;
+  multiNode?: boolean;
+  disabled?: boolean;
 }) {
   const [loadingFormat, setLoadingFormat] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState("pem");
+  const [pendingKeyAction, setPendingKeyAction] = useState<
+    "download" | "copy" | null
+  >(null);
+  const [reauthUser, setReauthUser] = useState("");
+  const [reauthPass, setReauthPass] = useState("");
+  const [reauthBusy, setReauthBusy] = useState(false);
+  const [reauthError, setReauthError] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -188,8 +234,9 @@ function CertificateDownload({
     };
   }, [open]);
 
-  async function getFile(format: string) {
+  async function getFile(format: string, stepUpToken?: string) {
     if (
+      disabled ||
       !database.tlsValidated ||
       loadingFormat ||
       !["pem", "crt", "key"].includes(format)
@@ -201,7 +248,9 @@ function CertificateDownload({
     try {
       return await request<{ filename: string; content: string }>(
         "GET",
-        `${base}/${database.id}/certificates/${format}`,
+        dbPath(database, multiNode, `/certificates/${format}`),
+        undefined,
+        stepUpToken ? { "X-Step-Up-Token": stepUpToken } : undefined,
       );
     } catch (e) {
       setError(displayError(e));
@@ -211,27 +260,45 @@ function CertificateDownload({
     }
   }
 
+  async function triggerDownload(file: { filename: string; content: string }) {
+    const url = URL.createObjectURL(
+      new Blob([file.content], { type: "application/x-pem-file" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setOpen(false);
+  }
+
   async function download(format: string) {
+    if (multiNode && format === "key") {
+      setOpen(false);
+      setReauthError("");
+      setReauthPass("");
+      setPendingKeyAction("download");
+      return;
+    }
     const file = await getFile(format);
     if (!file) return;
     try {
-      const url = URL.createObjectURL(
-        new Blob([file.content], { type: "application/x-pem-file" }),
-      );
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = file.filename;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setOpen(false);
+      await triggerDownload(file);
     } catch (e) {
       setError(displayError(e));
     }
   }
 
   async function copy(format: string) {
+    if (multiNode && format === "key") {
+      setOpen(false);
+      setReauthError("");
+      setReauthPass("");
+      setPendingKeyAction("copy");
+      return;
+    }
     const file = await getFile(format);
     if (!file) return;
     try {
@@ -240,6 +307,43 @@ function CertificateDownload({
       setOpen(false);
     } catch (e) {
       setError(displayError(e));
+    }
+  }
+
+  async function submitKeyStepUp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (reauthBusy || !pendingKeyAction) return;
+    setReauthBusy(true);
+    setReauthError("");
+    try {
+      const step = await request<{ stepUpToken: string }>(
+        "POST",
+        "/api/auth/step-up",
+        {
+          username: reauthUser,
+          password: reauthPass,
+          targetNodeId: database.nodeId || "",
+          resourceId: database.id,
+          action: "database.export_key",
+        },
+      );
+      setReauthPass("");
+      const file = await getFile("key", step.stepUpToken);
+      if (!file) {
+        setPendingKeyAction(null);
+        return;
+      }
+      if (pendingKeyAction === "download") {
+        await triggerDownload(file);
+      } else {
+        await navigator.clipboard.writeText(file.content);
+        setCopied(true);
+      }
+      setPendingKeyAction(null);
+    } catch (e) {
+      setReauthError(displayError(e));
+    } finally {
+      setReauthBusy(false);
     }
   }
 
@@ -253,7 +357,7 @@ function CertificateDownload({
           aria-label={t("Selecionar certificado")}
           aria-haspopup="true"
           aria-expanded={open}
-          disabled={!!loadingFormat || !database.tlsValidated}
+          disabled={disabled || !!loadingFormat || !database.tlsValidated}
           onClick={() => {
             if (open) {
               setOpen(false);
@@ -333,7 +437,9 @@ function CertificateDownload({
                     type="button"
                     aria-label={t("Baixar {0}", label)}
                     title={t("Baixar {0}", label)}
-                    disabled={!!loadingFormat || !database.tlsValidated}
+                    disabled={
+                      disabled || !!loadingFormat || !database.tlsValidated
+                    }
                     onClick={() => void download(value)}
                   >
                     <DownloadIcon />
@@ -343,7 +449,9 @@ function CertificateDownload({
                     type="button"
                     aria-label={t("Copiar {0}", label)}
                     title={t("Copiar {0}", label)}
-                    disabled={!!loadingFormat || !database.tlsValidated}
+                    disabled={
+                      disabled || !!loadingFormat || !database.tlsValidated
+                    }
                     onClick={() => void copy(value)}
                   >
                     <CopyIcon />
@@ -358,6 +466,59 @@ function CertificateDownload({
         <ErrorMessage error={error} />
         {copied && <span>{t("Conteúdo copiado.")}</span>}
       </div>
+      {pendingKeyAction && (
+        <Modal
+          title={t("Confirmar identidade para exportar chave privada")}
+          onClose={() => !reauthBusy && setPendingKeyAction(null)}
+          closeDisabled={reauthBusy}
+          className="database-rotation-modal"
+        >
+          <form onSubmit={submitKeyStepUp} className="db-password-form">
+            <p className="muted">
+              {t(
+                "Informe o usuário e a senha da sua conta de origem para autorizar a exportação única da chave privada (.key).",
+              )}
+            </p>
+            <label>
+              {t("Nome de usuário")}
+              <input
+                autoFocus
+                autoComplete="username"
+                required
+                disabled={reauthBusy}
+                value={reauthUser}
+                onChange={(e) => setReauthUser(e.target.value)}
+              />
+            </label>
+            <label>
+              {t("Senha")}
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                disabled={reauthBusy}
+                value={reauthPass}
+                onChange={(e) => setReauthPass(e.target.value)}
+              />
+            </label>
+            <ErrorMessage error={reauthError} />
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button"
+                disabled={reauthBusy}
+                onClick={() => setPendingKeyAction(null)}
+              >
+                {t("Cancelar")}
+              </button>
+              <button className="button primary" disabled={reauthBusy}>
+                {reauthBusy ? <Spinner /> : <KeyRound size={15} />}
+                {t("Confirmar e exportar")}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -562,6 +723,7 @@ export function Databases({
   open,
   section,
   select,
+  multiNode,
   allowLANFirewall,
   snapshotDesktop,
   onOpenDriveSettings,
@@ -574,6 +736,7 @@ export function Databases({
   open: (id: string | null) => void;
   section: Section;
   select: (section: Section) => void;
+  multiNode?: boolean;
   allowLANFirewall?: boolean;
   snapshotDesktop?: SnapshotDesktop;
   onOpenDriveSettings?: () => void;
@@ -592,6 +755,8 @@ export function Databases({
   const [create, setCreate] = useState(false);
   const [created, setCreated] = useState<string>();
   const [viewPassword, setViewPassword] = useState(false);
+  const [deleteUser, setDeleteUser] = useState("");
+  const [deletePass, setDeletePass] = useState("");
   const [credentials, setCredentials] = useState<
     Credentials & { database: Instance; verified?: boolean }
   >();
@@ -600,6 +765,7 @@ export function Databases({
   >();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState(false);
+  const [computerFilter, setComputerFilter] = useState("");
   const [engine, setEngine] = useState("");
   const [state, setState] = useState("");
   const [order, setOrder] = useState("recent");
@@ -622,33 +788,38 @@ export function Databases({
         const current = await requestRef.current<Catalog>("GET", base);
         if (!active) return;
         setCatalog(current);
-        if (
-          Date.now() - lastHistory < 5000 &&
-          (!id || current.databases.some((db) => db.id === id))
-        )
-          return;
+        const matchSelected = id
+          ? current.databases.find((db) => dbKey(db, multiNode) === id)
+          : undefined;
+        if (Date.now() - lastHistory < 5000 && (!id || matchSelected)) return;
         lastHistory = Date.now();
-        if (id && current.databases.some((db) => db.id === id)) {
-          const next = await requestRef.current<Detail>(
-            "GET",
-            `${base}/${id}?period=${period}`,
-          );
-          if (active) setDetail(next);
+        if (id && matchSelected) {
+          if (matchSelected.nodeOnline === false) {
+            if (active) setDetail({ database: matchSelected, metrics: [] });
+          } else {
+            const next = await requestRef.current<Detail>(
+              "GET",
+              `${dbPath(matchSelected, multiNode)}?period=${period}`,
+            );
+            if (active) setDetail(next);
+          }
         } else if (!id) {
           const items = await Promise.all(
             current.databases.map(async (db) => {
+              const key = dbKey(db, multiNode);
+              if (db.nodeOnline === false) return [key, []] as const;
               try {
                 return [
-                  db.id,
+                  key,
                   (
                     await requestRef.current<Detail>(
                       "GET",
-                      `${base}/${db.id}?period=10m`,
+                      `${dbPath(db, multiNode)}?period=10m`,
                     )
                   ).metrics,
                 ] as const;
               } catch {
-                return [db.id, []] as const;
+                return [key, []] as const;
               }
             }),
           );
@@ -681,14 +852,23 @@ export function Databases({
       clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [id, period]);
+  }, [id, period, multiNode]);
 
   const database = id
-    ? catalog?.databases.find((db) => db.id === id)
+    ? catalog?.databases.find((db) => dbKey(db, multiNode) === id)
     : undefined;
+  const hostOffline = database?.nodeOnline === false;
+  const hostLastSeen = database?.nodeLastSeenAt
+    ? new Date(database.nodeLastSeenAt * 1000).toLocaleString(getLocale(), {
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : "";
 
   useEffect(() => {
     setViewPassword(false);
+    setDeleteUser("");
+    setDeletePass("");
   }, [id]);
 
   const firewallStatus = allowLANFirewall ? catalog?.lanFirewall : undefined;
@@ -720,13 +900,14 @@ export function Databases({
   ]);
   const needsDocker = !!catalog && !catalog.docker;
   async function reveal(db: Instance) {
-    if (revealing.current) return;
-    revealing.current = db.id;
+    if (revealing.current || db.nodeOnline === false) return;
+    const key = dbKey(db, multiNode);
+    revealing.current = key;
     setBusy("credentials");
     try {
       const result = await request<Credentials>(
         "POST",
-        `${base}/${db.id}/credentials`,
+        dbPath(db, multiNode, "/credentials"),
         {},
       );
       setCredentials({ ...result, database: db });
@@ -741,32 +922,63 @@ export function Databases({
     }
   }
   useEffect(() => {
-    if (database?.credentialsPending && created === database.id) {
+    if (
+      database?.credentialsPending &&
+      created === dbKey(database, multiNode)
+    ) {
       setCreated(undefined);
       void reveal(database);
     }
   }, [database?.credentialsPending, created]);
 
   async function mutate(action: string, input: Record<string, string> = {}) {
-    if (!database || busy) return;
+    if (!database || busy || database.nodeOnline === false) return;
     setBusy(action);
     setError("");
     try {
-      const next = await request<Instance>("PATCH", `${base}/${database.id}`, {
-        action,
-        ...input,
-      });
+      let headers: Record<string, string> | undefined;
+      if (multiNode && action === "delete") {
+        if (!deleteUser.trim() || !deletePass) {
+          throw new Error(
+            "Informe o usuário e a senha da sua conta para confirmar a exclusão.",
+          );
+        }
+        const step = await request<{ stepUpToken: string }>(
+          "POST",
+          "/api/auth/step-up",
+          {
+            username: deleteUser,
+            password: deletePass,
+            targetNodeId: database.nodeId || "",
+            resourceId: database.id,
+            action: "database.delete",
+          },
+        );
+        setDeletePass("");
+        headers = { "X-Step-Up-Token": step.stepUpToken };
+      }
+      const key = dbKey(database, multiNode);
+      const next = await request<Instance>(
+        "PATCH",
+        dbPath(database, multiNode),
+        {
+          action,
+          ...(multiNode ? { operationId: newOperationId() } : {}),
+          ...input,
+        },
+        headers,
+      );
       setCatalog(
         (current) =>
           current && {
             ...current,
             databases: current.databases.map((db) =>
-              db.id === next.id ? next : db,
+              dbKey(db, multiNode) === key ? { ...db, ...next } : db,
             ),
           },
       );
-      if (action === "password") setCreated(database.id);
-      if (action === "delete") deleting.current = database.id;
+      if (action === "password") setCreated(key);
+      if (action === "delete") deleting.current = key;
       setConfirm(undefined);
       refreshRef.current();
     } catch (e) {
@@ -816,17 +1028,20 @@ export function Databases({
   const controls = database && (
     <Actions
       state={displayState(database.state)}
-      busy={!!busy}
+      busy={!!busy || hostOffline}
       onAction={(name) => void mutate(name)}
     />
   );
-  const samples = detail?.database.id === id ? detail.metrics : [];
+  const samples =
+    detail && dbKey(detail.database, multiNode) === id ? detail.metrics : [];
+  const availableNodes = catalog?.nodes ?? [];
   const visible = (catalog?.databases ?? [])
     .filter(
       (db) =>
         db.name
           .toLocaleLowerCase(getLocale())
           .includes(query.trim().toLocaleLowerCase(getLocale())) &&
+        (!computerFilter || db.nodeId === computerFilter) &&
         (!engine || engine === db.engine) &&
         (!state || db.state === state),
     )
@@ -971,6 +1186,25 @@ export function Databases({
                 }}
               />
             </label>
+            {multiNode && availableNodes.length > 1 && (
+              <select
+                className="computer-filter-select"
+                aria-label={t("Filtrar por computador")}
+                value={computerFilter}
+                onChange={(e) => {
+                  setComputerFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="">{t("Todos os computadores")}</option>
+                {availableNodes.map((n) => (
+                  <option key={n.nodeId} value={n.nodeId}>
+                    {n.nodeName}
+                    {n.online ? "" : ` (${t("Offline")})`}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               className="button"
               aria-expanded={filter}
@@ -1042,39 +1276,79 @@ export function Databases({
             <div className="db-cards">
               {visible
                 .slice(currentPage * pageSize, (currentPage + 1) * pageSize)
-                .map((db) => (
-                  <button
-                    key={db.id}
-                    className="project-card db-card"
-                    onClick={() => open(db.id)}
-                  >
-                    <div className="project-card-header">
-                      <EngineIcon engine={db.engine} />
-                      <div className="project-card-identity">
-                        <h2>{db.name}</h2>
-                        <code>{db.id}</code>
+                .map((db) => {
+                  const key = dbKey(db, multiNode);
+                  const offline = db.nodeOnline === false;
+                  return (
+                    <button
+                      key={key}
+                      className={
+                        offline
+                          ? "project-card db-card is-host-offline"
+                          : "project-card db-card"
+                      }
+                      onClick={() => open(key)}
+                    >
+                      <div className="project-card-header">
+                        <EngineIcon engine={db.engine} />
+                        <div className="project-card-identity">
+                          <h2>{db.name}</h2>
+                          <div className="project-card-subline">
+                            <code>{db.id}</code>
+                            {db.nodeName && (
+                              <span
+                                className={
+                                  offline
+                                    ? "host-badge offline"
+                                    : "host-badge online"
+                                }
+                              >
+                                <Server size={11} aria-hidden="true" />
+                                {db.nodeName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight size={16} />
                       </div>
-                      <ChevronRight size={16} />
-                    </div>
-                    <Chart
-                      samples={cardHistory[db.id] ?? []}
-                      field="cpu"
-                      second="memory"
-                      label={t("Histórico recente de CPU e RAM")}
-                    />
-                    <div className="project-card-metrics">
-                      <span>
-                        <Cpu size={14} />
-                        {percent(db.latest?.cpu)}
-                      </span>
-                      <span>
-                        <MemoryStick size={14} />
-                        {bytes(db.latest?.memory)}
-                      </span>
-                      <Status state={displayState(db.state)} />
-                    </div>
-                  </button>
-                ))}
+                      {offline && (
+                        <div className="host-offline-banner" role="status">
+                          <WifiOff size={12} aria-hidden="true" />
+                          <span>
+                            {db.nodeLastSeenAt
+                              ? t(
+                                  "Offline · último estado em {0}",
+                                  new Date(
+                                    db.nodeLastSeenAt * 1000,
+                                  ).toLocaleString(getLocale(), {
+                                    dateStyle: "short",
+                                    timeStyle: "short",
+                                  }),
+                                )
+                              : t("Computador offline")}
+                          </span>
+                        </div>
+                      )}
+                      <Chart
+                        samples={cardHistory[key] ?? []}
+                        field="cpu"
+                        second="memory"
+                        label={t("Histórico recente de CPU e RAM")}
+                      />
+                      <div className="project-card-metrics">
+                        <span>
+                          <Cpu size={14} />
+                          {percent(db.latest?.cpu)}
+                        </span>
+                        <span>
+                          <MemoryStick size={14} />
+                          {bytes(db.latest?.memory)}
+                        </span>
+                        <Status state={displayState(db.state)} />
+                      </div>
+                    </button>
+                  );
+                })}
             </div>
           ) : (
             <div className="project-list">
@@ -1134,6 +1408,20 @@ export function Databases({
         </div>
       ) : (
         <>
+          {hostOffline && (
+            <div className="notice" role="status">
+              <WifiOff size={15} />{" "}
+              {hostLastSeen
+                ? t(
+                    "Computador hospedeiro ({0}) offline. Exibindo último estado conhecido em {1}. Ações remotas bloqueadas até reconectar.",
+                    database.nodeName || "",
+                    hostLastSeen,
+                  )
+                : t(
+                    "Computador hospedeiro offline. Ações remotas bloqueadas até reconectar.",
+                  )}
+            </div>
+          )}
           {database.issue && (
             <div className="notice" role="status">
               {database.issue}
@@ -1146,7 +1434,7 @@ export function Databases({
               </span>
               <button
                 className="button"
-                disabled={!!busy}
+                disabled={!!busy || hostOffline}
                 onClick={() => void reveal(database)}
               >
                 <KeyRound size={15} />
@@ -1173,7 +1461,21 @@ export function Databases({
                   <EngineIcon engine={database.engine} />
                   <div>
                     <h1>{database.name}</h1>
-                    <code>{database.id}</code>
+                    <div className="project-card-subline">
+                      <code>{database.id}</code>
+                      {database.nodeName && (
+                        <span
+                          className={
+                            hostOffline
+                              ? "host-badge offline"
+                              : "host-badge online"
+                          }
+                        >
+                          <Server size={11} aria-hidden="true" />
+                          {database.nodeName}
+                        </span>
+                      )}
+                    </div>
                     <div>
                       <Status state={displayState(database.state)} />
                       {database.startedAt && (
@@ -1316,7 +1618,7 @@ export function Databases({
                   key={database.name}
                   title={t("Nome")}
                   initial={database.name}
-                  busy={!!busy}
+                  busy={!!busy || hostOffline}
                   onSave={(name) => mutate("rename", { name })}
                 />
               </div>
@@ -1433,10 +1735,15 @@ export function Databases({
                   ) : null}
                 </div>
                 <DatabaseTCP
-                  key={database.id}
+                  key={dbKey(database, multiNode)}
                   id={database.id}
+                  endpointPath={dbPath(database, multiNode, "/tunnel")}
                   engine={database.engine}
-                  ready={database.state === "running" && database.tlsValidated}
+                  ready={
+                    !hostOffline &&
+                    database.state === "running" &&
+                    database.tlsValidated
+                  }
                   desktop={!!allowLANFirewall}
                   request={request}
                   copy={copyValue}
@@ -1455,7 +1762,9 @@ export function Databases({
                   <div className="db-password-actions">
                     <button
                       className="button"
-                      disabled={!!busy || database.state !== "running"}
+                      disabled={
+                        !!busy || hostOffline || database.state !== "running"
+                      }
                       onClick={() => {
                         setError("");
                         setConfirm("password");
@@ -1466,7 +1775,7 @@ export function Databases({
                     </button>
                     <button
                       className="button"
-                      disabled={!!busy || !database.tlsValidated}
+                      disabled={!!busy || hostOffline || !database.tlsValidated}
                       onClick={() => {
                         setError("");
                         setViewPassword(true);
@@ -1496,16 +1805,18 @@ export function Databases({
                   <div className="db-certificate-actions">
                     <button
                       className="button"
-                      disabled={!!busy || !database.canRotateTls}
+                      disabled={!!busy || hostOffline || !database.canRotateTls}
                       onClick={() => setConfirm("certificate")}
                     >
                       <ShieldCheck size={16} />
                       {t("Redefinir certificado")}
                     </button>
                     <CertificateDownload
-                      key={database.id}
+                      key={dbKey(database, multiNode)}
                       database={database}
                       request={request}
+                      multiNode={multiNode}
+                      disabled={hostOffline}
                     />
                   </div>
                 </div>
@@ -1529,12 +1840,14 @@ export function Databases({
                   className="button danger"
                   disabled={
                     !!busy ||
+                    hostOffline ||
                     ["starting", "stopping", "restarting"].includes(
                       database.state,
                     )
                   }
                   onClick={() => {
                     setError("");
+                    setDeletePass("");
                     setConfirm("delete");
                   }}
                 >
@@ -1561,7 +1874,38 @@ export function Databases({
               onConfirm={(confirmation) =>
                 void mutate("delete", { confirmation })
               }
-            />
+            >
+              {multiNode && (
+                <div className="db-stepup-fields">
+                  <p className="muted small">
+                    {t(
+                      "Reconfirme as credenciais da sua conta de origem para autorizar esta exclusão.",
+                    )}
+                  </p>
+                  <label>
+                    {t("Nome de usuário")}
+                    <input
+                      autoComplete="username"
+                      required
+                      disabled={!!busy}
+                      value={deleteUser}
+                      onChange={(e) => setDeleteUser(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {t("Senha")}
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      disabled={!!busy}
+                      value={deletePass}
+                      onChange={(e) => setDeletePass(e.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
+            </DeleteConfirmationModal>
           )}
           {confirm && confirm !== "delete" && (
             <Modal
@@ -1606,6 +1950,7 @@ export function Databases({
           {viewPassword && (
             <ViewPasswordModal
               database={database}
+              multiNode={multiNode}
               request={request}
               onClose={() => setViewPassword(false)}
               onVerified={(result) => {
@@ -1659,10 +2004,12 @@ export function Databases({
       {create && catalog && (
         <CreateDatabase
           request={request}
+          nodes={multiNode ? availableNodes : undefined}
           onClose={() => setCreate(false)}
           onCreated={(db) => {
+            const key = dbKey(db, multiNode);
             setCreate(false);
-            setCreated(db.id);
+            setCreated(key);
             setCatalog(
               (current) =>
                 current && {
@@ -1670,7 +2017,7 @@ export function Databases({
                   databases: [...current.databases, db],
                 },
             );
-            open(db.id);
+            open(key);
           }}
         />
       )}
@@ -1739,6 +2086,8 @@ export function Databases({
               <CertificateDownload
                 database={credentials.database}
                 request={request}
+                multiNode={multiNode}
+                disabled={credentials.database.nodeOnline === false}
               />
             </div>
           )}
@@ -1788,6 +2137,7 @@ function CopyField({
 }
 function DatabaseTCP({
   id,
+  endpointPath,
   engine,
   ready,
   desktop,
@@ -1796,6 +2146,7 @@ function DatabaseTCP({
   onOpenExternal,
 }: {
   id: string;
+  endpointPath?: string;
   engine: Engine;
   ready: boolean;
   desktop: boolean;
@@ -1821,7 +2172,7 @@ function DatabaseTCP({
   const [domain, setDomain] = useState("");
   const [team, setTeam] = useState("");
   const [audience, setAudience] = useState("");
-  const endpoint = `${base}/${id}/tunnel`;
+  const endpoint = endpointPath || `${base}/${id}/tunnel`;
   const requestRef = useRef(request);
   requestRef.current = request;
   useEffect(() => {
@@ -2087,14 +2438,20 @@ function EditField({
 
 function CreateDatabase({
   request,
+  nodes,
   onClose,
   onCreated,
 }: {
   request: Request;
+  nodes?: CatalogNode[];
   onClose: () => void;
   onCreated: (db: Instance) => void;
 }) {
   const engineOptions = Object.keys(engines) as Engine[];
+  const eligibleNodes = (nodes ?? []).filter((n) => n.online && n.docker);
+  const [targetNodeId, setTargetNodeId] = useState(
+    eligibleNodes[0]?.nodeId ?? nodes?.[0]?.nodeId ?? "",
+  );
   const [engine, setEngine] = useState<Engine>(engineOptions[0]);
   const [name, setName] = useState("");
   const [memoryMb, setMemoryMb] = useState("1024");
@@ -2105,12 +2462,21 @@ function CreateDatabase({
     setBusy(true);
     setError("");
     try {
+      const targetPath =
+        nodes && targetNodeId
+          ? `/api/nodes/${encodeURIComponent(targetNodeId)}/databases`
+          : base;
       onCreated(
-        await request<Instance>("POST", base, {
-          name,
-          engine,
-          memoryMb: Number(memoryMb),
-        }),
+        await request<Instance>(
+          "POST",
+          targetPath,
+          {
+            name,
+            engine,
+            memoryMb: Number(memoryMb),
+          },
+          nodes ? { "X-Operation-Id": newOperationId() } : undefined,
+        ),
       );
     } catch (e) {
       setError(displayError(e));
@@ -2135,6 +2501,32 @@ function CreateDatabase({
           <p className="muted">
             {t("Escolha a tecnologia, o nome e o limite de memória do banco.")}
           </p>
+          {nodes && nodes.length > 0 && (
+            <label>
+              {t("Computador hospedeiro")}
+              <select
+                required
+                value={targetNodeId}
+                disabled={busy}
+                onChange={(e) => setTargetNodeId(e.target.value)}
+              >
+                {nodes.map((n) => (
+                  <option
+                    key={n.nodeId}
+                    value={n.nodeId}
+                    disabled={!n.online || !n.docker}
+                  >
+                    {n.nodeName}
+                    {!n.online
+                      ? ` (${t("Offline")})`
+                      : !n.docker
+                        ? ` (${t("Docker indisponível")})`
+                        : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             {t("Nome")}
             <input
@@ -2204,11 +2596,13 @@ function CreateDatabase({
 
 function ViewPasswordModal({
   database,
+  multiNode,
   request,
   onClose,
   onVerified,
 }: {
   database: Instance;
+  multiNode?: boolean;
   request: Request;
   onClose: () => void;
   onVerified: (credentials: Credentials) => void;
@@ -2226,7 +2620,7 @@ function ViewPasswordModal({
     try {
       const result = await request<Credentials>(
         "POST",
-        `${base}/${database.id}/password`,
+        dbPath(database, multiNode, "/password"),
         { username, password },
       );
       setPassword("");

@@ -3,6 +3,7 @@ package api
 import (
 	"cloudforge/core/internal/auth"
 	"cloudforge/core/internal/cloudflare"
+	"cloudforge/core/internal/cluster"
 	"cloudforge/core/internal/databases"
 	"cloudforge/core/internal/model"
 	"cloudforge/core/internal/monitoring"
@@ -33,30 +34,47 @@ import (
 var AppVersion = "development"
 
 type Server struct {
-	BinarySHA256     string
-	Shutdown         func()
-	Store            persistence.Repository
-	Auth             *auth.Auth
-	Supervisor       *supervisor.Supervisor
-	Cloud            *cloudflare.Manager
-	Databases        *databases.Manager
-	Snapshots        *snapshots.Service
-	Key              string
-	Development      bool
-	WebDir           string
-	DataDir          string
-	Autostart        func(bool) error
-	AutostartEnabled func() bool
-	mu               sync.RWMutex
-	system           monitoring.System
-	limit            limiter
-	loginGate        chan struct{}
-	connections      chan struct{}
+	BinarySHA256       string
+	Shutdown           func()
+	Store              persistence.Repository
+	Auth               *auth.Auth
+	Supervisor         *supervisor.Supervisor
+	Cloud              *cloudflare.Manager
+	Databases          *databases.Manager
+	Snapshots          *snapshots.Service
+	Cluster            *cluster.Manager
+	PrimaryURLOverride string
+	Key                string
+	Development        bool
+	WebDir             string
+	DataDir            string
+	Autostart          func(bool) error
+	AutostartEnabled   func() bool
+	mu                 sync.RWMutex
+	system             monitoring.System
+	limit              limiter
+	loginGate          chan struct{}
+	connections        chan struct{}
 }
 
 func New(s persistence.Repository, sup *supervisor.Supervisor, cf *cloudflare.Manager, key, dataDir, webDir string, development bool) *Server {
 	v := &Server{Store: s, Auth: auth.New(s), Supervisor: sup, Cloud: cf, Key: key, DataDir: dataDir, WebDir: webDir, Development: development, loginGate: make(chan struct{}, 2), connections: make(chan struct{}, 16)}
 	v.system = monitoring.Inspect(dataDir)
+	if store, ok := s.(*persistence.Store); ok {
+		inst := ""
+		if cf != nil {
+			inst = cf.Installation
+		}
+		if inst == "" {
+			_ = s.Setting("installationId", &inst)
+		}
+		if inst == "" {
+			inst = auth.ID()
+		}
+		v.Cluster = cluster.New(store.DB, inst, v.Auth, cluster.OSKeyVault{Installation: inst}, development)
+		v.Cluster.AppVersion = AppVersion
+		v.Cluster.Provider = v
+	}
 	return v
 }
 func (s *Server) Monitor(ctx context.Context) {
@@ -148,7 +166,14 @@ func (s *Server) Snapshot() map[string]any {
 	if s.AutostartEnabled != nil {
 		auto = s.AutostartEnabled()
 	}
-	return map[string]any{"ready": s.Auth.Ready(), "system": system, "projects": s.Supervisor.Views(), "cloudflare": s.Cloud.Config(), "autostart": auto}
+	snap := map[string]any{"ready": s.Auth.Ready(), "system": system, "projects": s.Supervisor.Views(), "cloudflare": s.Cloud.Config(), "autostart": auto}
+	if admin, err := s.Store.Admin(); err == nil {
+		snap["username"] = admin.Username
+	}
+	if s.Cluster != nil {
+		snap["cluster"] = s.Cluster.Summary()
+	}
+	return snap
 }
 func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 	security(w)
@@ -209,7 +234,7 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "api/health" && r.Method == "GET" {
-		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": AppVersion, "apiVersion": 8, "binarySHA256": s.BinarySHA256, "pid": os.Getpid(), "lifecycle": s.Shutdown != nil})
+		write(w, 200, map[string]any{"ok": true, "service": "cloudforge", "version": AppVersion, "apiVersion": 10, "binarySHA256": s.BinarySHA256, "pid": os.Getpid(), "lifecycle": s.Shutdown != nil})
 		return
 	}
 	if path == "api/shutdown" && r.Method == "POST" && s.Shutdown != nil {
@@ -248,6 +273,10 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.Auth.Ready() {
 		fail(w, 403, errors.New("crie o administrador antes de continuar"))
+		return
+	}
+	if path == "api/cluster" || strings.HasPrefix(path, "api/cluster/") {
+		s.clusterLocalRoutes(w, r, strings.Split(path, "/"))
 		return
 	}
 	if path == "api/projects/inspect" && r.Method == "POST" {
@@ -293,6 +322,9 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			s.Supervisor.Add(b.Project)
+			if s.Cluster != nil {
+				s.Cluster.TriggerInventorySync()
+			}
 			write(w, 201, b.Project)
 			return
 		}
@@ -413,6 +445,40 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		write(w, 200, map[string]bool{"ok": true})
 		return
 	}
+	if path == "api/cloudflare/retry-panel-cleanup" && r.Method == "POST" {
+		if e := s.Cloud.RetryPanelCleanup(r.Context()); e != nil {
+			fail(w, 503, e)
+			return
+		}
+		write(w, 200, map[string]bool{"ok": true})
+		return
+	}
+	if path == "api/cloudflare/republish-panel" && r.Method == "POST" {
+		if s.Cluster != nil && s.Cluster.Role() == cluster.RoleSecondary {
+			fail(w, 409, errors.New("este computador está vinculado a um painel principal; remova o vínculo antes de republicar um painel independente"))
+			return
+		}
+		var body struct {
+			Domain    string `json:"domain"`
+			Subdomain string `json:"subdomain"`
+			Confirmed bool   `json:"confirmed"`
+		}
+		if err := decode(w, r, &body); err != nil {
+			fail(w, 400, err)
+			return
+		}
+		if !body.Confirmed {
+			fail(w, 400, errors.New("confirme a republicação do painel independente"))
+			return
+		}
+		cfg, err := s.Cloud.RepublishPanel(r.Context(), body.Domain, body.Subdomain)
+		if err != nil {
+			fail(w, 400, err)
+			return
+		}
+		write(w, 200, cfg)
+		return
+	}
 	if path == "api/cloudflare/install" && r.Method == "POST" {
 		var b struct {
 			Confirmed bool `json:"confirmed"`
@@ -448,6 +514,26 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 		write(w, 200, map[string]bool{"ok": true})
 		return
 	}
+	if path == "api/username" && r.Method == "POST" {
+		var b struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if e := decode(w, r, &b); e != nil {
+			fail(w, 400, e)
+			return
+		}
+		uid, username, epoch, e := s.Auth.ChangeUsernameEpoch(b.Password, b.Username)
+		if e != nil {
+			fail(w, 400, e)
+			return
+		}
+		if s.Cluster != nil {
+			s.Cluster.NotifyLocalUsernameChanged(uid, username, epoch)
+		}
+		write(w, 200, map[string]any{"ok": true, "username": username})
+		return
+	}
 	if path == "api/password" && r.Method == "POST" {
 		var b struct {
 			Current      string `json:"current"`
@@ -462,9 +548,13 @@ func (s *Server) Local(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, errors.New("as senhas não coincidem"))
 			return
 		}
-		if e := s.Auth.ChangePassword(b.Current, b.Next); e != nil {
+		uid, epoch, e := s.Auth.ChangePasswordEpoch(b.Current, b.Next)
+		if e != nil {
 			fail(w, 400, e)
 			return
+		}
+		if s.Cluster != nil {
+			s.Cluster.NotifyLocalPasswordChanged(uid, epoch)
 		}
 		write(w, 200, map[string]bool{"ok": true})
 		return
@@ -835,6 +925,9 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, id string) {
 		fail(w, 409, e)
 		return
 	}
+	if s.Cluster != nil {
+		s.Cluster.TriggerInventorySync()
+	}
 	write(w, 202, map[string]string{"operationId": op})
 }
 func (s *Server) remoteViews() []map[string]any {
@@ -911,6 +1004,18 @@ func (s *Server) Public(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := s.clientIP(r)
+	if path == "/api/cluster/ws" && r.Method == "GET" {
+		if !s.limit.allow("cluster-ws:"+ip, 60, time.Minute) {
+			fail(w, 429, errors.New("muitas tentativas de conexão do cluster"))
+			return
+		}
+		if s.Cluster == nil {
+			http.NotFound(w, r)
+			return
+		}
+		s.Cluster.ServeWS(w, r)
+		return
+	}
 	if !s.limit.allow("all:"+ip, 180, time.Minute) {
 		fail(w, 429, errors.New("muitas requisições; aguarde um minuto"))
 		return
@@ -920,57 +1025,31 @@ func (s *Server) Public(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "/api/session" && r.Method == "GET" {
-		session, _, e := s.session(r)
+		access, _, e := s.sessionAccess(r)
 		csrfCookie, _ := r.Cookie(s.csrfName())
-		if e == nil && csrfCookie != nil && s.Auth.ValidCSRF(session, csrfCookie.Value) {
-			write(w, 200, map[string]any{"authenticated": true, "username": session.Username, "expiresAt": session.ExpiresAt, "csrf": csrfCookie.Value})
+		if e == nil && csrfCookie != nil && s.Auth.ValidCSRF(access.Session, csrfCookie.Value) {
+			write(w, 200, s.sessionPayload(access, csrfCookie.Value))
 			return
 		}
 		csrf := auth.Token()
 		s.setCookie(w, s.csrfName(), csrf, 3600)
-		write(w, 200, map[string]any{"authenticated": false, "csrf": csrf})
+		write(w, 200, map[string]any{
+			"authenticated":        false,
+			"csrf":                 csrf,
+			"multiComputerEnabled": s.Cluster != nil && s.Cluster.Role() == cluster.RolePrimary,
+		})
 		return
 	}
 	if path == "/api/login" && r.Method == "POST" {
-		if !s.limit.allow("login:"+ip, 5, 15*time.Minute) || !s.limit.allow("login-global", 40, 15*time.Minute) {
-			fail(w, 429, errors.New("tentativas demais; aguarde 15 minutos"))
-			return
-		}
-		csrf, e := r.Cookie(s.csrfName())
-		if e != nil || subtle.ConstantTimeCompare([]byte(csrf.Value), []byte(r.Header.Get("X-CSRF-Token"))) != 1 {
-			fail(w, 403, errors.New("proteção CSRF inválida; recarregue a página"))
-			return
-		}
-		var b struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-		}
-		if e = decode(w, r, &b); e != nil {
-			fail(w, 400, e)
-			return
-		}
-		select {
-		case s.loginGate <- struct{}{}:
-			defer func() { <-s.loginGate }()
-		default:
-			fail(w, 429, errors.New("autenticação ocupada; tente novamente"))
-			return
-		}
-		token, next, e := s.Auth.Login(b.Username, b.Password, r.UserAgent())
-		if e != nil {
-			fail(w, 401, e)
-			return
-		}
-		s.setCookie(w, s.cookieName(), token, 30*86400)
-		s.setCookie(w, s.csrfName(), next, 30*86400)
-		write(w, 200, map[string]any{"authenticated": true, "csrf": next, "username": b.Username})
+		s.publicLogin(w, r, ip)
 		return
 	}
-	session, token, e := s.session(r)
+	access, token, e := s.sessionAccess(r)
 	if e != nil {
 		fail(w, 401, errors.New("sua sessão expirou; entre novamente"))
 		return
 	}
+	session := access.Session
 	if r.Method != "GET" && !s.Auth.ValidCSRF(session, r.Header.Get("X-CSRF-Token")) {
 		fail(w, 403, errors.New("proteção CSRF inválida"))
 		return
@@ -1000,13 +1079,51 @@ func (s *Server) Public(w http.ResponseWriter, r *http.Request) {
 		write(w, 200, map[string]string{"csrf": csrf})
 		return
 	}
+	if path == "/api/auth/step-up" && r.Method == "POST" {
+		s.publicStepUp(w, r, access, ip)
+		return
+	}
+	if path == "/api/computers" || strings.HasPrefix(path, "/api/computers/") {
+		s.publicComputersRoutes(w, r, access, strings.Split(strings.Trim(path, "/"), "/"))
+		return
+	}
+	if strings.HasPrefix(path, "/api/nodes/") {
+		s.publicNodeRoutes(w, r, access, ip, strings.Split(strings.Trim(path, "/"), "/"))
+		return
+	}
 	if path == "/api/projects" && r.Method == "GET" {
+		if s.Cluster != nil {
+			write(w, 200, s.Cluster.AggregatedProjects(access, r.URL.Query().Get("nodeId")))
+			return
+		}
 		write(w, 200, s.remoteViews())
 		return
 	}
+	if path == "/api/databases" && r.Method == "GET" {
+		if s.Cluster != nil {
+			cat, err := s.Cluster.AggregatedDatabases(r.Context(), access)
+			if err != nil {
+				databaseError(w, err)
+				return
+			}
+			write(w, 200, cat)
+			return
+		}
+		s.databaseRoutes(w, r, session.UserID, false)
+		return
+	}
 	if path == "/api/databases" || strings.HasPrefix(path, "/api/databases/") {
-		if r.Method != "GET" && !s.limit.allow("database:"+session.UserID, 20, time.Minute) {
+		if r.Method != "GET" && !s.limit.allow("database:"+access.IssuerNodeID+":"+session.UserID, 20, time.Minute) {
 			fail(w, 429, errors.New("aguarde para executar outra operação"))
+			return
+		}
+		if s.Cluster != nil {
+			if !s.Cluster.CanAccessNode(access, s.Cluster.InstallationID) {
+				fail(w, 403, errors.New("Acesso negado"))
+				return
+			}
+			parts := strings.Split(strings.Trim(path, "/"), "/")
+			s.publicNodeDatabaseRoutes(w, r, access, ip, s.Cluster.InstallationID, true, parts[1:])
 			return
 		}
 		s.databaseRoutes(w, r, session.UserID, false)
@@ -1023,6 +1140,10 @@ func (s *Server) Public(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(path, "/api/projects/") && strings.HasSuffix(path, "/action") && r.Method == "POST" {
 		parts := strings.Split(strings.Trim(path, "/"), "/")
 		if len(parts) == 4 && s.limit.allow("action:"+session.ID, 30, time.Minute) {
+			if s.Cluster != nil && !s.Cluster.CanAccessNode(access, s.Cluster.InstallationID) {
+				fail(w, 403, errors.New("Acesso negado"))
+				return
+			}
 			s.action(w, r, parts[2])
 			return
 		}
@@ -1091,10 +1212,18 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, local bool, sess
 				}
 			}
 		} else {
-			if _, _, e := s.session(r); e != nil {
+			access, _, e := s.sessionAccess(r)
+			if e != nil {
 				return
 			}
-			payload = map[string]any{"projects": s.remoteViews()}
+			if s.Cluster != nil {
+				payload = map[string]any{
+					"projects": s.Cluster.AggregatedProjects(access, ""),
+					"nodes":    s.Cluster.AuthorizedNodes(r.Context(), access),
+				}
+			} else {
+				payload = map[string]any{"projects": s.remoteViews()}
+			}
 		}
 		_ = ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if e = ws.WriteJSON(payload); e != nil {

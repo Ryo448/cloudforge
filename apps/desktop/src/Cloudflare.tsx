@@ -34,7 +34,13 @@ export function CloudflarePage({
   const [domains, setDomains] = useState<string[]>([]);
   const [editDomain, setEditDomain] = useState("");
   const [editSubdomain, setEditSubdomain] = useState("");
+  const [republishDomain, setRepublishDomain] = useState("");
+  const [republishSubdomain, setRepublishSubdomain] = useState("painel");
+  const [republishConfirmed, setRepublishConfirmed] = useState(false);
   const config = status?.configuration || state.cloudflare;
+  const isSecondary = state.cluster?.role === "secondary";
+  const primaryPanelUrl = state.cluster?.primaryUrl || "";
+  const panelDisabled = config.panelDisabled === true;
   const pending = browser?.pending === true;
   const connecting = !!config.tunnelId && !status?.connected;
   const selectedDomain = browser?.domain || domain.trim().toLowerCase();
@@ -124,6 +130,22 @@ export function CloudflarePage({
     });
   }
 
+  function republishPanel(event: FormEvent) {
+    event.preventDefault();
+    void run("republish", async () => {
+      const targetDomain = republishDomain || config.domain || domains[0] || "";
+      await api("POST", "/api/cloudflare/republish-panel", {
+        domain: targetDomain,
+        subdomain: republishSubdomain.trim(),
+        confirmed: republishConfirmed,
+      });
+      setRepublishConfirmed(false);
+      await refresh();
+      onChanged();
+      setNotice("Painel independente republicado.");
+    });
+  }
+
   return (
     <>
       <div className="page-heading">
@@ -148,8 +170,188 @@ export function CloudflarePage({
           {translateMessage(notice)}
         </div>
       )}
+      {isSecondary && primaryPanelUrl && (
+        <section className="settings-section">
+          <div className="section-heading">
+            <h2>{t("Painel principal vinculado")}</h2>
+            <span className="host-badge online">
+              {state.cluster?.primaryName || t("Computador principal")}
+            </span>
+          </div>
+          <p className="muted">
+            {t(
+              "O painel web deste computador foi despublicado. A administração remota acontece exclusivamente pelo painel principal, enquanto seus projetos, bancos e rotas TCP continuam no túnel local desta máquina.",
+            )}
+          </p>
+          <div className="configured-domain">
+            <Globe size={22} />
+            <strong>{primaryPanelUrl}</strong>
+            <button
+              className="icon-button"
+              aria-label={t("Copiar endereço do painel")}
+              onClick={() =>
+                void run("copy", async () => {
+                  await window.cloudforge.copy(primaryPanelUrl);
+                  setNotice("Endereço copiado.");
+                })
+              }
+            >
+              <Copy size={16} />
+            </button>
+            <button
+              className="button primary"
+              onClick={() =>
+                void run("open", () =>
+                  window.cloudforge.openExternal(primaryPanelUrl),
+                )
+              }
+            >
+              {t("Abrir painel")} <ArrowUpRight size={15} />
+            </button>
+          </div>
+        </section>
+      )}
+      {status?.panelCleanupPending && (
+        <section className="settings-section">
+          <h2>
+            {t(
+              "Limpeza pendente do DNS antigo ({0})",
+              status.retiredAdminHost || "",
+            )}
+          </h2>
+          <p className="muted">
+            {t(
+              "O antigo endereço do painel já está bloqueado no roteador local, mas a remoção do CNAME na Cloudflare falhou.",
+            )}
+          </p>
+          <ErrorMessage error={status.panelCleanupError || ""} />
+          <button
+            className="button primary"
+            disabled={!!busy}
+            onClick={() =>
+              void run("retry-cleanup", async () => {
+                await api("POST", "/api/cloudflare/retry-panel-cleanup", {});
+                await refresh();
+                onChanged();
+                setNotice("CNAME do painel antigo removido.");
+              })
+            }
+          >
+            <RefreshCw size={15} />
+            {t("Tentar remover DNS antigo novamente")}
+          </button>
+        </section>
+      )}
       <section className="settings-section">
-        {config.adminHost && !pending ? (
+        {panelDisabled && config.tunnelId && !pending ? (
+          <>
+            <div className="section-heading">
+              <h2>{t("Túnel local dos serviços")}</h2>
+              <span
+                className={
+                  status?.connected ? "status online" : "status offline"
+                }
+              >
+                <span className="status-dot" />
+                {status?.connected
+                  ? t("Túnel conectado")
+                  : t("Aguardando conexão")}
+              </span>
+            </div>
+            <p className="muted">
+              {t(
+                "Este túnel mantém publicados os domínios HTTP dos projetos e as rotas TCP dos bancos hospedados neste computador, mesmo com o painel local despublicado.",
+              )}
+            </p>
+            <ErrorMessage error={status?.lastError || ""} />
+            <div className="actions">
+              <button
+                className="button"
+                disabled={!!busy}
+                onClick={() =>
+                  void run("verify", async () => {
+                    await api("POST", "/api/cloudflare/verify", {});
+                    await refresh();
+                    setNotice(
+                      "O túnel Cloudflare está conectado e operacional.",
+                    );
+                  })
+                }
+              >
+                {busy === "verify" ? <Spinner /> : <ShieldCheck size={16} />}{" "}
+                {t("Verificar túnel")}
+              </button>
+              {config.mode === "local" && (
+                <button className="button" disabled={!!busy} onClick={login}>
+                  {t("Autorizar outro domínio")} <ArrowUpRight size={15} />
+                </button>
+              )}
+            </div>
+            {!isSecondary && (
+              <form
+                className="narrow-form domain-form"
+                onSubmit={republishPanel}
+              >
+                <h3>{t("Republicar painel independente")}</h3>
+                <p className="muted small">
+                  {t(
+                    "Esta instalação não está vinculada a um painel principal. Caso queira voltar a hospedar um painel web próprio, escolha o endereço e confirme abaixo.",
+                  )}
+                </p>
+                <label>
+                  {t("Domínio")}
+                  <select
+                    value={republishDomain || config.domain}
+                    onChange={(event) => setRepublishDomain(event.target.value)}
+                  >
+                    {Array.from(new Set([config.domain, ...domains]))
+                      .filter(Boolean)
+                      .map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  {t("Subdomínio")}
+                  <div className="input-suffix">
+                    <input
+                      required
+                      maxLength={63}
+                      pattern="[a-z0-9]([a-z0-9\-]*[a-z0-9])?"
+                      value={republishSubdomain}
+                      onChange={(event) =>
+                        setRepublishSubdomain(event.target.value.toLowerCase())
+                      }
+                    />
+                    <span>.{republishDomain || config.domain}</span>
+                  </div>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={republishConfirmed}
+                    onChange={(e) => setRepublishConfirmed(e.target.checked)}
+                  />
+                  <span>
+                    {t(
+                      "Confirmo a republicação do painel web independente neste computador.",
+                    )}
+                  </span>
+                </label>
+                <button
+                  className="button primary"
+                  disabled={
+                    !!busy || !republishConfirmed || !republishSubdomain
+                  }
+                >
+                  {busy === "republish" ? <Spinner /> : <Globe size={16} />}{" "}
+                  {t("Republicar painel independente")}
+                </button>
+              </form>
+            )}
+          </>
+        ) : config.adminHost && !pending ? (
           <>
             <div className="section-heading">
               <h2>{t("Endereço do painel")}</h2>
@@ -404,6 +606,9 @@ export function CloudflarePage({
                   {
                     "cloudflare-provision": t("Configuração do Cloudflare"),
                     "cloudflare-route": t("Rota do projeto"),
+                    "cloudflare-panel-cleanup": t(
+                      "Remoção do DNS do painel antigo",
+                    ),
                   } as Record<string, string>
                 )[operation.kind] ?? operation.kind}
               </strong>

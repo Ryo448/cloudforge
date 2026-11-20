@@ -2,7 +2,15 @@ import { t, useLocale } from "../../../packages/ui/i18n";
 import { LanguageSelector } from "../../../packages/ui/LanguageSelector";
 import React, { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { Database, LogOut, ShieldCheck, Wifi, WifiOff } from "lucide-react";
+import {
+  Database,
+  Laptop,
+  LogOut,
+  Server,
+  ShieldCheck,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import "@fontsource/poppins/500.css";
 import "@fontsource/poppins/600.css";
 import "@fontsource/poppins/700.css";
@@ -27,12 +35,30 @@ import {
 import type { RemoteProject } from "../../../packages/shared-types";
 import { mergeProjectUsage } from "../../../packages/shared-types/usage";
 import { ErrorScreen } from "./ErrorScreen";
+import { Computers } from "./Computers";
+
 type Session = {
   authenticated: boolean;
   csrf: string;
+  multiComputerEnabled?: boolean;
   username?: string;
+  userId?: string;
+  issuerNodeId?: string;
+  issuerNodeName?: string;
+  scope?: "origin_only" | "unified";
+  canManageComputers?: boolean;
+  primaryNodeId?: string;
+  primaryNodeName?: string;
   expiresAt?: number;
 };
+
+type ApiError = Error & { code?: string; status?: number };
+
+const newOperationId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID().replaceAll("-", "")
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+
 function App() {
   useLocale();
   const [session, setSession] = useState<Session | null>(null),
@@ -42,18 +68,44 @@ function App() {
     [error, setError] = useState(""),
     [denied, setDenied] = useState(false),
     [busy, setBusy] = useState(""),
-    [page, setPage] = useState<"projects" | "databases">("projects"),
+    [page, setPage] = useState<"projects" | "databases" | "computers">(
+      "projects",
+    ),
+    [computerFilter, setComputerFilter] = useState(""),
     [databaseID, setDatabaseID] = useState<string | null>(null),
     [databaseSection, setDatabaseSection] =
       useState<DatabaseSection>("overview"),
     [connected, setConnected] = useState(false);
+
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [session?.authenticated]);
+
+  useEffect(() => {
+    if (
+      page === "computers" &&
+      session?.authenticated &&
+      !session.canManageComputers
+    ) {
+      setPage("projects");
+    }
+  }, [page, session?.authenticated, session?.canManageComputers]);
+
+  useEffect(() => {
+    if (
+      computerFilter &&
+      projects !== null &&
+      !projects.some((p) => p.nodeId === computerFilter)
+    ) {
+      setComputerFilter("");
+    }
+  }, [computerFilter, projects]);
+
   async function request<T>(
     method: string,
     path: string,
     body?: unknown,
+    extraHeaders?: Record<string, string>,
   ): Promise<T> {
     const response = await fetch(path, {
       method,
@@ -61,24 +113,36 @@ function App() {
       headers: {
         "Content-Type": "application/json",
         "X-CSRF-Token": session?.csrf || "",
+        ...extraHeaders,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      if (response.status === 403) setDenied(true);
+      const msg =
+        data?.error ||
+        (data ? `HTTP ${response.status}` : "Resposta inválida do servidor.");
+      if (
+        response.status === 403 &&
+        (path === "/api/login" ||
+          msg.toLowerCase().includes("csrf") ||
+          msg.toLowerCase().includes("origem"))
+      ) {
+        setDenied(true);
+      }
       if (response.status === 401 && path !== "/api/login") {
         setSession(null);
         void loadSession();
       }
-      throw new Error(
-        data?.error ||
-          (data ? `HTTP ${response.status}` : "Resposta inválida do servidor."),
-      );
+      const err: ApiError = new Error(msg);
+      err.status = response.status;
+      err.code = data?.code;
+      throw err;
     }
     if (data === null) throw new Error("Resposta inválida do servidor.");
     return data;
   }
+
   async function loadSession() {
     try {
       setSession(await request<Session>("GET", "/api/session"));
@@ -87,9 +151,11 @@ function App() {
       setError(e instanceof Error ? e.message : "Servidor indisponível.");
     }
   }
+
   useEffect(() => {
     void loadSession();
   }, []);
+
   useEffect(() => {
     if (!session?.authenticated) return;
     let closed = false;
@@ -138,6 +204,7 @@ function App() {
       socket?.close();
     };
   }, [session?.authenticated]);
+
   useEffect(() => {
     if (!session?.authenticated) return;
     const renew = async () => {
@@ -147,6 +214,7 @@ function App() {
           setSession(current);
           return;
         }
+        setSession(current);
         if (
           current.expiresAt &&
           current.expiresAt * 1000 - Date.now() < 7 * 86400000
@@ -181,6 +249,9 @@ function App() {
         password,
       });
       setPassword("");
+      setComputerFilter("");
+      setDatabaseID(null);
+      setPage("projects");
       setSession(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível entrar.");
@@ -188,11 +259,19 @@ function App() {
       setBusy("");
     }
   }
-  async function action(id: string, action: string) {
-    await request("POST", `/api/projects/${id}/action`, { action });
+
+  async function action(project: RemoteProject, actionName: string) {
+    const path = project.nodeId
+      ? `/api/nodes/${encodeURIComponent(project.nodeId)}/projects/${project.id}/action`
+      : `/api/projects/${project.id}/action`;
+    await request("POST", path, {
+      action: actionName,
+      operationId: newOperationId(),
+    });
     const incoming = await request<RemoteProject[]>("GET", "/api/projects");
     setProjects((previous) => mergeProjectUsage(previous, incoming));
   }
+
   if (!session)
     return error ? (
       <ErrorScreen
@@ -212,6 +291,7 @@ function App() {
         </div>
       </div>
     );
+
   if (!session.authenticated)
     return (
       <div className="login-page">
@@ -263,12 +343,42 @@ function App() {
         <footer>{t("Cloudforge · Controle remoto")}</footer>
       </div>
     );
+
+  const projectHosts = Array.from(
+    new Map(
+      (projects ?? [])
+        .filter((p) => p.nodeId && p.nodeName)
+        .map((p) => [
+          p.nodeId!,
+          { id: p.nodeId!, name: p.nodeName!, online: p.nodeOnline !== false },
+        ]),
+    ).values(),
+  );
+  const filteredProjects = (projects ?? []).filter(
+    (p) => !computerFilter || p.nodeId === computerFilter,
+  );
+  const isFederated =
+    !!session.issuerNodeId &&
+    !!session.primaryNodeId &&
+    session.issuerNodeId !== session.primaryNodeId;
+
   return (
     <div className="remote-shell">
       <header className="remote-header">
         <Brand />
-        <div>
-          <span className="muted small">{session.username}</span>
+        <div className="remote-header-controls">
+          <span className="muted small session-identity">
+            <strong>{session.username}</strong>
+            {isFederated && session.issuerNodeName && (
+              <span className="host-badge online">
+                <Server size={11} />
+                {session.issuerNodeName}
+              </span>
+            )}
+            {isFederated && session.scope === "unified" && (
+              <span className="scope-chip">{t("Acesso unificado")}</span>
+            )}
+          </span>
           <LanguageSelector />
           <button
             className="button"
@@ -277,6 +387,10 @@ function App() {
               setBusy("logout");
               try {
                 await request("POST", "/api/logout", {});
+                setProjects(null);
+                setComputerFilter("");
+                setDatabaseID(null);
+                setPage("projects");
                 await loadSession();
               } catch (e) {
                 setError(e instanceof Error ? e.message : "Falha ao sair.");
@@ -320,13 +434,29 @@ function App() {
                 <Database size={18} />
                 <span>{t("Bancos de dados")}</span>
               </button>
+              {session.canManageComputers && (
+                <button
+                  className={
+                    page === "computers" ? "nav-item active" : "nav-item"
+                  }
+                  aria-label={t("Computadores")}
+                  aria-current={page === "computers" ? "page" : undefined}
+                  onClick={() => setPage("computers")}
+                >
+                  <Laptop size={18} />
+                  <span>{t("Computadores")}</span>
+                </button>
+              )}
             </nav>
           )}
         </aside>
         <main className="remote-main">
-          {page === "databases" ? (
+          {page === "computers" && session.canManageComputers ? (
+            <Computers request={request} onChanged={() => void loadSession()} />
+          ) : page === "databases" ? (
             <Databases
               request={request}
+              multiNode
               copy={(value) => navigator.clipboard.writeText(value)}
               id={databaseID}
               open={(id) => {
@@ -347,10 +477,28 @@ function App() {
                     )}
                   </p>
                 </div>
-                <span className="connection-state">
-                  {connected ? <Wifi size={15} /> : <WifiOff size={15} />}{" "}
-                  {connected ? t("Em tempo real") : t("Reconectando")}
-                </span>
+                <div className="remote-heading-tools">
+                  {projectHosts.length > 1 && (
+                    <select
+                      className="computer-filter-select"
+                      aria-label={t("Filtrar por computador")}
+                      value={computerFilter}
+                      onChange={(e) => setComputerFilter(e.target.value)}
+                    >
+                      <option value="">{t("Todos os computadores")}</option>
+                      {projectHosts.map((host) => (
+                        <option key={host.id} value={host.id}>
+                          {host.name}
+                          {host.online ? "" : ` (${t("Offline")})`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <span className="connection-state">
+                    {connected ? <Wifi size={15} /> : <WifiOff size={15} />}{" "}
+                    {connected ? t("Em tempo real") : t("Reconectando")}
+                  </span>
+                </div>
               </div>
               <ErrorMessage error={error} />
               {projects === null ? (
@@ -360,7 +508,7 @@ function App() {
                     <p>{t("Carregando aplicações…")}</p>
                   </div>
                 </section>
-              ) : !projects.length ? (
+              ) : !filteredProjects.length ? (
                 <section className="project-list">
                   <div className="empty-state">
                     <ProjectsIcon size={34} />
@@ -374,11 +522,11 @@ function App() {
                 </section>
               ) : (
                 <div className="project-cards">
-                  {projects.map((project) => (
+                  {filteredProjects.map((project) => (
                     <ProjectCard
-                      key={project.id}
+                      key={`${project.nodeId || "local"}:${project.id}`}
                       project={project}
-                      onAction={(name) => action(project.id, name)}
+                      onAction={(name) => action(project, name)}
                     />
                   ))}
                 </div>

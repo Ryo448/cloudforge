@@ -1,6 +1,13 @@
 import { getLocale, t, translateMessage } from "../../../packages/ui/i18n";
 import { useEffect, useState, type FormEvent } from "react";
-import { Check, KeyRound, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
+import {
+  Check,
+  KeyRound,
+  RefreshCw,
+  ShieldCheck,
+  Unplug,
+  UserRoundPen,
+} from "lucide-react";
 import type { Session, Snapshot } from "../../../packages/shared-types";
 import { bytes, ErrorMessage, Modal, Spinner } from "../../../packages/ui";
 import { api, message } from "./api";
@@ -18,9 +25,13 @@ export function SettingsPage({
 }) {
   const [sessions, setSessions] = useState<Session[]>([]),
     [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
+    [accountError, setAccountError] = useState(""),
+    [accountNotice, setAccountNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [autostart, setAutostart] = useState<boolean | null>(null),
+    [editingUsername, setEditingUsername] = useState(false),
+    [nextUsername, setNextUsername] = useState(""),
+    [usernamePassword, setUsernamePassword] = useState(""),
     [current, setCurrent] = useState(""),
     [next, setNext] = useState(""),
     [confirmation, setConfirmation] = useState("");
@@ -34,19 +45,45 @@ export function SettingsPage({
   useEffect(() => {
     void load();
   }, []);
+  async function changeUsername(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setAccountError("");
+    setAccountNotice("");
+    try {
+      await api<{ ok: boolean; username: string }>("POST", "/api/username", {
+        username: nextUsername,
+        password: usernamePassword,
+      });
+      setUsernamePassword("");
+      setEditingUsername(false);
+      setAccountNotice(
+        "Nome de usuário alterado. Todas as sessões remotas foram revogadas.",
+      );
+      onChanged();
+      await load();
+    } catch (e) {
+      setAccountError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function changePassword(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError("");
+    setAccountError("");
+    setAccountNotice("");
     try {
       await api("POST", "/api/password", { current, next, confirmation });
       setCurrent("");
       setNext("");
       setConfirmation("");
-      setNotice("Senha alterada. Todas as sessões remotas foram revogadas.");
+      setAccountNotice(
+        "Senha alterada. Todas as sessões remotas foram revogadas.",
+      );
       await load();
     } catch (e) {
-      setError(message(e));
+      setAccountError(message(e));
     } finally {
       setBusy(false);
     }
@@ -64,12 +101,6 @@ export function SettingsPage({
         </div>
       </div>
       <ErrorMessage error={error} />
-      {notice && (
-        <div className="notice" role="status">
-          <Check size={17} />
-          {translateMessage(notice)}
-        </div>
-      )}
       <section className="settings-section">
         <h2>{t("Inicialização e execução")}</h2>
         <div className="setting-row">
@@ -112,49 +143,142 @@ export function SettingsPage({
         <h2>{t("Conta administrativa")}</h2>
         <p className="muted">
           {t(
-            "Alterar a senha encerra todas as sessões remotas. A senha é armazenada com Argon2id e salt individual.",
+            "Use estas credenciais para acessar o painel remoto e confirmar ações sensíveis deste computador. Alterar o usuário ou a senha encerra todas as sessões remotas.",
           )}
         </p>
-        <form className="narrow-form" onSubmit={changePassword}>
-          <label>
-            {t("Senha atual")}
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-            />
-          </label>
-          <div className="form-grid">
-            <label>
-              {t("Nova senha")}
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={12}
-                required
-                value={next}
-                onChange={(e) => setNext(e.target.value)}
-              />
-            </label>
-            <label>
-              {t("Confirmar nova senha")}
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={12}
-                required
-                value={confirmation}
-                onChange={(e) => setConfirmation(e.target.value)}
-              />
-            </label>
+        <ErrorMessage error={accountError} />
+        {accountNotice && (
+          <div className="notice" role="status">
+            <Check size={17} />
+            {translateMessage(accountNotice)}
           </div>
-          <button className="button" disabled={busy}>
-            {busy ? <Spinner /> : <KeyRound size={16} />}
-            {t("Alterar senha")}
-          </button>
-        </form>
+        )}
+        <div>
+          <div className="setting-row">
+            <div>
+              <strong>{t("Nome de usuário")}</strong>
+              <p className="muted">
+                {state.username ? (
+                  <>
+                    {t("Usuário atual:")} <code>{state.username}</code>
+                  </>
+                ) : (
+                  t(
+                    "Usado para entrar no painel remoto e confirmar operações neste computador.",
+                  )
+                )}
+              </p>
+            </div>
+            {!editingUsername && (
+              <button
+                type="button"
+                className="button"
+                disabled={busy}
+                onClick={() => {
+                  setNextUsername(state.username ?? "");
+                  setUsernamePassword("");
+                  setAccountError("");
+                  setAccountNotice("");
+                  setEditingUsername(true);
+                }}
+              >
+                <UserRoundPen size={16} />
+                {t("Alterar usuário")}
+              </button>
+            )}
+          </div>
+        </div>
+        {editingUsername && (
+          <form className="narrow-form" onSubmit={changeUsername}>
+            <div className="form-grid">
+              <label>
+                {t("Novo nome de usuário")}
+                <input
+                  autoComplete="username"
+                  minLength={3}
+                  maxLength={64}
+                  required
+                  value={nextUsername}
+                  onChange={(e) => setNextUsername(e.target.value)}
+                />
+              </label>
+              <label>
+                {t("Senha atual")}
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={usernamePassword}
+                  onChange={(e) => setUsernamePassword(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="actions">
+              <button
+                type="button"
+                className="button"
+                disabled={busy}
+                onClick={() => {
+                  setEditingUsername(false);
+                  setUsernamePassword("");
+                  setAccountError("");
+                }}
+              >
+                {t("Cancelar")}
+              </button>
+              <button className="button primary" disabled={busy}>
+                {busy ? <Spinner /> : <UserRoundPen size={16} />}
+                {t("Salvar usuário")}
+              </button>
+            </div>
+          </form>
+        )}
+        <div className="settings-subsection">
+          <h3>{t("Alterar senha")}</h3>
+          <p className="muted">
+            {t("A senha é armazenada com Argon2id e salt individual.")}
+          </p>
+          <form className="narrow-form" onSubmit={changePassword}>
+            <label>
+              {t("Senha atual")}
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+              />
+            </label>
+            <div className="form-grid">
+              <label>
+                {t("Nova senha")}
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={12}
+                  required
+                  value={next}
+                  onChange={(e) => setNext(e.target.value)}
+                />
+              </label>
+              <label>
+                {t("Confirmar nova senha")}
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={12}
+                  required
+                  value={confirmation}
+                  onChange={(e) => setConfirmation(e.target.value)}
+                />
+              </label>
+            </div>
+            <button className="button" disabled={busy}>
+              {busy ? <Spinner /> : <KeyRound size={16} />}
+              {t("Alterar senha")}
+            </button>
+          </form>
+        </div>
       </section>
       <section className="settings-section">
         <div className="section-heading">
@@ -171,6 +295,9 @@ export function SettingsPage({
             <div className="setting-row" key={session.id}>
               <div>
                 <strong>{session.username}</strong>
+                {session.issuerNodeId && (
+                  <span className="muted small"> · {t("Conta vinculada")}</span>
+                )}
                 <p className="muted small">
                   {session.device || t("Dispositivo sem identificação")}
                 </p>

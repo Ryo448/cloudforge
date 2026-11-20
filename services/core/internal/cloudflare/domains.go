@@ -179,7 +179,7 @@ func (m *Manager) RouteTo(ctx context.Context, projectID, domain, sub string, po
 	if err != nil {
 		return model.Route{}, "", err
 	}
-	if host == cfg.AdminHost {
+	if (cfg.AdminHost != "" && host == cfg.AdminHost) || (cfg.RetiredAdminHost != "" && cfg.PanelCleanupError != "" && host == cfg.RetiredAdminHost) {
 		return model.Route{}, "", errors.New("esse endereço é usado pelo painel")
 	}
 	if m.databaseTunnelHostInUse(host) {
@@ -235,6 +235,9 @@ func (m *Manager) ChangePanel(ctx context.Context, domain, sub string) (string, 
 	}
 	defer m.op.Unlock()
 	old := m.Config()
+	if old.PanelDisabled {
+		return "", errors.New("o painel web desta instalação está despublicado; republique o painel independente ou acesse pelo computador principal")
+	}
 	zone, host, err := m.destination(old, domain, sub)
 	if err != nil || host == old.AdminHost {
 		return "", err

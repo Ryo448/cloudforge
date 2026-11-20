@@ -269,14 +269,25 @@ func (s *Store) SaveCloudConfig(cfg model.CloudConfig) error {
 		return e
 	}
 	defer tx.Rollback()
-	for _, statement := range []struct {
+	statements := []struct {
 		sql  string
 		args []any
 	}{
 		{"INSERT INTO settings(key,value,updated_at) VALUES('cloudflare',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", []any{string(raw), time.Now().UTC()}},
-		{"INSERT OR REPLACE INTO domains VALUES(?,?,?,?)", []any{cfg.ZoneID, cfg.ZoneID, cfg.Domain, "cloudflare"}},
-		{"INSERT OR REPLACE INTO tunnels VALUES(?,?,?,?,?)", []any{cfg.TunnelID, cfg.TunnelID, cfg.Name, "configured", "os-keyring:tunnel-token"}},
-	} {
+	}
+	if cfg.ZoneID != "" && cfg.Domain != "" {
+		statements = append(statements, struct {
+			sql  string
+			args []any
+		}{"INSERT OR REPLACE INTO domains VALUES(?,?,?,?)", []any{cfg.ZoneID, cfg.ZoneID, cfg.Domain, "cloudflare"}})
+	}
+	if cfg.TunnelID != "" {
+		statements = append(statements, struct {
+			sql  string
+			args []any
+		}{"INSERT OR REPLACE INTO tunnels VALUES(?,?,?,?,?)", []any{cfg.TunnelID, cfg.TunnelID, cfg.Name, "configured", "os-keyring:tunnel-token"}})
+	}
+	for _, statement := range statements {
 		if _, e = tx.Exec(statement.sql, statement.args...); e != nil {
 			return e
 		}

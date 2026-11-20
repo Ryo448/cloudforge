@@ -25,6 +25,7 @@ import {
   Folder,
   Globe,
   HardDrive,
+  Laptop,
   MemoryStick,
   Plus,
   RefreshCw,
@@ -56,12 +57,19 @@ import {
 import { api, message } from "./api";
 import { AddProject, ProjectPage, type ProjectSection } from "./Projects";
 import { CloudflarePage } from "./Cloudflare";
+import { ComputersPage } from "./Computers";
 import { SettingsPage } from "./Settings";
 import WindowControls from "./WindowControls";
 import { EnvironmentIcon } from "./EnvironmentIcon";
 import { DBeaverWorkspace } from "./DBeaverWorkspace";
 
-type Page = "overview" | "projects" | "databases" | "cloudflare" | "settings";
+type Page =
+  | "overview"
+  | "projects"
+  | "databases"
+  | "computers"
+  | "cloudflare"
+  | "settings";
 
 const sidebarPreferenceKey = "cloudforge.sidebarCollapsed";
 
@@ -406,6 +414,7 @@ export default function App() {
               overview: t("Visão geral"),
               projects: t("Aplicações"),
               databases: t("Bancos de dados"),
+              computers: t("Computadores"),
               cloudflare: "Cloudflare",
               settings: t("Configurações"),
             }[page]
@@ -529,6 +538,11 @@ export default function App() {
                     icon: Database,
                   },
                   {
+                    id: "computers",
+                    label: t("Computadores"),
+                    icon: Laptop,
+                  },
+                  {
                     id: "cloudflare",
                     label: "Cloudflare",
                     icon: CloudflareIcon,
@@ -553,6 +567,12 @@ export default function App() {
                   {item.id === "projects" && (
                     <span className="nav-count">{state.projects.length}</span>
                   )}
+                  {item.id === "computers" &&
+                    (state.cluster?.pendingCount ?? 0) > 0 && (
+                      <span className="nav-count">
+                        {state.cluster!.pendingCount}
+                      </span>
+                    )}
                 </button>
               ))}
             </nav>
@@ -569,7 +589,7 @@ export default function App() {
             </div>
             <div className="sidebar-version">
               <span>Cloudforge</span>
-              <span>v2.2.1</span>
+              <span>v3.0.0</span>
             </div>
           </div>
         </aside>
@@ -747,21 +767,44 @@ export default function App() {
                       <Cloud size={17} />
                     </div>
                     <p className="muted small">
-                      {state.cloudflare.adminHost
+                      {state.cluster?.role === "secondary" &&
+                      state.cluster.primaryUrl
                         ? t(
-                            "Domínio administrativo configurado. Confira a conexão do túnel.",
+                            "Vinculado ao painel principal em {0}.",
+                            state.cluster.primaryName ||
+                              state.cluster.primaryUrl,
                           )
-                        : t(
-                            "Conecte seu domínio para controlar as aplicações de qualquer lugar.",
-                          )}
+                        : state.cloudflare.adminHost
+                          ? t(
+                              "Domínio administrativo configurado. Confira a conexão do túnel.",
+                            )
+                          : t(
+                              "Conecte seu domínio para controlar as aplicações de qualquer lugar.",
+                            )}
                     </p>
-                    <button
-                      className="text-button"
-                      onClick={() => navigate("cloudflare")}
-                    >
-                      {state.cloudflare.adminHost || t("Configurar Cloudflare")}
-                      <ArrowUpRight size={15} />
-                    </button>
+                    {state.cluster?.role === "secondary" &&
+                    state.cluster.primaryUrl ? (
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          void window.cloudforge.openExternal(
+                            state.cluster!.primaryUrl!,
+                          )
+                        }
+                      >
+                        {t("Abrir painel")}
+                        <ArrowUpRight size={15} />
+                      </button>
+                    ) : (
+                      <button
+                        className="text-button"
+                        onClick={() => navigate("cloudflare")}
+                      >
+                        {state.cloudflare.adminHost ||
+                          t("Configurar Cloudflare")}
+                        <ArrowUpRight size={15} />
+                      </button>
+                    )}
                   </section>
                 </div>
                 <div className="section-heading projects-heading">
@@ -833,6 +876,12 @@ export default function App() {
                 renderDBeaver={(database) => (
                   <DBeaverWorkspace key={database.id} database={database} />
                 )}
+              />
+            ) : page === "computers" ? (
+              <ComputersPage
+                state={state}
+                onChanged={refresh}
+                onOpenCloudflare={() => navigate("cloudflare")}
               />
             ) : page === "cloudflare" ? (
               <CloudflarePage state={state} onChanged={refresh} />

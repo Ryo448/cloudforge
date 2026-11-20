@@ -33,7 +33,16 @@ func fixture(t *testing.T) *Server {
 	sup := supervisor.New(store, dir)
 	cloud := cloudflare.New(store, dir, "http://127.0.0.1:28932", "test")
 	s := New(store, sup, cloud, "local-test-key-not-a-default", dir, "", true)
-	t.Cleanup(func() { sup.Shutdown(); store.Close() })
+	if s.Cluster != nil {
+		s.Cluster.Vault = &testEnvironmentVault{values: map[string]string{}}
+	}
+	t.Cleanup(func() {
+		if s.Cluster != nil {
+			s.Cluster.Stop()
+		}
+		sup.Shutdown()
+		store.Close()
+	})
 	return s
 }
 func TestLANFirewallRequiresLocalConfirmation(t *testing.T) {
@@ -582,5 +591,81 @@ func TestDatabasePasswordRevealRequiresCoreCredentials(t *testing.T) {
 	w = invoke(s, true, "POST", path, `{"username":"admin","password":"core-admin-secret-password"}`, "", "", nil)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 after 5 failed attempts: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestChangeUsernameEndpoint(t *testing.T) {
+	s := fixture(t)
+
+	// Setup creates initial admin and /api/state exposes the current username locally.
+	w := invoke(s, true, "POST", "/api/setup", `{"username":"admin","password":"a-long-test-password","confirmation":"a-long-test-password"}`, "", "", nil)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("setup failed: %d %s", w.Code, w.Body.String())
+	}
+	w = invoke(s, true, "GET", "/api/state", "", "", "", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("state failed: %d %s", w.Code, w.Body.String())
+	}
+	var snap map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &snap); err != nil {
+		t.Fatal(err)
+	}
+	if snap["username"] != "admin" {
+		t.Fatalf("expected initial state username 'admin', got %#v", snap["username"])
+	}
+
+	// Sign in on the public panel to create a remote session.
+	w = invoke(s, false, "GET", "/api/session", "", "", "", nil)
+	var pre map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &pre)
+	cookies := w.Result().Cookies()
+	csrf := pre["csrf"].(string)
+	w = invoke(s, false, "POST", "/api/login", `{"username":"admin","password":"a-long-test-password"}`, "http://127.0.0.1", csrf, cookies)
+	if w.Code != http.StatusOK {
+		t.Fatalf("initial public login failed: %d %s", w.Code, w.Body.String())
+	}
+	sessionCookies := w.Result().Cookies()
+
+	// Wrong password is rejected.
+	w = invoke(s, true, "POST", "/api/username", `{"username":"novo-usuario","password":"wrong-password"}`, "", "", nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on wrong password, got %d %s", w.Code, w.Body.String())
+	}
+
+	// Valid change updates username, updates /api/state, and revokes existing remote sessions.
+	w = invoke(s, true, "POST", "/api/username", `{"username":"novo-usuario","password":"a-long-test-password"}`, "", "", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("username change failed: %d %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["ok"] != true || resp["username"] != "novo-usuario" {
+		t.Fatalf("unexpected response: %#v", resp)
+	}
+
+	w = invoke(s, true, "GET", "/api/state", "", "", "", nil)
+	_ = json.Unmarshal(w.Body.Bytes(), &snap)
+	if snap["username"] != "novo-usuario" {
+		t.Fatalf("expected updated state username 'novo-usuario', got %#v", snap["username"])
+	}
+
+	// Previous remote session is now revoked.
+	w = invoke(s, false, "GET", "/api/projects", "", "", "", sessionCookies)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for revoked session after username change, got %d %s", w.Code, w.Body.String())
+	}
+
+	// Old username fails login; new username succeeds.
+	w = invoke(s, false, "GET", "/api/session", "", "", "", nil)
+	_ = json.Unmarshal(w.Body.Bytes(), &pre)
+	cookies = w.Result().Cookies()
+	csrf = pre["csrf"].(string)
+	w = invoke(s, false, "POST", "/api/login", `{"username":"admin","password":"a-long-test-password"}`, "http://127.0.0.1", csrf, cookies)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("old username should fail login, got %d %s", w.Code, w.Body.String())
+	}
+	w = invoke(s, false, "POST", "/api/login", `{"username":"novo-usuario","password":"a-long-test-password"}`, "http://127.0.0.1", csrf, cookies)
+	if w.Code != http.StatusOK {
+		t.Fatalf("new username login failed: %d %s", w.Code, w.Body.String())
 	}
 }

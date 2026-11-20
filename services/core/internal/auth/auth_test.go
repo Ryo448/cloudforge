@@ -77,3 +77,48 @@ func TestPasswordAndSessions(t *testing.T) {
 		t.Fatal("password change did not revoke sessions")
 	}
 }
+
+func TestChangeUsername(t *testing.T) {
+	s, e := persistence.Open(filepath.Join(t.TempDir(), "test.db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	a := New(s)
+	if e = a.Bootstrap("admin", "a-long-test-password"); e != nil {
+		t.Fatal(e)
+	}
+	token, _, e := a.Login("admin", "a-long-test-password", "browser")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = a.ChangeUsername("wrong-password", "maryana"); e == nil {
+		t.Fatal("accepted username change with wrong password")
+	}
+	if e = a.ChangeUsername("a-long-test-password", "ab"); e == nil {
+		t.Fatal("accepted too-short username")
+	}
+	if e = a.ChangeUsername("a-long-test-password", "admin\nnewline"); e == nil {
+		t.Fatal("accepted username with control characters")
+	}
+	if e = a.ChangeUsername("a-long-test-password", "admin"); e == nil {
+		t.Fatal("accepted unchanged username")
+	}
+	uid, updated, epoch, e := a.ChangeUsernameEpoch("a-long-test-password", " maryana ")
+	if e != nil {
+		t.Fatalf("valid username change failed: %v", e)
+	}
+	if uid == "" || updated != "maryana" || epoch < 2 {
+		t.Fatalf("unexpected change result: uid=%q updated=%q epoch=%d", uid, updated, epoch)
+	}
+	if _, e = a.Session(token); e == nil {
+		t.Fatal("username change did not revoke active sessions")
+	}
+	if _, e = a.Authenticate("admin", "a-long-test-password"); e == nil {
+		t.Fatal("old username still authenticated")
+	}
+	verified, e := a.Authenticate("maryana", "a-long-test-password")
+	if e != nil || verified.Username != "maryana" {
+		t.Fatalf("new username failed authentication: %+v %v", verified, e)
+	}
+}
