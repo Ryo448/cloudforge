@@ -215,6 +215,30 @@ func TestCredentials(t *testing.T) {
 	if err != nil || current.CredentialsPending || strings.Contains(current.URL, password) {
 		t.Fatal("senha exposta no detalhe", err)
 	}
+	if _, err = m.Credentials("other", r.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("credencial acessível por outro usuário: %v", err)
+	}
+	for range 2 {
+		again, err := m.Credentials("owner", r.ID)
+		if err != nil || again.Password != password || !strings.Contains(again.URL, password) {
+			t.Fatalf("credencial indisponível após revelação inicial: %+v %v", again, err)
+		}
+	}
+	r.State = "stopped"
+	if err = m.save(r); err != nil {
+		t.Fatal(err)
+	}
+	stoppedCreds, err := m.Credentials("owner", r.ID)
+	if err != nil || stoppedCreds.Password != password {
+		t.Fatalf("credencial indisponível para banco parado: %+v %v", stoppedCreds, err)
+	}
+	s.PendingPassword = strings.Repeat("b", 64)
+	if err = m.saveSecrets(r, s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Credentials("owner", r.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("credencial exposta durante rotação: %v", err)
+	}
 
 }
 

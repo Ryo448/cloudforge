@@ -73,14 +73,21 @@ func (a *Auth) Bootstrap(username, password string) error {
 	}
 	return a.Store.CreateAdmin(persistence.User{ID: ID(), Username: username, PasswordHash: hash, CreatedAt: time.Now().Unix()})
 }
-func (a *Auth) Login(username, password, device string) (string, string, error) {
-	user, e := a.Store.UserByUsername(username)
+func (a *Auth) Authenticate(username, password string) (persistence.User, error) {
+	user, e := a.Store.UserByUsername(strings.TrimSpace(username))
 	if e != nil {
 		Verify(a.dummy, password)
-		return "", "", errors.New("usuário ou senha inválidos")
+		return persistence.User{}, errors.New("usuário ou senha inválidos")
 	}
 	if !Verify(user.PasswordHash, password) {
-		return "", "", errors.New("usuário ou senha inválidos")
+		return persistence.User{}, errors.New("usuário ou senha inválidos")
+	}
+	return user, nil
+}
+func (a *Auth) Login(username, password, device string) (string, string, error) {
+	user, e := a.Authenticate(username, password)
+	if e != nil {
+		return "", "", e
 	}
 	return a.issue(user.ID, device)
 }

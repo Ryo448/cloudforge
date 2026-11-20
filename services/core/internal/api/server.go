@@ -886,6 +886,15 @@ func (s *Server) session(r *http.Request) (auth.Session, string, error) {
 	session, e := s.Auth.Session(cookie.Value)
 	return session, cookie.Value, e
 }
+func (s *Server) clientIP(r *http.Request) string {
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if !s.Development {
+		if forwarded := r.Header.Get("CF-Connecting-IP"); net.ParseIP(forwarded) != nil {
+			ip = forwarded
+		}
+	}
+	return ip
+}
 func (s *Server) Public(w http.ResponseWriter, r *http.Request) {
 	security(w)
 	if !s.Development {
@@ -901,12 +910,7 @@ func (s *Server) Public(w http.ResponseWriter, r *http.Request) {
 		write(w, 200, map[string]any{"ok": true, "service": "cloudforge"})
 		return
 	}
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if !s.Development {
-		if forwarded := r.Header.Get("CF-Connecting-IP"); net.ParseIP(forwarded) != nil {
-			ip = forwarded
-		}
-	}
+	ip := s.clientIP(r)
 	if !s.limit.allow("all:"+ip, 180, time.Minute) {
 		fail(w, 429, errors.New("muitas requisições; aguarde um minuto"))
 		return
@@ -1140,4 +1144,24 @@ func (l *limiter) allow(key string, max int, window time.Duration) bool {
 	v.count++
 	l.entries[key] = v
 	return v.count <= max
+}
+
+func (l *limiter) exceeded(key string, max int) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	v, ok := l.entries[key]
+	if !ok || time.Now().After(v.until) {
+		return false
+	}
+	return v.count >= max
+}
+
+func (l *limiter) hit(key string, window time.Duration) {
+	l.allow(key, 0, window)
+}
+
+func (l *limiter) reset(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.entries, key)
 }

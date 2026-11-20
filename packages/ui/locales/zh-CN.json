@@ -1273,5 +1273,10 @@
   "Nenhuma atualização disponível.": "没有可用的更新。",
   "O download não foi concluído. Tente novamente.": "下载未完成,再试一次。",
   "Recolher barra lateral": "折叠侧边栏",
-  "Fixar barra lateral": "固定侧边栏"
+  "Fixar barra lateral": "固定侧边栏",
+  "Ver senha": "查看密码",
+  "Consulte a senha atual ou gere uma nova senha para o usuário cloudforge.": "查看当前密码或为用户 cloudforge 生成新密码。",
+  "Informe o usuário e a senha configurados no painel do Core para exibir a senha do banco.": "请输入在 Core 面板中配置的用户名和密码以显示数据库密码。",
+  "Credenciais verificadas. Copie a senha e feche esta janela quando terminar.": "凭据已验证。请复制密码并在完成后关闭此窗口。",
+  "serviço de autenticação indisponível": "认证服务不可用"
 }

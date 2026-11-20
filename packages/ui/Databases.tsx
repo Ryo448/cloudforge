@@ -11,6 +11,7 @@ import {
   Cpu,
   Database,
   DatabaseZap,
+  Eye,
   HardDrive,
   History,
   KeyRound,
@@ -126,7 +127,9 @@ const navigation = [
   ["risk", "Área de risco", TriangleAlert],
 ] as const;
 const displayError = (e: unknown) =>
-  e instanceof Error ? e.message : "Não foi possível concluir a operação.";
+  e instanceof Error
+    ? e.message.replace(/^Error invoking remote method '[^']+': Error: /, "")
+    : "Não foi possível concluir a operação.";
 const displayState = (state: string) =>
   state === "running" ? "online" : state === "stopped" ? "offline" : state;
 
@@ -588,8 +591,9 @@ export function Databases({
   const [busy, setBusy] = useState("");
   const [create, setCreate] = useState(false);
   const [created, setCreated] = useState<string>();
+  const [viewPassword, setViewPassword] = useState(false);
   const [credentials, setCredentials] = useState<
-    Credentials & { database: Instance }
+    Credentials & { database: Instance; verified?: boolean }
   >();
   const [confirm, setConfirm] = useState<
     "password" | "certificate" | "delete"
@@ -683,6 +687,10 @@ export function Databases({
     ? catalog?.databases.find((db) => db.id === id)
     : undefined;
 
+  useEffect(() => {
+    setViewPassword(false);
+  }, [id]);
+
   const firewallStatus = allowLANFirewall ? catalog?.lanFirewall : undefined;
   useEffect(() => {
     if (firewallStatus !== "consent") {
@@ -693,6 +701,7 @@ export function Databases({
       firewallPrompted.current ||
       create ||
       confirm ||
+      viewPassword ||
       credentials ||
       created ||
       busy
@@ -700,7 +709,15 @@ export function Databases({
       return;
     firewallPrompted.current = true;
     setFirewallDialog(true);
-  }, [firewallStatus, create, confirm, credentials, created, busy]);
+  }, [
+    firewallStatus,
+    create,
+    confirm,
+    viewPassword,
+    credentials,
+    created,
+    busy,
+  ]);
   const needsDocker = !!catalog && !catalog.docker;
   async function reveal(db: Instance) {
     if (revealing.current) return;
@@ -1426,21 +1443,39 @@ export function Databases({
                   onOpenExternal={onOpenExternal}
                 />
                 {connection(database)}
-                <div className="db-row db-with-action">
+                <div className="db-row db-with-action db-password-row">
                   <div>
                     <h3>{t("Senha do banco de dados")}</h3>
                     <p className="muted">
-                      {t("Gere uma nova senha para o usuário cloudforge.")}
+                      {t(
+                        "Consulte a senha atual ou gere uma nova senha para o usuário cloudforge.",
+                      )}
                     </p>
                   </div>
-                  <button
-                    className="button"
-                    disabled={!!busy || database.state !== "running"}
-                    onClick={() => setConfirm("password")}
-                  >
-                    <KeyRound size={16} />
-                    {t("Redefinir senha")}
-                  </button>
+                  <div className="db-password-actions">
+                    <button
+                      className="button"
+                      disabled={!!busy || database.state !== "running"}
+                      onClick={() => {
+                        setError("");
+                        setConfirm("password");
+                      }}
+                    >
+                      <KeyRound size={16} />
+                      {t("Redefinir senha")}
+                    </button>
+                    <button
+                      className="button"
+                      disabled={!!busy || !database.tlsValidated}
+                      onClick={() => {
+                        setError("");
+                        setViewPassword(true);
+                      }}
+                    >
+                      <Eye size={16} />
+                      {t("Ver senha")}
+                    </button>
+                  </div>
                 </div>
                 <div className="db-row db-with-action db-certificate-row">
                   <div>
@@ -1568,6 +1603,17 @@ export function Databases({
               </div>
             </Modal>
           )}
+          {viewPassword && (
+            <ViewPasswordModal
+              database={database}
+              request={request}
+              onClose={() => setViewPassword(false)}
+              onVerified={(result) => {
+                setViewPassword(false);
+                setCredentials({ ...result, database, verified: true });
+              }}
+            />
+          )}
         </>
       )}
       {firewallDialog && allowLANFirewall && (
@@ -1635,9 +1681,13 @@ export function Databases({
           wide
         >
           <p className="notice">
-            {t(
-              "A senha será exibida apenas uma vez. Copie e guarde as credenciais antes de fechar.",
-            )}
+            {credentials.verified
+              ? t(
+                  "Credenciais verificadas. Copie a senha e feche esta janela quando terminar.",
+                )
+              : t(
+                  "A senha será exibida apenas uma vez. Copie e guarde as credenciais antes de fechar.",
+                )}
           </p>
           <dl className="db-credential-list">
             <div>
@@ -2148,6 +2198,99 @@ function CreateDatabase({
           </div>
         </form>
       </div>
+    </Modal>
+  );
+}
+
+function ViewPasswordModal({
+  database,
+  request,
+  onClose,
+  onVerified,
+}: {
+  database: Instance;
+  request: Request;
+  onClose: () => void;
+  onVerified: (credentials: Credentials) => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await request<Credentials>(
+        "POST",
+        `${base}/${database.id}/password`,
+        { username, password },
+      );
+      setPassword("");
+      onVerified(result);
+    } catch (e) {
+      setError(displayError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={t("Ver senha")}
+      onClose={onClose}
+      closeDisabled={busy}
+      className="database-rotation-modal"
+    >
+      <form onSubmit={submit} className="db-password-form">
+        <p className="muted">
+          {t(
+            "Informe o usuário e a senha configurados no painel do Core para exibir a senha do banco.",
+          )}
+        </p>
+        <label>
+          {t("Nome de usuário")}
+          <input
+            autoFocus
+            autoComplete="username"
+            maxLength={64}
+            required
+            disabled={busy}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </label>
+        <label>
+          {t("Senha")}
+          <input
+            type="password"
+            autoComplete="current-password"
+            maxLength={1024}
+            required
+            disabled={busy}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </label>
+        <ErrorMessage error={error} />
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="button"
+            disabled={busy}
+            onClick={onClose}
+          >
+            {t("Cancelar")}
+          </button>
+          <button className="button primary" disabled={busy}>
+            {busy ? <Spinner /> : <Eye size={16} />}
+            {t("Ver senha")}
+          </button>
+        </div>
+      </form>
     </Modal>
   );
 }

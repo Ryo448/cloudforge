@@ -30,6 +30,19 @@ func TestPasswordAndSessions(t *testing.T) {
 	if !strings.HasPrefix(hash, "$argon2id$") || strings.Contains(hash, "a-long-test-password") {
 		t.Fatal("unsafe password storage")
 	}
+	if _, e = a.Authenticate("admin", "wrong"); e == nil {
+		t.Fatal("invalid password accepted by Authenticate")
+	}
+	if _, e = a.Authenticate("other", "a-long-test-password"); e == nil {
+		t.Fatal("invalid username accepted by Authenticate")
+	}
+	verified, e := a.Authenticate(" admin ", "a-long-test-password")
+	if e != nil || verified.Username != "admin" {
+		t.Fatalf("valid credentials rejected by Authenticate: %v", e)
+	}
+	if sessions, e := a.Sessions(); e != nil || len(sessions) != 0 {
+		t.Fatalf("Authenticate created unexpected sessions: %+v %v", sessions, e)
+	}
 	if _, _, e = a.Login("admin", "wrong", "test"); e == nil {
 		t.Fatal("invalid password accepted")
 	}

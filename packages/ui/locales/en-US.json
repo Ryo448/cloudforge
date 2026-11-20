@@ -1273,5 +1273,10 @@
   "Nenhuma atualização disponível.": "No update available.",
   "O download não foi concluído. Tente novamente.": "The download has not been completed. try again.",
   "Recolher barra lateral": "Collapse sidebar",
-  "Fixar barra lateral": "Pin sidebar"
+  "Fixar barra lateral": "Pin sidebar",
+  "Ver senha": "View password",
+  "Consulte a senha atual ou gere uma nova senha para o usuário cloudforge.": "View the current password or generate a new password for the cloudforge user.",
+  "Informe o usuário e a senha configurados no painel do Core para exibir a senha do banco.": "Enter the username and password configured in the Core panel to view the database password.",
+  "Credenciais verificadas. Copie a senha e feche esta janela quando terminar.": "Credentials verified. Copy the password and close this window when done.",
+  "serviço de autenticação indisponível": "authentication service unavailable"
 }

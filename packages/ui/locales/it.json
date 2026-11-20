@@ -1273,5 +1273,10 @@
   "Nenhuma atualização disponível.": "Nessuna aggiornamento disponibile.",
   "O download não foi concluído. Tente novamente.": "Il download non è stato completato, prova di nuovo.",
   "Recolher barra lateral": "Comprimi barra laterale",
-  "Fixar barra lateral": "Fissa barra laterale"
+  "Fixar barra lateral": "Fissa barra laterale",
+  "Ver senha": "Mostra password",
+  "Consulte a senha atual ou gere uma nova senha para o usuário cloudforge.": "Visualizza la password attuale o genera una nuova password per l’utente cloudforge.",
+  "Informe o usuário e a senha configurados no painel do Core para exibir a senha do banco.": "Inserisci il nome utente e la password configurati nel pannello Core per visualizzare la password del database.",
+  "Credenciais verificadas. Copie a senha e feche esta janela quando terminar.": "Credenziali verificate. Copia la password e chiudi questa finestra al termine.",
+  "serviço de autenticação indisponível": "servizio di autenticazione non disponibile"
 }

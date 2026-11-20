@@ -8,6 +8,10 @@ import (
 	"cloudforge/core/internal/persistence"
 	"cloudforge/core/internal/supervisor"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
 	"github.com/zalando/go-keyring"
 	"net/http"
@@ -493,5 +497,90 @@ func TestLocalFileEditorAndMedia(t *testing.T) {
 	response = invoke(s, false, "GET", "/api/projects/files-test/media?path=cover.png", "", "", "", nil)
 	if response.Code == 200 {
 		t.Fatal("public interface exposed project media")
+	}
+}
+
+func TestDatabasePasswordRevealRequiresCoreCredentials(t *testing.T) {
+	s := fixture(t)
+	store := s.Store.(*persistence.Store)
+	s.Databases = databases.New(store, s.Key)
+	if err := s.Auth.Bootstrap("admin", "core-admin-secret-password"); err != nil {
+		t.Fatal(err)
+	}
+	admin, err := s.Store.Admin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbID := strings.Repeat("a", 32)
+	const dbPassword = "db-secret-password-123456"
+	mac := hmac.New(sha256.New, []byte(s.Key))
+	_, _ = mac.Write([]byte("cloudforge-db-v1\x00"))
+	block, err := aes.NewCipher(mac.Sum(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	box, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := make([]byte, box.NonceSize())
+	secretJSON := `{"Admin":"admin-pass","Password":"` + dbPassword + `","Reveal":false}`
+	encrypted := append([]byte("cloudforge-db-v1\x00"), box.Seal(nonce, nonce, []byte(secretJSON), []byte(dbID))...)
+	data := `{"View":{"id":"` + dbID + `","name":"App DB","engine":"postgresql","host":"127.0.0.1","port":15432,"state":"stopped","tlsValidated":true,"credentialsPending":false},"Desired":"stopped","Action":""}`
+	if _, err = store.DB.Exec("INSERT INTO hosted_databases(id,owner,engine,port,data,secret) VALUES(?,?,?,?,?,?)", dbID, admin.ID, "postgresql", 15432, data, encrypted); err != nil {
+		t.Fatal(err)
+	}
+
+	path := "/api/databases/" + dbID + "/password"
+	for _, body := range []string{
+		`{"username":"wrong","password":"core-admin-secret-password"}`,
+		`{"username":"admin","password":"wrong-password"}`,
+		`{"username":"","password":""}`,
+	} {
+		w := invoke(s, true, "POST", path, body, "", "", nil)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "usuário ou senha inválidos") {
+			t.Fatalf("local invalid credentials %s: %d %s", body, w.Code, w.Body.String())
+		}
+	}
+	w := invoke(s, true, "POST", path, `{"username":"admin","password":"core-admin-secret-password"}`, "", "", nil)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), dbPassword) || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("local valid credentials failed: %d %s", w.Code, w.Body.String())
+	}
+	if sessions, err := s.Auth.Sessions(); err != nil || len(sessions) != 0 {
+		t.Fatalf("password reveal created unexpected sessions: %+v %v", sessions, err)
+	}
+	// Verify public API requires session + CSRF, keeps session alive on wrong credentials, and works on valid credentials.
+	w = invoke(s, false, "GET", "/api/session", "", "", "", nil)
+	var pre map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &pre)
+	cookies := w.Result().Cookies()
+	csrf := pre["csrf"].(string)
+	w = invoke(s, false, "POST", "/api/login", `{"username":"admin","password":"core-admin-secret-password"}`, "http://127.0.0.1", csrf, cookies)
+	if w.Code != http.StatusOK {
+		t.Fatalf("public login failed: %d %s", w.Code, w.Body.String())
+	}
+	cookies = w.Result().Cookies()
+	var login map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &login)
+	csrf = login["csrf"].(string)
+
+	w = invoke(s, false, "POST", path, `{"username":"admin","password":"wrong"}`, "http://127.0.0.1", csrf, cookies)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("public wrong password: %d %s", w.Code, w.Body.String())
+	}
+	w = invoke(s, false, "POST", path, `{"username":"admin","password":"core-admin-secret-password"}`, "http://127.0.0.1", csrf, cookies)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), dbPassword) {
+		t.Fatalf("public valid credentials failed: %d %s", w.Code, w.Body.String())
+	}
+	// Rate limit kicks in after 5 consecutive failures.
+	for range 5 {
+		w = invoke(s, true, "POST", path, `{"username":"admin","password":"wrong"}`, "", "", nil)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 before rate limit: %d %s", w.Code, w.Body.String())
+		}
+	}
+	w = invoke(s, true, "POST", path, `{"username":"admin","password":"core-admin-secret-password"}`, "", "", nil)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 after 5 failed attempts: %d %s", w.Code, w.Body.String())
 	}
 }

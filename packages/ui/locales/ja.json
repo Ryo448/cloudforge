@@ -1273,5 +1273,10 @@
   "Nenhuma atualização disponível.": "アップデートがありません。",
   "O download não foi concluído. Tente novamente.": "ダウンロードは完了していませんので、再度試してみてください。",
   "Recolher barra lateral": "サイドバーを折りたたむ",
-  "Fixar barra lateral": "サイドバーを固定"
+  "Fixar barra lateral": "サイドバーを固定",
+  "Ver senha": "パスワードを表示",
+  "Consulte a senha atual ou gere uma nova senha para o usuário cloudforge.": "ユーザー cloudforge の現在のパスワードを確認するか、新しいパスワードを生成します。",
+  "Informe o usuário e a senha configurados no painel do Core para exibir a senha do banco.": "データベースのパスワードを表示するには、Core パネルで設定したユーザー名とパスワードを入力してください。",
+  "Credenciais verificadas. Copie a senha e feche esta janela quando terminar.": "認証が完了しました。パスワードをコピーし、完了したらこのウィンドウを閉じてください。",
+  "serviço de autenticação indisponível": "認証サービスを利用できません"
 }

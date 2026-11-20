@@ -72,7 +72,7 @@ O modal de criação e **Conexão → Certificado SSL/TLS** oferecem três downl
 
 **Redefinir certificado** reinicia o banco, renova os pares do servidor e de cliente e preserva a CA, a porta, as credenciais e os dados. Certificados e chaves anteriores poderão deixar de funcionar; baixe o novo par e atualize a configuração dos clientes. Como a CA permanece a mesma, essa operação não revoga automaticamente certificados de cliente antigos.
 
-A porta atribuída permanece a mesma após parar, iniciar ou reiniciar o container ou o Core. Containers autorizados podem conectar pela rede Docker da instância usando o nome do container e a porta interna da engine. A opção **Redefinir senha** invalida a senha anterior. A exclusão só prossegue após a confirmação pelo nome do banco.
+A porta atribuída permanece a mesma após parar, iniciar ou reiniciar o container ou o Core. Containers autorizados podem conectar pela rede Docker da instância usando o nome do container e a porta interna da engine. A opção **Ver senha** exibe novamente a senha e a URL de conexão após validar o usuário e a senha configurados no painel do Core. A opção **Redefinir senha** invalida a senha anterior. A exclusão só prossegue após a confirmação pelo nome do banco.
 
 ## Atualizar instalações existentes
 

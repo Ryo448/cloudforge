@@ -108,6 +108,8 @@ func (s *Server) databaseRoutes(w http.ResponseWriter, r *http.Request, owner st
 			return
 		}
 		write(w, 200, credentials)
+	case len(parts) == 4 && parts[3] == "password" && r.Method == http.MethodPost:
+		s.databasePassword(w, r, owner, id, local)
 	case len(parts) == 5 && parts[3] == "certificates" && r.Method == "GET":
 		w.Header().Set("Cache-Control", "no-store")
 		content, filename, err := s.Databases.Certificate(owner, id, parts[4])
@@ -120,6 +122,53 @@ func (s *Server) databaseRoutes(w http.ResponseWriter, r *http.Request, owner st
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (s *Server) databasePassword(w http.ResponseWriter, r *http.Request, owner, id string, local bool) {
+	w.Header().Set("Cache-Control", "no-store")
+	if s.Auth == nil {
+		fail(w, http.StatusServiceUnavailable, errors.New("serviço de autenticação indisponível"))
+		return
+	}
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := decode(w, r, &body); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	failKey := "db-password-fail:local:" + owner
+	if !local {
+		failKey = "db-password-fail:" + s.clientIP(r) + ":" + owner
+	}
+	if s.limit.exceeded(failKey, 5) || (!local && s.limit.exceeded("db-password-fail-global", 40)) {
+		fail(w, http.StatusTooManyRequests, errors.New("tentativas demais; aguarde 15 minutos"))
+		return
+	}
+	select {
+	case s.loginGate <- struct{}{}:
+		defer func() { <-s.loginGate }()
+	default:
+		fail(w, http.StatusTooManyRequests, errors.New("autenticação ocupada; tente novamente"))
+		return
+	}
+	user, err := s.Auth.Authenticate(body.Username, body.Password)
+	if err != nil || user.ID != owner {
+		s.limit.hit(failKey, 15*time.Minute)
+		if !local {
+			s.limit.hit("db-password-fail-global", 15*time.Minute)
+		}
+		fail(w, http.StatusBadRequest, errors.New("usuário ou senha inválidos"))
+		return
+	}
+	s.limit.reset(failKey)
+	credentials, err := s.Databases.Credentials(owner, id)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	write(w, http.StatusOK, credentials)
 }
 
 func (s *Server) databaseTunnel(w http.ResponseWriter, r *http.Request, owner, id string, local bool) {

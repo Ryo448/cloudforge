@@ -410,7 +410,7 @@ const routes = [
   ["PUT", /^\/api\/snapshots\/drive$/],
   ["GET", /^\/api\/databases(?:\/[a-f0-9]{32}(?:\?period=(?:10m|1h|24h))?)?$/],
   ["GET", /^\/api\/databases\/[a-f0-9]{32}\/certificates\/(?:pem|crt|key)$/],
-  ["POST", /^\/api\/databases(?:\/[a-f0-9]{32}\/credentials)?$/],
+  ["POST", /^\/api\/databases(?:\/[a-f0-9]{32}\/(?:credentials|password))?$/],
   ["POST", /^\/api\/databases\/lan\/firewall$/],
   ["PATCH", /^\/api\/databases\/[a-f0-9]{32}$/],
   ["GET", /^\/api\/databases\/[a-f0-9]{32}\/tunnel$/],

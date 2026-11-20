@@ -1273,5 +1273,10 @@
   "Nenhuma atualização disponível.": "Keine Updates verfügbar.",
   "O download não foi concluído. Tente novamente.": "Das Download ist nicht abgeschlossen. versuchen Sie erneut.",
   "Recolher barra lateral": "Seitenleiste einklappen",
-  "Fixar barra lateral": "Seitenleiste anheften"
+  "Fixar barra lateral": "Seitenleiste anheften",
+  "Ver senha": "Passwort anzeigen",
+  "Consulte a senha atual ou gere uma nova senha para o usuário cloudforge.": "Aktuelles Passwort anzeigen oder ein neues Passwort für den Benutzer cloudforge erstellen.",
+  "Informe o usuário e a senha configurados no painel do Core para exibir a senha do banco.": "Geben Sie den im Core-Panel konfigurierten Benutzernamen und das Passwort ein, um das Datenbankpasswort anzuzeigen.",
+  "Credenciais verificadas. Copie a senha e feche esta janela quando terminar.": "Zugangsdaten bestätigt. Kopieren Sie das Passwort und schließen Sie dieses Fenster, wenn Sie fertig sind.",
+  "serviço de autenticação indisponível": "Authentifizierungsdienst nicht verfügbar"
 }

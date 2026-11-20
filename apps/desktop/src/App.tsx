@@ -569,7 +569,7 @@ export default function App() {
             </div>
             <div className="sidebar-version">
               <span>Cloudforge</span>
-              <span>v2.2.0</span>
+              <span>v2.2.1</span>
             </div>
           </div>
         </aside>

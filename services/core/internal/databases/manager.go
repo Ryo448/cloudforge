@@ -270,6 +270,26 @@ func (m *Manager) Reveal(owner, id string) (Credentials, error) {
 	return Credentials{Password: s.Password, URL: r.connection(s.Password)}, nil
 }
 
+func (m *Manager) Credentials(owner, id string) (Credentials, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, err := m.get(owner, id)
+	if err != nil {
+		return Credentials{}, err
+	}
+	if !m.tlsAvailable(r) {
+		return Credentials{}, ErrConflict
+	}
+	s, err := m.secrets(r)
+	if err != nil {
+		return Credentials{}, err
+	}
+	if s.Password == "" || s.PendingPassword != "" {
+		return Credentials{}, ErrConflict
+	}
+	return Credentials{Password: s.Password, URL: r.connection(s.Password)}, nil
+}
+
 func (m *Manager) notify() {
 	select {
 	case m.wake <- struct{}{}:

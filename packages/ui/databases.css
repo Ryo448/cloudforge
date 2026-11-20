@@ -559,19 +559,39 @@
     margin-left: 0;
   }
 }
+.db-password-row,
 .db-certificate-row {
   flex-wrap: wrap;
 }
 
+.db-password-row > :first-child,
 .db-certificate-row > :first-child {
   flex: 1 1 240px;
 }
 
+.db-password-actions,
 .db-certificate-actions {
   display: flex;
   gap: 8px;
   align-items: flex-start;
   flex-wrap: wrap;
+}
+
+.modal form.db-password-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 0;
+}
+
+.db-password-form label {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.db-password-form p {
+  margin: 0;
+  font-size: 12px;
 }
 
 .db-certificate-select {
