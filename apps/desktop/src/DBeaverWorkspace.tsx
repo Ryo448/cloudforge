@@ -6,9 +6,10 @@ import {
   ExternalLink,
   RefreshCw,
 } from "lucide-react";
-import { ErrorMessage, Spinner } from "../../../packages/ui";
+import { ErrorMessage } from "../../../packages/ui";
 import type { DBeaverDatabase } from "../../../packages/ui/Databases";
 import { message } from "./api";
+import { DBeaverLoadingGame } from "./DBeaverLoadingGame";
 import "./dbeaver-workspace.css";
 
 export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
@@ -154,12 +155,10 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
         </div>
       </header>
       {detachError && <ErrorMessage error={detachError} />}
-      <div
-        className="dbeaver-slot"
-        ref={slot}
-        aria-busy={supported && online && state === "loading"}
-      >
-        {!supported || !online || state !== "ready" ? (
+      <div className="dbeaver-slot" ref={slot}>
+        {supported && online && state === "loading" ? (
+          <DBeaverLoadingGame />
+        ) : !supported || !online || state !== "ready" ? (
           <div className="dbeaver-state">
             {!supported ? (
               <>
@@ -200,10 +199,6 @@ export function DBeaverWorkspace({ database }: { database: DBeaverDatabase }) {
                   {t("Mostrar janela")}
                 </button>
               </>
-            ) : state === "loading" ? (
-              <div role="status">
-                <Spinner /> {t("Conectando ao banco…")}
-              </div>
             ) : (
               <>
                 <ErrorMessage error={error} />
